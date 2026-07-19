@@ -1,0 +1,405 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 枚举以字符串存储（SQLite 不支持 Prisma enum）
+// MeetingType: PARTY_COMMITTEE | JOINT_CONFERENCE
+// MeetingStatus: DRAFT | SCHEDULED | IN_PROGRESS | ENDED | RESOLVED | ARCHIVED
+// TopicStatus: DRAFT | PENDING_REVIEW | DEFERRED | APPROVED | ON_AGENDA | DISCUSSED | RESOLVED | REJECTED
+// JointReviewSide: SECRETARY | DEAN
+// ReviewDecision: PENDING | APPROVED | REJECTED
+// OpinionType: AGREE | DISAGREE | DEFER
+// VoteMethod: ORAL | HAND | BALLOT
+// ResolutionType: APPROVED | PRINCIPLE_APPROVED | DEFERRED | REJECTED
+// SupervisionStatus: PENDING | ACCEPTED | IN_PROGRESS | FEEDBACK | DONE | OVERDUE | ADJUST_REQUEST
+// SecurityLevel: PUBLIC | INTERNAL | SECRET
+
+model College {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  rosters       RosterMember[]
+  meetings      Meeting[]
+  topics        Topic[]
+  auditLogs     AuditLog[]
+  categoryDicts CategoryDict[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  passwordHash  String
+  realName      String
+  title         String?
+  collegeId     String?
+  isSchoolAdmin Boolean  @default(false)
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  college              College?              @relation(fields: [collegeId], references: [id])
+  roles                UserRole[]
+  rosterMemberships    RosterMember[]
+  proposedTopics       Topic[]               @relation("TopicProposer")
+  jointReviews         JointReview[]
+  attendances          Attendance[]
+  discussions          DiscussionOpinion[]
+  votes                VoteRecord[]
+  minuteSigns          MinutesSign[]
+  supervisionOwned     SupervisionTask[]     @relation("SupervisionOwner")
+  supervisionFeedbacks SupervisionFeedback[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  materialReceipts     MaterialReadReceipt[]
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String?
+
+  users UserRole[]
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model RosterMember {
+  id          String   @id @default(cuid())
+  collegeId   String
+  meetingType String
+  userId      String
+  isFormal    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([collegeId, meetingType, userId])
+}
+
+model CategoryDict {
+  id           String  @id @default(cuid())
+  collegeId    String?
+  meetingType  String
+  code         String
+  name         String
+  needPrecheck Boolean @default(false)
+  sortOrder    Int     @default(0)
+
+  college College? @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  topics  Topic[]
+
+  @@unique([collegeId, meetingType, code])
+}
+
+model Meeting {
+  id           String    @id @default(cuid())
+  collegeId    String
+  meetingType  String
+  title        String
+  periodNo     String?
+  scheduledAt  DateTime?
+  hostUserId   String?
+  status       String    @default("DRAFT")
+  isMajor      Boolean   @default(false)
+  quorumRatio  Float     @default(0.5)
+  shouldAttend Int       @default(0)
+  actualAttend Int       @default(0)
+  canResolve   Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  college     College      @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  topics      Topic[]
+  attendances Attendance[]
+  minutes     Minutes?
+}
+
+model Topic {
+  id                       String   @id @default(cuid())
+  collegeId                String
+  meetingId                String?
+  meetingType              String
+  categoryId               String?
+  title                    String
+  content                  String?
+  proposerId               String
+  status                   String   @default("DRAFT")
+  needPartyPrecheck        Boolean  @default(false)
+  relatedPartyResolutionId String?
+  isMajor                  Boolean  @default(false)
+  isTempMotion             Boolean  @default(false)
+  isEmergency              Boolean  @default(false)
+  emergencyConfirmSides    String   @default("[]")
+  avoidUserIds             String   @default("[]")
+  sortOrder                Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  college      College             @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  meeting      Meeting?            @relation(fields: [meetingId], references: [id])
+  category     CategoryDict?       @relation(fields: [categoryId], references: [id])
+  proposer     User                @relation("TopicProposer", fields: [proposerId], references: [id])
+  materials    Material[]
+  jointReviews JointReview[]
+  discussions  DiscussionOpinion[]
+  votes        VoteRecord[]
+  resolution   Resolution?
+  transferFrom TransferLink?       @relation("TransferTarget")
+  transferTo   TransferLink?       @relation("TransferSource")
+}
+
+model Material {
+  id            String   @id @default(cuid())
+  topicId       String
+  name          String
+  filePath      String?
+  originalName  String?
+  mimeType      String?
+  fileSize      Int?
+  requiredKey   String?
+  isRequired    Boolean  @default(false)
+  uploaded      Boolean  @default(false)
+  securityLevel String   @default("INTERNAL")
+  createdAt     DateTime @default(now())
+
+  topic    Topic                 @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  receipts MaterialReadReceipt[]
+}
+
+model JointReview {
+  id         String    @id @default(cuid())
+  topicId    String
+  side       String
+  reviewerId String
+  decision   String    @default("PENDING")
+  comment    String?
+  decidedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  topic    Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  reviewer User  @relation(fields: [reviewerId], references: [id])
+
+  @@unique([topicId, side])
+}
+
+model Attendance {
+  id        String    @id @default(cuid())
+  meetingId String
+  userId    String
+  isFormal  Boolean   @default(true)
+  checkedIn Boolean   @default(false)
+  leaveNote String?
+  leaveAt   DateTime?
+  checkedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([meetingId, userId])
+}
+
+model MaterialReadReceipt {
+  id         String   @id @default(cuid())
+  materialId String
+  userId     String
+  readAt     DateTime @default(now())
+  note       String?
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, userId])
+  @@index([userId])
+}
+
+model DiscussionOpinion {
+  id        String   @id @default(cuid())
+  topicId   String
+  userId    String
+  opinion   String
+  reason    String?
+  isFinal   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+}
+
+model VoteRecord {
+  id              String   @id @default(cuid())
+  topicId         String
+  userId          String?
+  method          String
+  approve         Boolean?
+  voteCounted     Boolean  @default(true)
+  isAbsentOpinion Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id])
+}
+
+model Resolution {
+  id            String   @id @default(cuid())
+  topicId       String   @unique
+  resultType    String
+  content       String?
+  isPublic      Boolean  @default(false)
+  securityLevel String   @default("INTERNAL")
+  createdAt     DateTime @default(now())
+
+  topic            Topic             @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  supervisionTasks SupervisionTask[]
+}
+
+model Minutes {
+  id          String    @id @default(cuid())
+  meetingId   String    @unique
+  content     String
+  version     Int       @default(1)
+  effectiveAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  meeting Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  signs   MinutesSign[]
+}
+
+model MinutesSign {
+  id        String   @id @default(cuid())
+  minutesId String
+  userId    String
+  side      String
+  signedAt  DateTime @default(now())
+
+  minutes Minutes @relation(fields: [minutesId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([minutesId, side])
+}
+
+model SupervisionTask {
+  id           String    @id @default(cuid())
+  resolutionId String
+  title        String
+  ownerId      String
+  dueAt        DateTime?
+  status       String    @default("PENDING")
+  urgeCount    Int       @default(0)
+  lastUrgeAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  resolution Resolution            @relation(fields: [resolutionId], references: [id], onDelete: Cascade)
+  owner      User                  @relation("SupervisionOwner", fields: [ownerId], references: [id])
+  feedbacks  SupervisionFeedback[]
+}
+
+model SupervisionFeedback {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  task SupervisionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User            @relation(fields: [userId], references: [id])
+}
+
+model TransferLink {
+  id                   String   @id @default(cuid())
+  sourceTopicId        String   @unique
+  targetTopicId        String   @unique
+  sourceResolutionNote String?
+  createdAt            DateTime @default(now())
+
+  sourceTopic Topic @relation("TransferSource", fields: [sourceTopicId], references: [id], onDelete: Cascade)
+  targetTopic Topic @relation("TransferTarget", fields: [targetTopicId], references: [id], onDelete: Cascade)
+}
+
+model ComplianceLog {
+  id        String   @id @default(cuid())
+  collegeId String?
+  meetingId String?
+  topicId   String?
+  ruleCode  String
+  passed    Boolean
+  message   String?
+  payload   String?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  collegeId  String?
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  detail     String?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  college College? @relation(fields: [collegeId], references: [id])
+  user    User?    @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  collegeId String?
+  type      String
+  title     String
+  content   String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+/// AI 生成记录（摘要/纪要草稿等），仅作辅读与审计，不直接改业务终态
+model AiGeneration {
+  id           String   @id @default(cuid())
+  collegeId    String?
+  topicId      String?
+  meetingId    String?
+  userId       String?
+  kind         String
+  provider     String
+  model        String?
+  promptVersion String  @default("v1")
+  inputDigest  String?
+  outputText   String
+  metaJson     String?
+  createdAt    DateTime @default(now())
+
+  @@index([topicId, kind, createdAt])
+  @@index([collegeId, createdAt])
+}
+

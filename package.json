@@ -1,0 +1,13 @@
+{
+  "name": "qfnu-meeting",
+  "private": true,
+  "version": "0.1.0",
+  "description": "曲阜师范大学二级学院党委会、党政联席会议一体化管理系统",
+  "scripts": {
+    "dev:backend": "pnpm --dir backend dev",
+    "dev:frontend": "pnpm --dir frontend dev",
+    "dev:system": "pnpm --dir frontend dev:system",
+    "db:seed": "pnpm --dir backend prisma:seed",
+    "db:setup": "pnpm --dir backend exec prisma migrate dev --name init && pnpm --dir backend prisma:seed"
+  }
+}

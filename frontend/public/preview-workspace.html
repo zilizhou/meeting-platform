@@ -1,0 +1,4007 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>曲师大双会管理系统 · 多端预览</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f2f5f9;
+        --card: #ffffff;
+        --text: #1a2740;
+        --muted: #7a8799;
+        --line: #e6ecf2;
+        --party: #b4232c;
+        --party-soft: #f8e8e9;
+        --joint: #1a4f8b;
+        --joint-soft: #e8eef7;
+        --warn: #c0392b;
+        --ok: #1f7a4d;
+        --tab-h: 56px;
+        --safe-b: env(safe-area-inset-bottom, 0px);
+      }
+
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background: #c5d0dc;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      button {
+        font: inherit;
+        border: 0;
+        background: none;
+        cursor: pointer;
+        color: inherit;
+      }
+
+      /* 舞台 + 设备切换 */
+      .stage {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 16px;
+      }
+
+      .device-bar {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.95);
+        border-radius: 999px;
+        box-shadow: 0 8px 24px rgba(15, 53, 95, 0.12);
+        backdrop-filter: blur(10px);
+        z-index: 5;
+      }
+
+      .device-bar-label {
+        padding: 0 10px 0 12px;
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .device-bar button {
+        height: 32px;
+        padding: 0 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      .device-bar button.on {
+        background: var(--joint);
+        color: #fff;
+      }
+
+      .shell {
+        width: min(390px, 100%);
+        height: min(844px, calc(100dvh - 72px));
+        background: var(--bg);
+        border-radius: 28px;
+        overflow: hidden;
+        position: relative;
+        box-shadow:
+          0 0 0 10px #1f2a37,
+          0 24px 60px rgba(15, 53, 95, 0.28);
+        display: flex;
+        flex-direction: column;
+        transition: width 0.25s ease, height 0.25s ease, border-radius 0.25s ease;
+      }
+
+      .shell.mode-tablet {
+        width: min(834px, calc(100vw - 32px));
+        height: min(1100px, calc(100dvh - 72px));
+        border-radius: 22px;
+        box-shadow:
+          0 0 0 8px #2a3544,
+          0 28px 64px rgba(15, 53, 95, 0.26);
+      }
+
+      .shell.mode-desktop {
+        width: min(1280px, calc(100vw - 32px));
+        height: min(860px, calc(100dvh - 72px));
+        border-radius: 16px;
+        box-shadow:
+          0 0 0 1px rgba(31, 42, 55, 0.35),
+          0 28px 70px rgba(15, 53, 95, 0.22);
+      }
+
+      @media (max-width: 480px) {
+        .stage {
+          padding: 0;
+          gap: 0;
+          background: var(--bg);
+          justify-content: stretch;
+        }
+        .device-bar {
+          display: none;
+        }
+        .shell,
+        .shell.mode-tablet,
+        .shell.mode-desktop {
+          width: 100%;
+          height: 100dvh;
+          border-radius: 0;
+          box-shadow: none;
+        }
+      }
+
+      .status {
+        height: 44px;
+        padding: 12px 18px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        font-weight: 600;
+        background: transparent;
+        flex-shrink: 0;
+      }
+
+      .shell.mode-tablet .status,
+      .shell.mode-desktop .status {
+        display: none;
+      }
+
+      .status .dots {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        opacity: 0.7;
+      }
+
+      .nav {
+        background: var(--card);
+        padding: 6px 16px 10px;
+        border-bottom: 1px solid var(--line);
+        flex-shrink: 0;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .nav-text {
+        min-width: 0;
+      }
+
+      .nav-title {
+        font-family: "Noto Serif SC", serif;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .nav-sub {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .nav-bell {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--joint);
+        display: grid;
+        place-items: center;
+        position: relative;
+        flex-shrink: 0;
+        margin-bottom: 2px;
+      }
+
+      .nav-bell .dot {
+        position: absolute;
+        top: 6px;
+        right: 7px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 3px;
+        border-radius: 999px;
+        background: var(--warn);
+        color: #fff;
+        font-size: 9px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+
+      .pages {
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .page {
+        position: absolute;
+        inset: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 12px 14px calc(var(--tab-h) + var(--safe-b) + 16px);
+        display: none;
+      }
+
+      .page.on {
+        display: block;
+      }
+
+      .page.agent-page {
+        padding: 0;
+        overflow: hidden;
+        flex-direction: column;
+      }
+
+      .page.agent-page.on {
+        display: flex;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 14px;
+        margin-bottom: 12px;
+        overflow: hidden;
+      }
+
+      .card-h {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 14px 8px;
+      }
+
+      .card-h h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .card-h .n {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+        margin-left: 6px;
+      }
+
+      .seg {
+        display: flex;
+        background: #eef2f7;
+        border-radius: 9px;
+        padding: 2px;
+        gap: 2px;
+      }
+
+      .seg button {
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 7px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .seg button.on {
+        background: #fff;
+        color: var(--text);
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(15, 53, 95, 0.08);
+      }
+
+      .todo {
+        display: grid;
+        grid-template-columns: 3px 1fr;
+        gap: 10px;
+        padding: 12px 14px;
+        border-top: 1px solid #f1f4f8;
+      }
+
+      .rail {
+        border-radius: 3px;
+      }
+
+      .rail.party {
+        background: var(--party);
+      }
+
+      .rail.joint {
+        background: var(--joint);
+      }
+
+      .kind {
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 3px;
+      }
+
+      .kind.party {
+        color: var(--party);
+      }
+
+      .kind.joint {
+        color: var(--joint);
+      }
+
+      .ttl {
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.35;
+      }
+
+      .sub {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .sub.late {
+        color: var(--warn);
+      }
+
+      .ops {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .link {
+        color: var(--muted);
+        font-size: 13px;
+        padding: 8px 4px;
+      }
+
+      .btn {
+        height: 34px;
+        padding: 0 14px;
+        border-radius: 9px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+      }
+
+      .btn.party {
+        background: var(--party);
+      }
+
+      .btn.joint {
+        background: var(--joint);
+      }
+
+      .btn.light {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--line);
+        font-weight: 500;
+      }
+
+      .meet {
+        padding: 14px;
+        border-top: 1px solid #f1f4f8;
+      }
+
+      .tag {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 6px;
+        margin-bottom: 8px;
+      }
+
+      .tag.party {
+        background: var(--party-soft);
+        color: var(--party);
+      }
+
+      .tag.joint {
+        background: var(--joint-soft);
+        color: var(--joint);
+      }
+
+      .meet h3 {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.35;
+      }
+
+      .meet .meta {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .alert {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 14px 14px;
+        border-top: 1px solid #f1f4f8;
+      }
+
+      .alert i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--warn);
+        margin-top: 6px;
+        flex-shrink: 0;
+      }
+
+      .alert strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .alert span {
+        display: block;
+        margin-top: 3px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      /* —— 待办页（与整体卡片风格对齐） —— */
+      .todo-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        padding: 18px 16px 16px;
+        margin-bottom: 12px;
+        color: #fff;
+        background:
+          radial-gradient(circle at 85% 15%, rgba(180, 35, 44, 0.3), transparent 42%),
+          linear-gradient(135deg, #0d2f56 0%, #1a4f8b 58%, #163f6d 100%);
+        box-shadow: 0 12px 28px rgba(15, 53, 95, 0.22);
+      }
+      .todo-hero .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        opacity: 0.85;
+        margin-bottom: 8px;
+      }
+      .todo-hero .eyebrow b {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #ff6b73;
+        box-shadow: 8px 0 0 #6ea8e8;
+      }
+      .todo-hero h3 {
+        margin: 0;
+        font-family: "Noto Serif SC", serif;
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .todo-hero p {
+        margin: 6px 0 0;
+        font-size: 12px;
+        opacity: 0.82;
+        line-height: 1.5;
+      }
+      .todo-hero .nums {
+        display: flex;
+        gap: 16px;
+        margin-top: 14px;
+      }
+      .todo-hero .nums strong {
+        display: block;
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .todo-hero .nums span {
+        display: block;
+        margin-top: 4px;
+        font-size: 11px;
+        opacity: 0.78;
+      }
+      .todo-filter {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .todo-filter button {
+        flex: 1;
+        height: 34px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .todo-filter button.on {
+        background: var(--joint);
+        border-color: var(--joint);
+        color: #fff;
+        font-weight: 700;
+        box-shadow: 0 6px 14px rgba(26, 79, 139, 0.22);
+      }
+      .todo-filter button.on.party {
+        background: var(--party);
+        border-color: var(--party);
+        box-shadow: 0 6px 14px rgba(180, 35, 44, 0.2);
+      }
+      .todo-sec {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 2px 2px 8px;
+      }
+      .todo-sec h2 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .todo-sec h2 i {
+        width: 3px;
+        height: 12px;
+        border-radius: 2px;
+        background: var(--joint);
+      }
+      .todo-sec h2.i-warn i {
+        background: var(--warn);
+      }
+      .todo-sec .n {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .t-card {
+        width: 100%;
+        text-align: left;
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 10px;
+        background: #fff;
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+      }
+      .t-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+      }
+      .t-card.party::before { background: var(--party); }
+      .t-card.joint::before { background: var(--joint); }
+      .t-card.party { background: linear-gradient(160deg, #fff 58%, #fdf4f4 100%); }
+      .t-card.joint { background: linear-gradient(160deg, #fff 58%, #f2f6fb 100%); }
+      .t-card.late { box-shadow: 0 8px 20px rgba(192, 57, 43, 0.1); }
+      .t-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .t-top .tag { margin: 0; }
+      .t-due {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .t-due.late { color: var(--warn); }
+      .t-card h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.4;
+      }
+      .t-meta {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .t-foot {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(225, 232, 240, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .todo-empty {
+        text-align: center;
+        padding: 28px 16px;
+        background: #fff;
+        border-radius: 16px;
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 10px;
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.04);
+      }
+      .focus-card {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        width: 100%;
+        text-align: left;
+        border-radius: 16px;
+        padding: 14px;
+        background: linear-gradient(160deg, #fff 50%, #fff6f5 100%);
+        border: 1px solid rgba(180, 35, 44, 0.12);
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
+        margin-bottom: 10px;
+      }
+      .focus-card .mark {
+        width: 36px;
+        height: 36px;
+        border-radius: 11px;
+        background: var(--party-soft);
+        color: var(--party);
+        display: grid;
+        place-items: center;
+        font-family: "Noto Serif SC", serif;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .focus-card .body { flex: 1; min-width: 0; }
+      .focus-card strong {
+        display: block;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .focus-card span {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .focus-card .btn {
+        align-self: center;
+        flex-shrink: 0;
+      }
+      .focus-go {
+        align-self: center;
+        flex-shrink: 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--party);
+        white-space: nowrap;
+      }
+
+      /* 列表页通用 */
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px;
+        background: var(--card);
+        border-radius: 12px;
+        margin-bottom: 10px;
+      }
+
+      .row .l strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .row .l span {
+        display: block;
+        margin-top: 3px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .chev {
+        color: #b0bac8;
+        font-size: 18px;
+      }
+
+      /* 我的 */
+      .me-profile {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        padding: 20px 16px 18px;
+        margin-bottom: 12px;
+        color: #fff;
+        background:
+          radial-gradient(circle at 90% 10%, rgba(180, 35, 44, 0.28), transparent 42%),
+          linear-gradient(145deg, #0d2f56 0%, #1a4f8b 55%, #163f6d 100%);
+        box-shadow: 0 12px 28px rgba(15, 53, 95, 0.22);
+      }
+
+      .me-profile::after {
+        content: "";
+        position: absolute;
+        left: -24px;
+        bottom: -36px;
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .me-profile-top {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+
+      .avatar {
+        width: 58px;
+        height: 58px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        display: grid;
+        place-items: center;
+        font-family: "Noto Serif SC", serif;
+        font-size: 24px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+
+      .me-profile h3 {
+        margin: 0;
+        font-family: "Noto Serif SC", serif;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .me-profile .role {
+        margin-top: 4px;
+        font-size: 12px;
+        opacity: 0.88;
+      }
+
+      .me-tags {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 14px;
+      }
+
+      .me-tags span {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+
+      .me-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .me-stat {
+        background: #fff;
+        border-radius: 14px;
+        padding: 12px 10px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 0 8px 18px rgba(15, 53, 95, 0.05);
+      }
+
+      .me-stat b {
+        display: block;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--joint);
+        line-height: 1.1;
+      }
+
+      .me-stat.party b {
+        color: var(--party);
+      }
+
+      .me-stat.warn b {
+        color: var(--warn);
+      }
+
+      .me-stat span {
+        display: block;
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .me-block {
+        background: #fff;
+        border-radius: 16px;
+        padding: 4px;
+        margin-bottom: 12px;
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.9);
+      }
+
+      .me-block .label {
+        padding: 10px 12px 4px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .me-item {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 40px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        text-align: left;
+        padding: 12px;
+        border-radius: 12px;
+      }
+
+      .me-item:active {
+        background: #f5f8fb;
+      }
+
+      .me-ico {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        font-family: "Noto Serif SC", serif;
+        font-weight: 700;
+        font-size: 15px;
+        background: var(--joint-soft);
+        color: var(--joint);
+      }
+
+      .me-ico.safe {
+        background: #eef2f6;
+        color: #4d5d73;
+      }
+
+      .me-ico.out {
+        background: var(--party-soft);
+        color: var(--party);
+      }
+
+      .me-item strong {
+        display: block;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .me-item em {
+        display: block;
+        margin-top: 2px;
+        font-style: normal;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .me-item .chev {
+        color: #b0bac8;
+        font-size: 18px;
+      }
+
+      .me-out {
+        width: 100%;
+        height: 46px;
+        border-radius: 14px;
+        background: #fff;
+        border: 1px solid rgba(180, 35, 44, 0.18);
+        color: var(--party);
+        font-weight: 700;
+        font-size: 15px;
+        box-shadow: 0 8px 18px rgba(15, 53, 95, 0.04);
+      }
+
+      .me-out:active {
+        background: var(--party-soft);
+      }
+
+      .me-foot {
+        text-align: center;
+        margin-top: 14px;
+        font-size: 11px;
+        color: #9aa6b5;
+        line-height: 1.5;
+      }
+
+      .menu .row {
+        margin-bottom: 0;
+        border-radius: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .menu .row:first-child {
+        border-radius: 12px 12px 0 0;
+      }
+
+      .menu .row:last-child {
+        border-radius: 0 0 12px 12px;
+        border-bottom: 0;
+      }
+
+      /* —— 工作台：卡片式 —— */
+      .work-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        padding: 18px 16px 16px;
+        margin-bottom: 14px;
+        color: #fff;
+        background:
+          radial-gradient(circle at 88% 18%, rgba(180, 35, 44, 0.35), transparent 42%),
+          linear-gradient(135deg, #0d2f56 0%, #1a4f8b 58%, #163f6d 100%);
+        box-shadow: 0 12px 28px rgba(15, 53, 95, 0.22);
+      }
+
+      .work-hero::after {
+        content: "";
+        position: absolute;
+        right: -20px;
+        bottom: -30px;
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .work-hero .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        opacity: 0.85;
+        margin-bottom: 8px;
+      }
+
+      .work-hero .eyebrow b {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #ff6b73;
+        box-shadow: 8px 0 0 #6ea8e8;
+      }
+
+      .work-hero h3 {
+        position: relative;
+        z-index: 1;
+        margin: 0;
+        font-family: "Noto Serif SC", serif;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .work-hero p {
+        position: relative;
+        z-index: 1;
+        margin: 6px 0 0;
+        font-size: 12px;
+        opacity: 0.82;
+        line-height: 1.5;
+      }
+
+      .work-group {
+        margin-bottom: 14px;
+      }
+
+      .work-group .g-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 2px 8px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .work-group .g-title i {
+        width: 3px;
+        height: 12px;
+        border-radius: 2px;
+      }
+
+      .work-group.party .g-title i {
+        background: var(--party);
+      }
+
+      .work-group.joint .g-title i {
+        background: var(--joint);
+      }
+
+      .work-group.more .g-title i {
+        background: #8a97ab;
+      }
+
+      .work-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .w-card {
+        position: relative;
+        text-align: left;
+        border-radius: 16px;
+        padding: 14px 12px 12px;
+        min-height: 108px;
+        background: var(--card);
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
+        overflow: hidden;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      .w-card:active {
+        transform: scale(0.98);
+      }
+
+      .w-card.party {
+        background:
+          linear-gradient(160deg, #fff 55%, #fdf4f4 100%);
+        border-color: rgba(180, 35, 44, 0.1);
+      }
+
+      .w-card.joint {
+        background:
+          linear-gradient(160deg, #fff 55%, #f2f6fb 100%);
+        border-color: rgba(26, 79, 139, 0.1);
+      }
+
+      .w-card.neutral {
+        background:
+          linear-gradient(160deg, #fff 50%, #f5f7fa 100%);
+      }
+
+      .w-card.wide {
+        grid-column: 1 / -1;
+        min-height: 84px;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 12px;
+        align-items: center;
+        background:
+          linear-gradient(120deg, #0f355f 0%, #1a4f8b 70%, #245a96 100%);
+        color: #fff;
+        box-shadow: 0 10px 24px rgba(15, 53, 95, 0.2);
+      }
+
+      .w-card.wide .w-desc {
+        color: rgba(255, 255, 255, 0.78);
+      }
+
+      .w-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 12px;
+        font-size: 16px;
+        font-weight: 700;
+        font-family: "Noto Serif SC", serif;
+      }
+
+      .w-card.party .w-icon {
+        background: var(--party-soft);
+        color: var(--party);
+      }
+
+      .w-card.joint .w-icon {
+        background: var(--joint-soft);
+        color: var(--joint);
+      }
+
+      .w-card.neutral .w-icon {
+        background: #eef2f6;
+        color: #4d5d73;
+      }
+
+      .w-card.wide .w-icon {
+        margin-bottom: 0;
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
+      }
+
+      .w-name {
+        display: block;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      .w-desc {
+        display: block;
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      .w-go {
+        font-size: 18px;
+        opacity: 0.55;
+      }
+
+      .w-card.wide .w-go {
+        opacity: 0.8;
+        color: #fff;
+      }
+
+      /* —— 会议页卡片 —— */
+      .meet-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        padding: 18px 16px 16px;
+        margin-bottom: 14px;
+        color: #fff;
+        background:
+          radial-gradient(circle at 12% 20%, rgba(180, 35, 44, 0.28), transparent 40%),
+          linear-gradient(135deg, #0d2f56 0%, #1a4f8b 60%, #163f6d 100%);
+        box-shadow: 0 12px 28px rgba(15, 53, 95, 0.22);
+      }
+
+      .meet-hero .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        opacity: 0.85;
+        margin-bottom: 8px;
+      }
+
+      .meet-hero .eyebrow b {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #ff6b73;
+        box-shadow: 8px 0 0 #6ea8e8;
+      }
+
+      .meet-hero h3 {
+        margin: 0;
+        font-family: "Noto Serif SC", serif;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .meet-hero p {
+        margin: 6px 0 0;
+        font-size: 12px;
+        opacity: 0.82;
+      }
+
+      .meet-cards {
+        display: grid;
+        gap: 10px;
+      }
+
+      .m-card {
+        width: 100%;
+        text-align: left;
+        border-radius: 16px;
+        padding: 14px;
+        background: #fff;
+        border: 1px solid var(--line);
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .m-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+      }
+
+      .m-card.party::before {
+        background: var(--party);
+      }
+
+      .m-card.joint::before {
+        background: var(--joint);
+      }
+
+      .m-card.archive::before {
+        background: #8a97ab;
+      }
+
+      .m-card.party {
+        background: linear-gradient(160deg, #fff 60%, #fdf4f4 100%);
+      }
+
+      .m-card.joint {
+        background: linear-gradient(160deg, #fff 60%, #f2f6fb 100%);
+      }
+
+      .m-card.soft {
+        opacity: 0.96;
+      }
+
+      .m-card.soft h3 {
+        font-size: 15px;
+      }
+
+      .m-card:active {
+        transform: scale(0.99);
+      }
+
+      .m-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+
+      .m-state {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--joint);
+        background: var(--joint-soft);
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+
+      .m-card.party .m-state {
+        color: var(--party);
+        background: var(--party-soft);
+      }
+
+      .m-state.muted {
+        color: var(--muted);
+        background: #eef2f6;
+        font-weight: 600;
+      }
+
+      .tag.archive {
+        background: #eef2f6;
+        color: #4d5d73;
+      }
+
+      .m-card h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.35;
+        padding-right: 4px;
+      }
+
+      .m-meta {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .m-foot {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(225, 232, 240, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--joint);
+      }
+
+      .m-card.party .m-foot {
+        color: var(--party);
+      }
+
+      .m-card.archive .m-foot {
+        color: #4d5d73;
+      }
+
+      .m-foot .chev {
+        font-size: 18px;
+        color: inherit;
+        opacity: 0.7;
+      }
+
+      /* —— 智能体对话页 —— */
+      .agent-body {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 12px 14px 10px;
+      }
+
+      .agent-welcome {
+        background: linear-gradient(145deg, #0f355f, #1a4f8b);
+        color: #fff;
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+
+      .agent-welcome h3 {
+        margin: 0;
+        font-family: "Noto Serif SC", serif;
+        font-size: 18px;
+      }
+
+      .agent-welcome p {
+        margin: 6px 0 0;
+        font-size: 12px;
+        opacity: 0.85;
+        line-height: 1.5;
+      }
+
+      .agent-tips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .agent-tips button {
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: #fff;
+        border: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--joint);
+        font-weight: 500;
+      }
+
+      .bubble {
+        max-width: 88%;
+        margin-bottom: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .bubble.ai {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-top-left-radius: 4px;
+        color: var(--text);
+      }
+
+      .bubble.me {
+        margin-left: auto;
+        background: var(--joint);
+        color: #fff;
+        border-top-right-radius: 4px;
+      }
+
+      .bubble .who {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        opacity: 0.7;
+      }
+
+      .bubble.me .who {
+        opacity: 0.85;
+      }
+
+      .confirm-card {
+        background: #fff;
+        border: 1px solid rgba(26, 79, 139, 0.18);
+        border-radius: 14px;
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+
+      .confirm-card .t {
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .confirm-card .d {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+
+      .confirm-card .note {
+        font-size: 11px;
+        color: var(--party);
+        margin-bottom: 10px;
+      }
+
+      .confirm-card .acts {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .agent-composer {
+        flex-shrink: 0;
+        padding: 8px 12px calc(8px + var(--tab-h) + var(--safe-b));
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid var(--line);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: end;
+      }
+
+      .agent-composer textarea {
+        width: 100%;
+        min-height: 40px;
+        max-height: 88px;
+        resize: none;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font: inherit;
+        font-size: 14px;
+        outline: none;
+        background: #f7f9fc;
+      }
+
+      .agent-composer .send {
+        height: 40px;
+        padding: 0 16px;
+        border-radius: 12px;
+        background: var(--joint);
+        color: #fff;
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .hint {
+        text-align: center;
+        font-size: 11px;
+        color: #9aa6b5;
+        margin: 16px 0 8px;
+      }
+
+      /* 底部 Tab */
+      .tabbar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: calc(var(--tab-h) + var(--safe-b));
+        padding-bottom: var(--safe-b);
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid var(--line);
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        backdrop-filter: blur(10px);
+        z-index: 10;
+      }
+
+      .tab {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 500;
+        position: relative;
+      }
+
+      .tab svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      .tab.on {
+        color: var(--joint);
+        font-weight: 700;
+      }
+
+      .tab .dot {
+        position: absolute;
+        top: 6px;
+        right: calc(50% - 16px);
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: var(--warn);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+
+      .toast {
+        position: absolute;
+        left: 50%;
+        bottom: calc(var(--tab-h) + var(--safe-b) + 16px);
+        transform: translateX(-50%) translateY(8px);
+        background: rgba(26, 39, 64, 0.92);
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 9px;
+        font-size: 12px;
+        opacity: 0;
+        pointer-events: none;
+        transition: 0.2s ease;
+        z-index: 20;
+        white-space: nowrap;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .modal {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        display: none;
+        align-items: flex-end;
+        z-index: 30;
+      }
+
+      .modal.open {
+        display: flex;
+      }
+
+      .sheet {
+        width: 100%;
+        background: #fff;
+        border-radius: 16px 16px 0 0;
+        padding: 18px 16px calc(18px + var(--safe-b));
+      }
+
+      .sheet h3 {
+        margin: 0 0 8px;
+        font-size: 17px;
+      }
+
+      .sheet p {
+        margin: 0 0 16px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .sheet .row-btns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .sheet .row-btns .btn {
+        height: 42px;
+        width: 100%;
+      }
+
+      /* —— 共用：二级详情页（待办/会议/督办可复用） —— */
+      .subpage {
+        position: absolute;
+        inset: 0;
+        z-index: 25;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        transform: translateX(105%);
+        transition: transform 0.22s ease;
+      }
+
+      .subpage.open {
+        transform: none;
+      }
+
+      .sub-nav {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px 10px;
+        background: rgba(255, 255, 255, 0.96);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .sub-back {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--joint);
+        font-size: 18px;
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+      }
+
+      .sub-nav .titles {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .sub-nav .titles strong {
+        display: block;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .sub-nav .titles span {
+        display: block;
+        margin-top: 1px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .sub-body {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 12px 14px 16px;
+      }
+
+      .sub-foot {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 14px calc(10px + var(--safe-b));
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid var(--line);
+      }
+
+      .sub-foot .btn {
+        flex: 1 1 30%;
+        min-width: 88px;
+        height: 44px;
+        font-size: 15px;
+      }
+
+      .detail-hero {
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 12px;
+        background: #fff;
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .detail-hero::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+      }
+
+      .detail-hero.party::before {
+        background: var(--party);
+      }
+
+      .detail-hero.joint::before {
+        background: var(--joint);
+      }
+
+      .detail-hero.warn::before {
+        background: var(--warn);
+      }
+
+      .detail-hero.party {
+        background: linear-gradient(160deg, #fff 55%, #fdf4f4 100%);
+      }
+
+      .detail-hero.joint {
+        background: linear-gradient(160deg, #fff 55%, #f2f6fb 100%);
+      }
+
+      .detail-hero.warn {
+        background: linear-gradient(160deg, #fff 55%, #fff6f5 100%);
+      }
+
+      .detail-hero .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .detail-hero h3 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.4;
+      }
+
+      .detail-hero .meta {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .detail-block {
+        background: #fff;
+        border-radius: 16px;
+        padding: 4px 4px 8px;
+        margin-bottom: 12px;
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
+      }
+
+      .detail-block .label {
+        padding: 10px 12px 6px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+
+      .detail-row .k {
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+
+      .detail-row .v {
+        text-align: right;
+        font-weight: 500;
+        line-height: 1.4;
+      }
+
+      .detail-text {
+        padding: 4px 12px 12px;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--text);
+      }
+
+      .mat-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-top: 1px solid #f1f4f8;
+        font-size: 13px;
+      }
+
+      .mat-item:first-of-type {
+        border-top: 0;
+      }
+
+      .mat-item .name {
+        font-weight: 600;
+      }
+
+      .mat-item .st {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--ok, #1f7a4d);
+      }
+
+      .mat-item .st.miss {
+        color: var(--warn);
+      }
+
+      .flow {
+        display: flex;
+        gap: 6px;
+        padding: 4px 12px 12px;
+        flex-wrap: wrap;
+      }
+
+      .flow span {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #eef2f6;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .flow span.on {
+        background: var(--joint-soft);
+        color: var(--joint);
+      }
+
+      .flow span.done {
+        background: #e8f6ee;
+        color: #1f7a4d;
+      }
+
+      .flow.party span.on {
+        background: var(--party-soft);
+        color: var(--party);
+      }
+
+      .topic-item {
+        display: grid;
+        grid-template-columns: 28px 1fr auto;
+        gap: 8px;
+        align-items: start;
+        padding: 10px 12px;
+        border-top: 1px solid #f1f4f8;
+      }
+
+      .topic-item:first-of-type {
+        border-top: 0;
+      }
+
+      .topic-item .idx {
+        width: 24px;
+        height: 24px;
+        border-radius: 8px;
+        background: #eef2f6;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+
+      .topic-item .tt {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+
+      .topic-item .tm {
+        margin-top: 3px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .attend-bar {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        padding: 4px 12px 12px;
+      }
+
+      .attend-bar div {
+        text-align: center;
+        background: #f5f8fb;
+        border-radius: 12px;
+        padding: 10px 6px;
+      }
+
+      .attend-bar strong {
+        display: block;
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--joint);
+      }
+
+      .attend-bar span {
+        display: block;
+        margin-top: 2px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .list-filter {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .list-filter button {
+        flex: 1;
+        height: 34px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .list-filter button.on {
+        background: var(--joint);
+        border-color: var(--joint);
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .list-filter button.on.party {
+        background: var(--party);
+        border-color: var(--party);
+      }
+
+      .list-search {
+        margin-bottom: 12px;
+      }
+
+      .list-search input {
+        width: 100%;
+        height: 40px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        padding: 0 12px;
+        font: inherit;
+        font-size: 14px;
+        background: #fff;
+        outline: none;
+      }
+
+      .list-card {
+        width: 100%;
+        text-align: left;
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 10px;
+        background: #fff;
+        box-shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+      }
+
+      .list-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+      }
+
+      .list-card.party::before {
+        background: var(--party);
+      }
+
+      .list-card.joint::before {
+        background: var(--joint);
+      }
+
+      .list-card.archive::before {
+        background: #8a97ab;
+      }
+
+      .list-card.party {
+        background: linear-gradient(160deg, #fff 58%, #fdf4f4 100%);
+      }
+
+      .list-card.joint {
+        background: linear-gradient(160deg, #fff 58%, #f2f6fb 100%);
+      }
+
+      .list-card .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .list-card h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .list-card .meta {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .list-card .foot {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(225, 232, 240, 0.9);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--joint);
+      }
+
+      .list-card.party .foot {
+        color: var(--party);
+      }
+
+      .list-empty {
+        text-align: center;
+        padding: 36px 16px;
+        color: var(--muted);
+        font-size: 13px;
+        background: #fff;
+        border-radius: 16px;
+      }
+
+      .status-pill {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #eef2f6;
+        color: var(--muted);
+      }
+
+      .status-pill.ing {
+        background: var(--joint-soft);
+        color: var(--joint);
+      }
+
+      .status-pill.done {
+        background: #e8f6ee;
+        color: #1f7a4d;
+      }
+
+      .status-pill.wait {
+        background: #fff4e8;
+        color: #c27803;
+      }
+
+      /* —— 登录页 —— */
+      .login {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        background:
+          radial-gradient(ellipse 90% 55% at 10% -10%, rgba(180, 35, 44, 0.14), transparent 50%),
+          radial-gradient(ellipse 80% 50% at 100% 0%, rgba(26, 79, 139, 0.18), transparent 48%),
+          linear-gradient(180deg, #e8eef6 0%, var(--bg) 42%, #e4ebf4 100%);
+        padding: 8px 20px calc(20px + var(--safe-b));
+      }
+
+      .login.hidden,
+      .app-main.hidden {
+        display: none;
+      }
+
+      .login-brand {
+        margin-top: 28px;
+        text-align: center;
+      }
+
+      .login-marks {
+        display: inline-flex;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+
+      .login-marks i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: block;
+      }
+
+      .login-marks .p {
+        background: var(--party);
+      }
+
+      .login-marks .j {
+        background: var(--joint);
+      }
+
+      .login-brand h1 {
+        margin: 0;
+        font-family: "Noto Serif SC", serif;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1.35;
+      }
+
+      .login-brand p {
+        margin: 8px 0 0;
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .login-card {
+        margin-top: 28px;
+        background: #fff;
+        border-radius: 20px;
+        padding: 20px 18px 18px;
+        box-shadow: 0 14px 36px rgba(15, 53, 95, 0.1);
+      }
+
+      .login-card h2 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .login-card .hint-line {
+        margin: 0 0 18px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .field {
+        margin-bottom: 14px;
+      }
+
+      .field label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .field input {
+        width: 100%;
+        height: 46px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        padding: 0 14px;
+        font: inherit;
+        font-size: 15px;
+        background: #f7f9fc;
+        outline: none;
+      }
+
+      .field input:focus {
+        border-color: rgba(26, 79, 139, 0.45);
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(26, 79, 139, 0.1);
+      }
+
+      .login-btn {
+        width: 100%;
+        height: 48px;
+        margin-top: 6px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #0f355f, #1a4f8b);
+        color: #fff;
+        font-size: 16px;
+        font-weight: 700;
+        box-shadow: 0 10px 22px rgba(26, 79, 139, 0.28);
+      }
+
+      .login-btn:active {
+        transform: scale(0.99);
+      }
+
+      .login-error {
+        display: none;
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--warn);
+        text-align: center;
+      }
+
+      .login-error.show {
+        display: block;
+      }
+
+      .quick-accounts {
+        margin-top: 16px;
+      }
+
+      .quick-accounts .lab {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .quick-accounts .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .quick-accounts button {
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #f7f9fc;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--joint);
+      }
+
+      .quick-accounts button.party {
+        color: var(--party);
+        background: var(--party-soft);
+        border-color: rgba(180, 35, 44, 0.15);
+      }
+
+      .login-foot {
+        margin-top: auto;
+        padding-top: 24px;
+        text-align: center;
+        font-size: 11px;
+        color: #9aa6b5;
+        line-height: 1.6;
+      }
+
+      .app-main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+
+      .side-brand {
+        display: none;
+      }
+
+      /* —— 平板：加宽双列，保留底栏 —— */
+      .shell.mode-tablet .nav {
+        padding: 12px 22px 14px;
+      }
+
+      .shell.mode-tablet .nav-title {
+        font-size: 24px;
+      }
+
+      .shell.mode-tablet .page {
+        padding: 16px 22px calc(var(--tab-h) + var(--safe-b) + 20px);
+      }
+
+      .shell.mode-tablet .page.agent-page {
+        padding: 0;
+      }
+
+      .shell.mode-tablet .todo-hero,
+      .shell.mode-tablet .meet-hero,
+      .shell.mode-tablet .work-hero {
+        padding: 20px 22px;
+      }
+
+      .shell.mode-tablet #todoList {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-items: start;
+      }
+
+      .shell.mode-tablet #todoList .t-card {
+        margin-bottom: 0;
+      }
+
+      .shell.mode-tablet .meet-cards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .shell.mode-tablet .m-card {
+        margin-bottom: 0;
+      }
+
+      .shell.mode-tablet .work-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .shell.mode-tablet .me-profile,
+      .shell.mode-tablet .me-stats,
+      .shell.mode-tablet .me-block {
+        max-width: 640px;
+      }
+
+      .shell.mode-tablet .login {
+        padding: 24px 48px calc(28px + var(--safe-b));
+        justify-content: center;
+      }
+
+      .shell.mode-tablet .login-card {
+        max-width: 420px;
+        margin-left: auto;
+        margin-right: auto;
+        width: 100%;
+      }
+
+      .shell.mode-tablet .login-brand h1 {
+        font-size: 28px;
+      }
+
+      .shell.mode-tablet .subpage {
+        left: 10%;
+        right: 10%;
+        top: 6%;
+        bottom: 6%;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 24px 64px rgba(15, 53, 95, 0.28);
+      }
+
+      .shell.mode-tablet .subpage.open {
+        transform: translateX(0);
+      }
+
+      /* —— 电脑：左侧导航 + 主工作区 —— */
+      .shell.mode-desktop .app-main:not(.hidden) {
+        display: grid;
+        grid-template-columns: 232px 1fr;
+        grid-template-rows: auto 1fr;
+      }
+
+      .shell.mode-desktop .nav {
+        grid-column: 2;
+        grid-row: 1;
+        padding: 14px 28px;
+        align-items: center;
+      }
+
+      .shell.mode-desktop .nav-title {
+        font-size: 22px;
+      }
+
+      .shell.mode-desktop .pages {
+        grid-column: 2;
+        grid-row: 2;
+      }
+
+      .shell.mode-desktop .tabbar {
+        grid-column: 1;
+        grid-row: 1 / -1;
+        position: relative;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        height: auto;
+        padding: 0 0 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        background: linear-gradient(180deg, #0d2f56 0%, #143a66 48%, #1a4f8b 100%);
+        border-top: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        color: #fff;
+        z-index: 10;
+      }
+
+      .shell.mode-desktop .side-brand {
+        display: block;
+        padding: 22px 18px 18px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .shell.mode-desktop .side-brand .marks {
+        display: inline-flex;
+        gap: 5px;
+        margin-bottom: 10px;
+      }
+
+      .shell.mode-desktop .side-brand .marks i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        display: block;
+      }
+
+      .shell.mode-desktop .side-brand .marks .p {
+        background: #f0a0a4;
+      }
+
+      .shell.mode-desktop .side-brand .marks .j {
+        background: #9ec0e8;
+      }
+
+      .shell.mode-desktop .side-brand strong {
+        display: block;
+        font-family: "Noto Serif SC", serif;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.4;
+        letter-spacing: 0.02em;
+      }
+
+      .shell.mode-desktop .side-brand em {
+        display: block;
+        margin-top: 6px;
+        font-style: normal;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.62);
+      }
+
+      .shell.mode-desktop .tab {
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 12px;
+        height: 44px;
+        margin: 0 12px;
+        padding: 0 14px;
+        border-radius: 10px;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.72);
+      }
+
+      .shell.mode-desktop .tab svg {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+      }
+
+      .shell.mode-desktop .tab.on {
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .shell.mode-desktop .tab .dot {
+        top: 8px;
+        right: 10px;
+        left: auto;
+      }
+
+      .shell.mode-desktop .page {
+        padding: 20px 28px 28px;
+      }
+
+      .shell.mode-desktop .page.agent-page {
+        padding: 0;
+      }
+
+      .shell.mode-desktop .todo-hero,
+      .shell.mode-desktop .meet-hero,
+      .shell.mode-desktop .work-hero {
+        padding: 22px 26px;
+      }
+
+      .shell.mode-desktop #todoList {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+
+      .shell.mode-desktop #todoList .t-card {
+        margin-bottom: 0;
+      }
+
+      .shell.mode-desktop .meet-cards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .shell.mode-desktop .m-card {
+        margin-bottom: 0;
+      }
+
+      .shell.mode-desktop .work-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .shell.mode-desktop .me-layout {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+
+      .shell.mode-desktop .me-col-main .me-profile,
+      .shell.mode-desktop .me-col-main .me-stats {
+        max-width: none;
+      }
+
+      .shell.mode-tablet .me-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+
+      .shell.mode-desktop .login-card {
+        margin-top: 0;
+      }
+
+      .shell.mode-desktop .toast {
+        bottom: 28px;
+        left: calc(232px + (100% - 232px) / 2);
+      }
+
+      .shell.mode-desktop .subpage {
+        left: auto;
+        width: min(480px, 100%);
+        box-shadow: -16px 0 48px rgba(15, 53, 95, 0.2);
+      }
+
+      .shell.mode-desktop .login:not(.hidden) {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        grid-template-rows: 1fr auto;
+        padding: 0;
+        overflow: hidden;
+        background: var(--bg);
+      }
+
+      .shell.mode-desktop .login-brand {
+        margin: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: flex-start;
+        text-align: left;
+        padding: 48px 44px;
+        background:
+          radial-gradient(ellipse 80% 60% at 20% 20%, rgba(180, 35, 44, 0.22), transparent 55%),
+          radial-gradient(ellipse 70% 50% at 90% 80%, rgba(255, 255, 255, 0.12), transparent 50%),
+          linear-gradient(160deg, #0d2f56 0%, #1a4f8b 55%, #245a96 100%);
+        color: #fff;
+      }
+
+      .shell.mode-desktop .login-brand h1 {
+        font-size: 32px;
+        color: #fff;
+      }
+
+      .shell.mode-desktop .login-brand p {
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 14px;
+      }
+
+      .shell.mode-desktop .login-brand .login-marks .p {
+        background: #f0a0a4;
+      }
+
+      .shell.mode-desktop .login-brand .login-marks .j {
+        background: #9ec0e8;
+      }
+
+      .shell.mode-desktop .login-card {
+        margin: auto 40px;
+        width: min(400px, 100%);
+        align-self: center;
+      }
+
+      .shell.mode-desktop .login-foot {
+        grid-column: 1 / -1;
+        margin: 0;
+        padding: 14px 24px;
+        background: rgba(255, 255, 255, 0.5);
+        border-top: 1px solid var(--line);
+      }
+
+      .shell.mode-desktop .agent-body {
+        max-width: 760px;
+        margin: 0 auto;
+        width: 100%;
+      }
+
+      .shell.mode-desktop .agent-composer {
+        max-width: 760px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .shell.mode-desktop .modal,
+      .shell.mode-tablet .modal {
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .shell.mode-desktop .sheet,
+      .shell.mode-tablet .sheet {
+        width: min(420px, 100%);
+        border-radius: 16px;
+        margin: 0;
+      }
+
+      .shell.mode-tablet .focus-card {
+        max-width: none;
+      }
+
+      .shell.mode-desktop .nav-bell {
+        width: 40px;
+        height: 40px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="device-bar" role="tablist" aria-label="预览设备">
+        <span class="device-bar-label">预览设备</span>
+        <button type="button" class="on" data-device="phone">手机</button>
+        <button type="button" data-device="tablet">平板</button>
+        <button type="button" data-device="desktop">电脑</button>
+      </div>
+      <div class="shell mode-phone" id="app">
+        <div class="status">
+          <span>9:41</span>
+          <span class="dots">●●● ▮▮▮</span>
+        </div>
+
+        <!-- 登录 -->
+        <section class="login" id="loginScreen">
+          <div class="login-brand">
+            <div class="login-marks" aria-hidden="true"><i class="p"></i><i class="j"></i></div>
+            <h1>曲师大双会管理系统</h1>
+            <p>党委会 · 党政联席会<br />制度硬校验 · 全流程留痕</p>
+          </div>
+
+          <div class="login-card">
+            <h2>登录</h2>
+            <p class="hint-line">书记 / 院长视图预览 · 密码均为 123456</p>
+            <form id="loginForm">
+              <div class="field">
+                <label for="loginUser">账号</label>
+                <input id="loginUser" name="username" autocomplete="username" value="dean" placeholder="如 dean / secretary" />
+              </div>
+              <div class="field">
+                <label for="loginPass">密码</label>
+                <input
+                  id="loginPass"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  value="123456"
+                  placeholder="请输入密码"
+                />
+              </div>
+              <button class="login-btn" type="submit">进入系统</button>
+              <div class="login-error" id="loginError">账号或密码不正确</div>
+            </form>
+
+            <div class="quick-accounts">
+              <div class="lab">快捷演示账号</div>
+              <div class="chips">
+                <button type="button" class="party" data-acc="secretary">书记 secretary</button>
+                <button type="button" data-acc="dean">院长 dean</button>
+                <button type="button" data-acc="office">办公室 office</button>
+                <button type="button" data-acc="admin">校级 admin</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="login-foot">
+            曲阜师范大学 · 曲师大双会管理系统<br />
+            预览稿 · 不连真实后端
+          </div>
+        </section>
+
+        <div class="app-main hidden" id="appMain">
+        <div class="nav">
+          <div class="nav-text">
+            <div class="nav-title" id="navTitle">待办</div>
+            <div class="nav-sub" id="navSub">院长视图 · 待办优先</div>
+          </div>
+          <button class="nav-bell" type="button" id="bellBtn" aria-label="消息通知" title="消息">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M6 9a6 6 0 1 1 12 0c0 3.2 1.2 4.8 2 6H4c.8-1.2 2-2.8 2-6Z"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linejoin="round"
+              />
+              <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+            <span class="dot">3</span>
+          </button>
+        </div>
+
+        <div class="pages">
+          <!-- 待办 -->
+          <section class="page on" data-page="todo" id="page-todo">
+            <div class="todo-hero">
+              <div class="eyebrow"><b></b> 待办优先 · 少步办结</div>
+              <h3>待办</h3>
+              <p>审题、签署、签到集中办理 · 党委红 / 联席蓝</p>
+              <div class="nums">
+                <div><strong id="numAll">4</strong><span>全部</span></div>
+                <div><strong id="numParty">2</strong><span>党委</span></div>
+                <div><strong id="numJoint">2</strong><span>联席</span></div>
+              </div>
+            </div>
+
+            <div class="todo-filter" role="tablist">
+              <button type="button" class="on" data-f="all">全部</button>
+              <button type="button" data-f="party">党委</button>
+              <button type="button" data-f="joint">联席</button>
+            </div>
+
+            <div class="todo-sec">
+              <h2><i></i>待我处理</h2>
+              <span class="n" id="todoN">4 项</span>
+            </div>
+            <div id="todoList"></div>
+
+            <div class="todo-sec">
+              <h2 class="i-warn"><i></i>需关注</h2>
+              <span class="n">1 项</span>
+            </div>
+            <button class="focus-card" type="button" data-detail="focus">
+              <div class="mark">督</div>
+              <div class="body">
+                <strong>实验室安全整改落实</strong>
+                <span>逾期 3 天 · 责任人：分管副院长</span>
+              </div>
+              <span class="focus-go">查看 ›</span>
+            </button>
+          </section>
+
+          <!-- 会议：卡片式 -->
+          <section class="page" data-page="meet" id="page-meet">
+            <div class="meet-hero">
+              <div class="eyebrow"><b></b> 今明优先 · 分轨开会</div>
+              <h3>会议</h3>
+              <p>党委红轨 · 联席蓝轨 · 点卡片进入</p>
+            </div>
+
+            <div class="work-group party">
+              <div class="g-title"><i></i>党委会议</div>
+              <div class="meet-cards">
+                <button class="m-card party" type="button" data-meet="m1">
+                  <div class="m-top">
+                    <span class="tag party">党委</span>
+                    <span class="m-state">今天</span>
+                  </div>
+                  <h3>计算机学院党委会议（第 12 次）</h3>
+                  <div class="m-meta">今天 14:30 · 行政楼 302</div>
+                  <div class="m-meta">议题 5 项 · 应到 9 · 未开始</div>
+                  <div class="m-foot">
+                    <span>查看详情</span>
+                    <span class="chev">›</span>
+                  </div>
+                </button>
+                <button class="m-card party soft" type="button" data-meet-list="party">
+                  <div class="m-top">
+                    <span class="tag party">党委</span>
+                    <span class="m-state muted">全部</span>
+                  </div>
+                  <h3>更多党委会</h3>
+                  <div class="m-meta">历史排期、已结束会议</div>
+                  <div class="m-foot">
+                    <span>查看全部</span>
+                    <span class="chev">›</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div class="work-group joint">
+              <div class="g-title"><i></i>联席会议</div>
+              <div class="meet-cards">
+                <button class="m-card joint" type="button" data-meet="m2">
+                  <div class="m-top">
+                    <span class="tag joint">联席</span>
+                    <span class="m-state">明天</span>
+                  </div>
+                  <h3>党政联席会议（第 18 次）</h3>
+                  <div class="m-meta">明天 09:00 · 行政楼 301</div>
+                  <div class="m-meta">议题 6 项 · 纪要待签署</div>
+                  <div class="m-foot">
+                    <span>查看详情</span>
+                    <span class="chev">›</span>
+                  </div>
+                </button>
+                <button class="m-card joint soft" type="button" data-meet-list="joint">
+                  <div class="m-top">
+                    <span class="tag joint">联席</span>
+                    <span class="m-state muted">全部</span>
+                  </div>
+                  <h3>更多联席会</h3>
+                  <div class="m-meta">历史排期、已结束会议</div>
+                  <div class="m-foot">
+                    <span>查看全部</span>
+                    <span class="chev">›</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div class="work-group more">
+              <div class="g-title"><i></i>归档与查询</div>
+              <button class="m-card archive" type="button" data-meet-list="archive">
+                <div class="m-top">
+                  <span class="tag archive">档案</span>
+                </div>
+                <h3>历史会议</h3>
+                <div class="m-meta">已结束、已归档会议全宗</div>
+                <div class="m-foot">
+                  <span>去查询</span>
+                  <span class="chev">›</span>
+                </div>
+              </button>
+            </div>
+          </section>
+
+          <!-- 工作台：卡片式功能入口 -->
+          <section class="page" data-page="work" id="page-work">
+            <div class="work-hero">
+              <div class="eyebrow"><b></b> 双会议办事大厅</div>
+              <h3>工作台</h3>
+              <p>党委红轨 · 联席蓝轨 · 点卡片即达，无需翻菜单</p>
+            </div>
+
+            <div class="work-group party">
+              <div class="g-title"><i></i>党委事务</div>
+              <div class="work-grid">
+                <button class="w-card party" type="button" data-toast="党委会议题">
+                  <div class="w-icon">题</div>
+                  <span class="w-name">党委会议题</span>
+                  <span class="w-desc">审题、材料、退回</span>
+                </button>
+                <button class="w-card party" type="button" data-toast="党委会开会">
+                  <div class="w-icon">会</div>
+                  <span class="w-name">党委会开会</span>
+                  <span class="w-desc">签到、表决、决议</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="work-group joint">
+              <div class="g-title"><i></i>联席事务</div>
+              <div class="work-grid">
+                <button class="w-card joint" type="button" data-toast="联席会议题">
+                  <div class="w-icon">题</div>
+                  <span class="w-name">联席会议题</span>
+                  <span class="w-desc">申报、双审进度</span>
+                </button>
+                <button class="w-card joint" type="button" data-toast="联席会议">
+                  <div class="w-icon">会</div>
+                  <span class="w-name">联席会议</span>
+                  <span class="w-desc">开会与纪要签署</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="work-group more">
+              <div class="g-title"><i></i>综合服务</div>
+              <div class="work-grid">
+                <button class="w-card neutral" type="button" data-toast="决议督办">
+                  <div class="w-icon">督</div>
+                  <span class="w-name">决议督办</span>
+                  <span class="w-desc">进度与逾期提醒</span>
+                </button>
+                <button class="w-card neutral" type="button" data-toast="档案中心">
+                  <div class="w-icon">档</div>
+                  <span class="w-name">档案中心</span>
+                  <span class="w-desc">会议全宗查询</span>
+                </button>
+                <button class="w-card neutral" type="button" data-toast="议事规则">
+                  <div class="w-icon">规</div>
+                  <span class="w-name">议事规则</span>
+                  <span class="w-desc">制度问答速查</span>
+                </button>
+                <button class="w-card neutral" type="button" data-tab-jump="agent">
+                  <div class="w-icon">助</div>
+                  <span class="w-name">去智能体</span>
+                  <span class="w-desc">对话找事、问答</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- 智能体 -->
+          <section class="page agent-page" data-page="agent" id="page-agent">
+            <div class="agent-body" id="agentBody">
+              <div class="agent-welcome">
+                <h3>会议智能体</h3>
+                <p>可问今日简报、待办、议题、督办与议事规则。审题/表决只给建议，需您确认，不自动改状态。</p>
+              </div>
+              <div class="agent-tips" id="agentTips">
+                <button type="button" data-q="今天有哪些待办？">今日待办</button>
+                <button type="button" data-q="本周党委会安排？">党委安排</button>
+                <button type="button" data-q="有哪些逾期督办？">督办预警</button>
+                <button type="button" data-q="请假书面意见算表决票吗？">规则问答</button>
+              </div>
+              <div class="bubble ai">
+                <span class="who">智能体</span>
+                您好，李院长。当前有 <b>4</b> 项待办、督办逾期 <b>1</b> 项。可直接点上方快捷问法，或输入问题。
+              </div>
+            </div>
+            <div class="agent-composer">
+              <textarea id="agentInput" rows="1" placeholder="例如：帮我看看待签署纪要"></textarea>
+              <button class="send" type="button" id="agentSend">发送</button>
+            </div>
+          </section>
+
+          <!-- 我的 -->
+          <section class="page" data-page="me" id="page-me">
+            <div class="me-layout">
+              <div class="me-col-main">
+                <div class="me-profile">
+                  <div class="me-profile-top">
+                    <div class="avatar">李</div>
+                    <div>
+                      <h3>李院长</h3>
+                      <div class="role">计算机学院 · 院长</div>
+                    </div>
+                  </div>
+                  <div class="me-tags">
+                    <span>联席会成员</span>
+                    <span>审题权限</span>
+                    <span>纪要签署</span>
+                  </div>
+                </div>
+
+                <div class="me-stats">
+                  <div class="me-stat party">
+                    <b>2</b>
+                    <span>党委待办</span>
+                  </div>
+                  <div class="me-stat">
+                    <b>2</b>
+                    <span>联席待办</span>
+                  </div>
+                  <div class="me-stat warn">
+                    <b>1</b>
+                    <span>逾期督办</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="me-col-side">
+                <div class="me-block">
+                  <div class="label">账号</div>
+                  <button class="me-item" type="button" data-toast="账号与安全">
+                    <div class="me-ico safe">安</div>
+                    <div>
+                      <strong>账号与安全</strong>
+                      <em>密码、登录设备</em>
+                    </div>
+                    <span class="chev">›</span>
+                  </button>
+                  <button class="me-item" type="button" data-toast="学院与职务信息">
+                    <div class="me-ico">院</div>
+                    <div>
+                      <strong>学院与职务</strong>
+                      <em>计算机学院 · 院长</em>
+                    </div>
+                    <span class="chev">›</span>
+                  </button>
+                </div>
+
+                <div class="me-block">
+                  <div class="label">关于</div>
+                  <button class="me-item" type="button" data-toast="关于本系统">
+                    <div class="me-ico">系</div>
+                    <div>
+                      <strong>关于曲师大双会管理系统</strong>
+                      <em>版本预览 · 制度硬校验</em>
+                    </div>
+                    <span class="chev">›</span>
+                  </button>
+                </div>
+
+                <button class="me-out" type="button" id="logoutBtn">退出登录</button>
+                <div class="me-foot">曲阜师范大学 · 曲师大双会管理系统<br />预览稿 · 非正式环境</div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <nav class="tabbar" aria-label="主导航">
+          <div class="side-brand">
+            <div class="marks" aria-hidden="true"><i class="p"></i><i class="j"></i></div>
+            <strong>曲师大双会管理系统</strong>
+            <em>党委会 · 党政联席会</em>
+          </div>
+          <button class="tab on" type="button" data-tab="todo">
+            <span class="dot">4</span>
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M8 7h11M8 12h11M8 17h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M5 7.2h.01M5 12.2h.01M5 17.2h.01" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
+            </svg>
+            待办
+          </button>
+          <button class="tab" type="button" data-tab="meet">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8" />
+              <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            会议
+          </button>
+          <button class="tab" type="button" data-tab="work">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            </svg>
+            工作台
+          </button>
+          <button class="tab" type="button" data-tab="agent">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8" />
+              <path d="M9.2 12.2h.01M14.8 12.2h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+              <path d="M9.2 14.6c.8.9 1.7 1.3 2.8 1.3s2-.4 2.8-1.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            智能体
+          </button>
+          <button class="tab" type="button" data-tab="me">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8" />
+              <path d="M5 19c1.5-3 4-4.5 7-4.5S17.5 16 19 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            我的
+          </button>
+        </nav>
+        </div><!-- /appMain -->
+
+        <div class="toast" id="toast"></div>
+        <div class="modal" id="modal">
+          <div class="sheet">
+            <h3 id="mt">确认</h3>
+            <p id="md"></p>
+            <div class="row-btns">
+              <button class="btn light" type="button" id="cancel">取消</button>
+              <button class="btn joint" type="button" id="ok">确认</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 共用二级页壳：待办详情（会议/督办可复用） -->
+        <div class="subpage" id="subpage" aria-hidden="true">
+          <div class="sub-nav">
+            <button class="sub-back" type="button" id="subBack" aria-label="返回">‹</button>
+            <div class="titles">
+              <strong id="subTitle">待办详情</strong>
+              <span id="subSub">查看与办理</span>
+            </div>
+          </div>
+          <div class="sub-body" id="subBody"></div>
+          <div class="sub-foot" id="subFoot"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const titles = {
+        todo: ["待办", "卡片办理 · 分轨筛选"],
+        meet: ["会议", "卡片分轨 · 今明优先"],
+        work: ["工作台", "卡片入口 · 分轨办事"],
+        agent: ["智能体", "辅助找事 · 不替代审签"],
+        me: ["我的", "身份卡片 · 账号设置"],
+      };
+
+      const todos = [
+        {
+          id: "t1",
+          track: "party",
+          type: "审题",
+          title: "关于调整学院党委委员分工的请示",
+          meta: "计算机学院党委",
+          due: "今天 12:00 前",
+          late: false,
+          btn: "同意",
+          action: "approve",
+          summary: "拟调整学院党委委员分工，明确组织、宣传、纪检等条线责任。",
+          materials: [
+            { name: "请示正文.pdf", ok: true },
+            { name: "分工方案.docx", ok: true },
+            { name: "会议纪要附件.pdf", ok: true },
+          ],
+          flow: ["申报", "党委审题", "入会议程"],
+          flowOn: 1,
+        },
+        {
+          id: "t2",
+          track: "party",
+          type: "审题",
+          title: "发展党员工作计划（2026 上半年）",
+          meta: "计算机学院党委",
+          due: "已逾期",
+          late: true,
+          btn: "同意",
+          action: "approve",
+          summary: "明确上半年发展对象培养、考察与审批节点，请审定后执行。",
+          materials: [
+            { name: "工作计划.pdf", ok: true },
+            { name: "培养对象名单.xlsx", ok: false },
+          ],
+          flow: ["申报", "党委审题", "入会议程"],
+          flowOn: 1,
+        },
+        {
+          id: "t3",
+          track: "joint",
+          type: "签署纪要",
+          title: "党政联席会议（第 17 次）纪要",
+          meta: "待院长签署后生效",
+          due: "待签署",
+          late: false,
+          btn: "签署",
+          action: "sign",
+          summary: "纪要已起草，书记已签。院长签署后纪要生效并进入督办。",
+          materials: [
+            { name: "会议纪要.docx", ok: true },
+            { name: "决议清单.pdf", ok: true },
+          ],
+          flow: ["开会", "纪要起草", "双签", "生效"],
+          flowOn: 2,
+        },
+        {
+          id: "t4",
+          track: "joint",
+          type: "待签到",
+          title: "党政联席会议（第 18 次）",
+          meta: "行政楼 301",
+          due: "明天 09:00",
+          late: false,
+          btn: "进入会议",
+          action: "enter",
+          summary: "请按时到会签到。重大事项表决须满足到会人数要求。",
+          materials: [
+            { name: "会议通知.pdf", ok: true },
+            { name: "议题材料包.zip", ok: true },
+          ],
+          flow: ["排期", "通知", "签到", "表决"],
+          flowOn: 2,
+        },
+      ];
+
+      const focusDetail = {
+        id: "f1",
+        kind: "todo",
+        track: "warn",
+        type: "督办",
+        title: "实验室安全整改落实",
+        meta: "责任人：分管副院长",
+        due: "逾期 3 天",
+        late: true,
+        summary: "联席会决议要求完成实验室安全隐患整改并反馈结果，目前已超期。",
+        materials: [
+          { name: "整改方案.pdf", ok: true },
+          { name: "验收报告.pdf", ok: false },
+        ],
+        flow: ["下达", "办理中", "反馈", "办结"],
+        flowOn: 1,
+      };
+
+      const meetings = [
+        {
+          id: "m1",
+          kind: "meeting",
+          track: "party",
+          type: "党委会",
+          title: "计算机学院党委会议（第 12 次）",
+          status: "未开始",
+          statusClass: "ing",
+          due: "今天 14:30",
+          late: false,
+          place: "行政楼 302",
+          host: "李书记",
+          shouldAttend: 9,
+          checkedIn: 0,
+          leave: 0,
+          summary: "本次党委会议审议委员分工调整、发展党员计划等事项。请按时到会。",
+          topics: [
+            { title: "关于调整学院党委委员分工的请示", meta: "审题通过 · 待表决" },
+            { title: "发展党员工作计划（2026 上半年）", meta: "审题中" },
+            { title: "意识形态工作专项报告", meta: "已入议程" },
+            { title: "党支部书记抓党建述职安排", meta: "已入议程" },
+            { title: "其他事项", meta: "临时动议视情况" },
+          ],
+          materials: [
+            { name: "会议通知.pdf", ok: true },
+            { name: "议题材料包.zip", ok: true },
+            { name: "签到表.xlsx", ok: true },
+          ],
+          flow: ["排期", "通知", "签到", "表决", "纪要", "归档"],
+          flowOn: 1,
+          actions: ["checkin", "enter"],
+          archived: false,
+        },
+        {
+          id: "m2",
+          kind: "meeting",
+          track: "joint",
+          type: "联席会",
+          title: "党政联席会议（第 18 次）",
+          status: "纪要待签署",
+          statusClass: "wait",
+          due: "明天 09:00",
+          late: false,
+          place: "行政楼 301",
+          host: "李院长",
+          shouldAttend: 11,
+          checkedIn: 0,
+          leave: 1,
+          summary: "会议已排期。上一场（第 17 次）纪要待院长签署；本场可提前查看议题材料。",
+          topics: [
+            { title: "实验室安全整改进展", meta: "督办相关 · 汇报" },
+            { title: "本科教学专项经费安排", meta: "双审通过" },
+            { title: "人才引进方案", meta: "双审通过" },
+            { title: "科研平台建设事项", meta: "双审通过" },
+            { title: "学生工作阶段性汇报", meta: "已入议程" },
+            { title: "其他事项", meta: "视情况" },
+          ],
+          materials: [
+            { name: "会议通知.pdf", ok: true },
+            { name: "议题材料包.zip", ok: true },
+            { name: "第17次纪要.docx", ok: true },
+          ],
+          flow: ["排期", "通知", "签到", "表决", "纪要", "归档"],
+          flowOn: 1,
+          actions: ["enter", "sign"],
+          archived: false,
+        },
+        {
+          id: "m3",
+          kind: "meeting",
+          track: "party",
+          type: "党委会",
+          title: "计算机学院党委会议（第 11 次）",
+          status: "已结束",
+          statusClass: "done",
+          due: "2026-06-28 15:00",
+          place: "行政楼 302",
+          host: "李书记",
+          shouldAttend: 9,
+          checkedIn: 8,
+          leave: 1,
+          summary: "已完成表决与纪要双签，相关决议已进入督办。",
+          topics: [
+            { title: "党建工作阶段性总结", meta: "已决议" },
+            { title: "干部谈心谈话安排", meta: "已决议" },
+          ],
+          materials: [
+            { name: "会议纪要.pdf", ok: true },
+            { name: "决议清单.pdf", ok: true },
+          ],
+          flow: ["排期", "通知", "签到", "表决", "纪要", "归档"],
+          flowOn: 5,
+          actions: ["enter"],
+          archived: false,
+        },
+        {
+          id: "m4",
+          kind: "meeting",
+          track: "joint",
+          type: "联席会",
+          title: "党政联席会议（第 17 次）",
+          status: "纪要待签署",
+          statusClass: "wait",
+          due: "2026-07-03 09:00",
+          place: "行政楼 301",
+          host: "李院长",
+          shouldAttend: 11,
+          checkedIn: 10,
+          leave: 1,
+          summary: "会议已结束，纪要待院长签署后生效。",
+          topics: [
+            { title: "实验室安全整改方案", meta: "已决议 · 督办中" },
+            { title: "研究生招生计划调整", meta: "已决议" },
+          ],
+          materials: [
+            { name: "会议纪要.docx", ok: true },
+            { name: "决议清单.pdf", ok: true },
+          ],
+          flow: ["排期", "通知", "签到", "表决", "纪要", "归档"],
+          flowOn: 4,
+          actions: ["sign", "enter"],
+          archived: false,
+        },
+        {
+          id: "m5",
+          kind: "meeting",
+          track: "party",
+          type: "党委会",
+          title: "计算机学院党委会议（第 10 次）",
+          status: "已归档",
+          statusClass: "done",
+          due: "2026-05-16 14:30",
+          place: "行政楼 302",
+          host: "李书记",
+          shouldAttend: 9,
+          checkedIn: 9,
+          leave: 0,
+          summary: "全宗已归档，可在档案中心查阅。",
+          topics: [{ title: "党纪学习教育安排", meta: "已归档" }],
+          materials: [{ name: "会议全宗.zip", ok: true }],
+          flow: ["排期", "通知", "签到", "表决", "纪要", "归档"],
+          flowOn: 5,
+          actions: ["enter"],
+          archived: true,
+        },
+        {
+          id: "m6",
+          kind: "meeting",
+          track: "joint",
+          type: "联席会",
+          title: "党政联席会议（第 16 次）",
+          status: "已归档",
+          statusClass: "done",
+          due: "2026-05-09 09:00",
+          place: "行政楼 301",
+          host: "李院长",
+          shouldAttend: 11,
+          checkedIn: 11,
+          leave: 0,
+          summary: "全宗已归档，可在档案中心查阅。",
+          topics: [{ title: "年度预算执行情况", meta: "已归档" }],
+          materials: [{ name: "会议全宗.zip", ok: true }],
+          flow: ["排期", "通知", "签到", "表决", "纪要", "归档"],
+          flowOn: 5,
+          actions: ["enter"],
+          archived: true,
+        },
+      ];
+
+      let meetListState = { scope: "party", status: "all", q: "" };
+
+      function statusPill(m) {
+        return `<span class="status-pill ${m.statusClass || ""}">${m.status}</span>`;
+      }
+
+      function openMeetList(scope) {
+        meetListState = { scope, status: "all", q: "" };
+        subStack = [];
+        renderMeetList();
+      }
+
+      function filteredMeetList() {
+        const q = meetListState.q.trim();
+        return meetings.filter((m) => {
+          if (meetListState.scope === "archive") {
+            if (m.status === "未开始") return false;
+          } else if (m.track !== meetListState.scope) {
+            return false;
+          }
+
+          if (meetListState.status === "ing") {
+            if (!["未开始", "进行中"].includes(m.status)) return false;
+          } else if (meetListState.status === "wait") {
+            if (m.status !== "纪要待签署") return false;
+          } else if (meetListState.status === "done") {
+            if (!["已结束", "已归档"].includes(m.status)) return false;
+          }
+
+          if (q && !(`${m.title}${m.place}${m.status}`.includes(q))) return false;
+          return true;
+        });
+      }
+
+      function renderMeetList() {
+        const scope = meetListState.scope;
+        const titleMap = {
+          party: ["党委会全部", "党委红轨 · 查询筛选"],
+          joint: ["联席会全部", "联席蓝轨 · 查询筛选"],
+          archive: ["历史会议", "已结束 / 已归档查询"],
+        };
+        document.getElementById("subTitle").textContent = titleMap[scope][0];
+        document.getElementById("subSub").textContent = titleMap[scope][1];
+
+        const filterHtml =
+          scope === "archive"
+            ? `
+          <div class="list-filter" id="meetListFilter">
+            <button type="button" data-ms="all" class="${meetListState.status === "all" ? "on" : ""}">全部</button>
+            <button type="button" data-ms="done" class="${meetListState.status === "done" ? "on" : ""}">已结束</button>
+            <button type="button" data-ms="wait" class="${meetListState.status === "wait" ? "on" : ""}">待签纪要</button>
+          </div>`
+            : `
+          <div class="list-filter" id="meetListFilter">
+            <button type="button" data-ms="all" class="${meetListState.status === "all" ? "on" : ""}${scope === "party" && meetListState.status === "all" ? " party" : ""}">全部</button>
+            <button type="button" data-ms="ing" class="${meetListState.status === "ing" ? "on" : ""}${scope === "party" && meetListState.status === "ing" ? " party" : ""}">未开/进行</button>
+            <button type="button" data-ms="wait" class="${meetListState.status === "wait" ? "on" : ""}${scope === "party" && meetListState.status === "wait" ? " party" : ""}">待签纪要</button>
+            <button type="button" data-ms="done" class="${meetListState.status === "done" ? "on" : ""}${scope === "party" && meetListState.status === "done" ? " party" : ""}">已结束</button>
+          </div>`;
+
+        const rows = filteredMeetList();
+        const listHtml = rows.length
+          ? rows
+              .map((m) => {
+                const cls = m.archived || m.status === "已归档" ? "archive" : m.track;
+                return `
+            <button class="list-card ${cls}" type="button" data-meet="${m.id}">
+              <div class="top">
+                <span class="tag ${m.track}">${m.type}</span>
+                ${statusPill(m)}
+              </div>
+              <h3>${m.title}</h3>
+              <div class="meta">${m.due} · ${m.place}</div>
+              <div class="meta">议题 ${m.topics.length} 项 · 应到 ${m.shouldAttend} / 已签 ${m.checkedIn}</div>
+              <div class="foot"><span>查看详情</span><span>›</span></div>
+            </button>`;
+              })
+              .join("")
+          : `<div class="list-empty">没有符合条件的会议</div>`;
+
+        document.getElementById("subBody").innerHTML = `
+          <div class="list-search">
+            <input id="meetListQ" type="search" placeholder="搜索会议标题 / 地点 / 状态" value="${meetListState.q.replace(/"/g, "&quot;")}" />
+          </div>
+          ${filterHtml}
+          ${listHtml}
+        `;
+        document.getElementById("subFoot").innerHTML =
+          `<button class="btn light" type="button" id="subCloseOnly">返回</button>`;
+
+        showSubpage();
+
+        const input = document.getElementById("meetListQ");
+        if (input) {
+          input.addEventListener("input", () => {
+            meetListState.q = input.value;
+            // re-render keeping focus roughly
+            const pos = input.selectionStart;
+            renderMeetList();
+            const again = document.getElementById("meetListQ");
+            if (again) {
+              again.focus();
+              try {
+                again.setSelectionRange(pos, pos);
+              } catch (_) {}
+            }
+          });
+        }
+      }
+
+      let filter = "all";
+      let pending = null;
+      let currentDetail = null;
+      let subStack = [];
+
+      function toast(m) {
+        const el = document.getElementById("toast");
+        el.textContent = m;
+        el.classList.add("show");
+        clearTimeout(toast._t);
+        toast._t = setTimeout(() => el.classList.remove("show"), 1800);
+      }
+
+      function closeSubpage() {
+        if (subStack.length) {
+          const prev = subStack.pop();
+          prev();
+          return;
+        }
+        const sp = document.getElementById("subpage");
+        sp.classList.remove("open");
+        sp.setAttribute("aria-hidden", "true");
+        currentDetail = null;
+      }
+
+      function showSubpage() {
+        const sp = document.getElementById("subpage");
+        sp.classList.add("open");
+        sp.setAttribute("aria-hidden", "false");
+        document.getElementById("subBody").scrollTop = 0;
+      }
+
+      function openMeetingDetail(item) {
+        currentDetail = item;
+        const topics = (item.topics || [])
+          .map(
+            (t, i) => `
+          <div class="topic-item">
+            <div class="idx">${i + 1}</div>
+            <div>
+              <div class="tt">${t.title}</div>
+              <div class="tm">${t.meta}</div>
+            </div>
+            <span class="tag ${item.track}">议</span>
+          </div>`,
+          )
+          .join("");
+        const mats = (item.materials || [])
+          .map(
+            (m) => `
+          <div class="mat-item">
+            <span class="name">${m.name}</span>
+            <span class="st${m.ok ? "" : " miss"}">${m.ok ? "已齐" : "缺件"}</span>
+          </div>`,
+          )
+          .join("");
+        const flow = (item.flow || [])
+          .map((f, i) => {
+            const cls = i < item.flowOn ? "done" : i === item.flowOn ? "on" : "";
+            return `<span class="${cls}">${f}</span>`;
+          })
+          .join("");
+
+        document.getElementById("subTitle").textContent = "会议详情";
+        document.getElementById("subSub").textContent =
+          item.track === "party" ? "党委红轨" : "联席蓝轨";
+
+        document.getElementById("subBody").innerHTML = `
+          <div class="detail-hero ${item.track}">
+            <div class="top">
+              <span class="tag ${item.track}">${item.type}</span>
+              <span class="t-due">${item.status}</span>
+            </div>
+            <h3>${item.title}</h3>
+            <div class="meta">${item.due} · ${item.place}</div>
+          </div>
+
+          <div class="detail-block">
+            <div class="label">基本信息</div>
+            <div class="detail-row"><span class="k">主持人</span><span class="v">${item.host}</span></div>
+            <div class="detail-row"><span class="k">时间</span><span class="v">${item.due}</span></div>
+            <div class="detail-row"><span class="k">地点</span><span class="v">${item.place}</span></div>
+            <div class="detail-row"><span class="k">状态</span><span class="v">${item.status}</span></div>
+          </div>
+
+          <div class="detail-block">
+            <div class="label">到会情况</div>
+            <div class="attend-bar">
+              <div><strong>${item.shouldAttend}</strong><span>应到</span></div>
+              <div><strong>${item.checkedIn}</strong><span>已签</span></div>
+              <div><strong>${item.leave}</strong><span>请假</span></div>
+            </div>
+          </div>
+
+          <div class="detail-block">
+            <div class="label">会议说明</div>
+            <div class="detail-text">${item.summary}</div>
+          </div>
+
+          <div class="detail-block">
+            <div class="label">议题议程（${item.topics.length}）</div>
+            ${topics}
+          </div>
+
+          <div class="detail-block">
+            <div class="label">会议材料</div>
+            ${mats}
+          </div>
+
+          <div class="detail-block">
+            <div class="label">会议流程</div>
+            <div class="flow ${item.track === "party" ? "party" : ""}">${flow}</div>
+          </div>
+        `;
+
+        const acts = item.actions || ["enter"];
+        let foot = `<button class="btn light" type="button" id="subCloseOnly">返回</button>`;
+        if (acts.includes("checkin")) {
+          foot += `<button class="btn ${item.track}" type="button" data-meet-act="checkin">签到</button>`;
+        }
+        if (acts.includes("sign")) {
+          foot += `<button class="btn joint" type="button" data-action="sign">签署纪要</button>`;
+        }
+        if (acts.includes("enter")) {
+          foot += `<button class="btn ${item.track}" type="button" data-meet-act="enter">进入会议</button>`;
+        }
+        document.getElementById("subFoot").innerHTML = foot;
+        showSubpage();
+      }
+
+      function openSubpage(item) {
+        if (item.kind === "meeting") {
+          openMeetingDetail(item);
+          return;
+        }
+        currentDetail = item;
+        const track = item.track === "warn" ? "warn" : item.track;
+        const mats = (item.materials || [])
+          .map(
+            (m) => `
+          <div class="mat-item">
+            <span class="name">${m.name}</span>
+            <span class="st${m.ok ? "" : " miss"}">${m.ok ? "已齐" : "缺件"}</span>
+          </div>`,
+          )
+          .join("");
+        const flow = (item.flow || [])
+          .map((f, i) => {
+            const cls = i < item.flowOn ? "done" : i === item.flowOn ? "on" : "";
+            return `<span class="${cls}">${f}</span>`;
+          })
+          .join("");
+
+        document.getElementById("subTitle").textContent = item.type + "详情";
+        document.getElementById("subSub").textContent =
+          item.track === "party" ? "党委红轨" : item.track === "joint" ? "联席蓝轨" : "督办预警";
+
+        document.getElementById("subBody").innerHTML = `
+          <div class="detail-hero ${track}">
+            <div class="top">
+              <span class="tag ${item.track === "warn" ? "party" : item.track}">${item.type}</span>
+              <span class="t-due${item.late ? " late" : ""}">${item.due}</span>
+            </div>
+            <h3>${item.title}</h3>
+            <div class="meta">${item.meta}</div>
+          </div>
+
+          <div class="detail-block">
+            <div class="label">基本信息</div>
+            <div class="detail-row"><span class="k">类型</span><span class="v">${item.type}</span></div>
+            <div class="detail-row"><span class="k">归属</span><span class="v">${item.meta}</span></div>
+            <div class="detail-row"><span class="k">时限</span><span class="v">${item.due}</span></div>
+          </div>
+
+          <div class="detail-block">
+            <div class="label">办理说明</div>
+            <div class="detail-text">${item.summary}</div>
+          </div>
+
+          <div class="detail-block">
+            <div class="label">材料清单</div>
+            ${mats}
+          </div>
+
+          <div class="detail-block">
+            <div class="label">流程进度</div>
+            <div class="flow ${item.track === "party" ? "party" : ""}">${flow}</div>
+          </div>
+        `;
+
+        let foot = "";
+        if (item.action === "approve") {
+          foot = `
+            <button class="btn light" type="button" data-toast="已打开退回说明（预览）">退回</button>
+            <button class="btn party" type="button" data-action="approve">同意</button>`;
+        } else if (item.action === "sign") {
+          foot = `
+            <button class="btn light" type="button" id="subCloseOnly">返回</button>
+            <button class="btn joint" type="button" data-action="sign">签署</button>`;
+        } else if (item.action === "enter") {
+          foot = `
+            <button class="btn light" type="button" id="subCloseOnly">返回</button>
+            <button class="btn joint" type="button" data-action="enter">进入会议</button>`;
+        } else {
+          foot = `
+            <button class="btn light" type="button" id="subCloseOnly">返回</button>
+            <button class="btn joint" type="button" data-toast="打开督办台账（预览）">去督办</button>`;
+        }
+        document.getElementById("subFoot").innerHTML = foot;
+        showSubpage();
+      }
+
+      function renderTodos() {
+        const rows = todos.filter((t) => filter === "all" || t.track === filter);
+        document.getElementById("todoN").textContent = rows.length + " 项";
+        document.getElementById("numAll").textContent = String(todos.length);
+        document.getElementById("numParty").textContent = String(todos.filter((t) => t.track === "party").length);
+        document.getElementById("numJoint").textContent = String(todos.filter((t) => t.track === "joint").length);
+
+        if (!rows.length) {
+          document.getElementById("todoList").innerHTML =
+            '<div class="todo-empty">该分类暂无待办</div>';
+          return;
+        }
+
+        document.getElementById("todoList").innerHTML = rows
+          .map(
+            (t) => `
+          <article class="t-card ${t.track}${t.late ? " late" : ""}" data-open="${t.id}">
+            <div class="t-top">
+              <span class="tag ${t.track}">${t.type}</span>
+              <span class="t-due${t.late ? " late" : ""}">${t.due}</span>
+            </div>
+            <h3>${t.title}</h3>
+            <div class="t-meta">${t.meta}</div>
+            <div class="t-foot">
+              <button class="link" type="button" data-open="${t.id}">详情</button>
+              <button class="btn ${t.track}" type="button" data-action="${t.action}" data-id="${t.id}">${t.btn}</button>
+            </div>
+          </article>`,
+          )
+          .join("");
+      }
+
+      function switchTab(name) {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.tab === name));
+        document.querySelectorAll(".page").forEach((p) => p.classList.toggle("on", p.dataset.page === name));
+        document.getElementById("navTitle").textContent = titles[name][0];
+        document.getElementById("navSub").textContent = titles[name][1];
+        const page = document.querySelector(".page.on");
+        if (page) page.scrollTop = 0;
+        document.getElementById("bellBtn").style.visibility = name === "agent" ? "hidden" : "visible";
+      }
+
+      function appendBubble(role, html) {
+        const body = document.getElementById("agentBody");
+        const div = document.createElement("div");
+        div.className = "bubble " + role;
+        div.innerHTML =
+          '<span class="who">' +
+          (role === "me" ? "我" : "智能体") +
+          "</span>" +
+          html;
+        body.appendChild(div);
+        body.scrollTop = body.scrollHeight;
+      }
+
+      function appendConfirm() {
+        const body = document.getElementById("agentBody");
+        const card = document.createElement("div");
+        card.className = "confirm-card";
+        card.innerHTML = `
+          <div class="t">建议：打开待签署纪要</div>
+          <div class="d">联席会第 17 次纪要待您签署。智能体仅提供入口，不会自动签署。</div>
+          <div class="note">红线：审题 / 表决 / 签署须人工确认</div>
+          <div class="acts">
+            <button class="btn light" type="button" data-toast="已取消">取消</button>
+            <button class="btn joint" type="button" data-toast="已跳转待办签署（预览）">去签署</button>
+          </div>`;
+        body.appendChild(card);
+        body.scrollTop = body.scrollHeight;
+      }
+
+      function replyTo(q) {
+        appendBubble("me", q);
+        setTimeout(() => {
+          if (/待办|签署|纪要/.test(q)) {
+            appendBubble(
+              "ai",
+              "检索到 1 项待签署纪要、2 项党委审题。下面给出可跳转确认卡（预览，不连后端）。",
+            );
+            appendConfirm();
+          } else if (/督办|逾期/.test(q)) {
+            appendBubble("ai", "当前逾期督办 1 项：<b>实验室安全整改落实</b>（逾期 3 天）。建议在「待办 → 需关注」查看。");
+          } else if (/规则|表决|请假/.test(q)) {
+            appendBubble(
+              "ai",
+              "按议事规则口径：缺席委员的书面意见一般不计入现场表决票，具体以学院制度与会议主持认定为准。回答仅供参考，不替代审签。",
+            );
+          } else if (/党委|安排/.test(q)) {
+            appendBubble("ai", "今天 14:30 有党委会议（第 12 次），行政楼 302，议题 5 项，尚未开始。");
+          } else {
+            appendBubble("ai", "已收到。可继续问待办、会议安排、督办或议事规则。涉及审签只会给出确认卡。");
+          }
+        }, 280);
+      }
+
+      document.querySelectorAll(".tab").forEach((t) => {
+        t.addEventListener("click", () => switchTab(t.dataset.tab));
+      });
+
+      document.querySelectorAll(".todo-filter button").forEach((b) => {
+        b.addEventListener("click", () => {
+          filter = b.dataset.f;
+          document.querySelectorAll(".todo-filter button").forEach((x) => {
+            x.classList.toggle("on", x === b);
+            x.classList.toggle("party", x === b && filter === "party");
+          });
+          renderTodos();
+        });
+      });
+
+      document.getElementById("bellBtn").onclick = () =>
+        toast("消息：待审题 2 · 待签署 1（已并入待办提醒）");
+
+      document.getElementById("agentSend").onclick = () => {
+        const input = document.getElementById("agentInput");
+        const q = input.value.trim();
+        if (!q) return;
+        input.value = "";
+        replyTo(q);
+      };
+
+      document.getElementById("agentInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          document.getElementById("agentSend").click();
+        }
+      });
+
+      document.getElementById("agentTips").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-q]");
+        if (b) replyTo(b.dataset.q);
+      });
+
+      document.getElementById("cancel").onclick = () => document.getElementById("modal").classList.remove("open");
+      document.getElementById("ok").onclick = () => {
+        if (pending) pending();
+        document.getElementById("modal").classList.remove("open");
+      };
+
+      document.getElementById("subBack").onclick = closeSubpage;
+
+      document.getElementById("subFoot").addEventListener("click", (e) => {
+        if (e.target.id === "subCloseOnly" || e.target.closest("#subCloseOnly")) closeSubpage();
+      });
+
+      document.body.addEventListener("click", (e) => {
+        const jump = e.target.closest("[data-tab-jump]");
+        if (jump) {
+          switchTab(jump.dataset.tabJump);
+          return;
+        }
+
+        const meetBtn = e.target.closest("[data-meet]");
+        if (meetBtn) {
+          const m = meetings.find((x) => x.id === meetBtn.dataset.meet);
+          if (m) {
+            const fromList = !!document.getElementById("meetListFilter");
+            if (fromList) subStack.push(() => renderMeetList());
+            else subStack = [];
+            openMeetingDetail(m);
+          }
+          return;
+        }
+
+        const meetListBtn = e.target.closest("[data-meet-list]");
+        if (meetListBtn) {
+          openMeetList(meetListBtn.dataset.meetList);
+          return;
+        }
+
+        const msBtn = e.target.closest("#meetListFilter [data-ms]");
+        if (msBtn) {
+          meetListState.status = msBtn.dataset.ms;
+          renderMeetList();
+          return;
+        }
+
+        const meetAct = e.target.closest("[data-meet-act]");
+        if (meetAct) {
+          const act = meetAct.dataset.meetAct;
+          if (act === "checkin") toast("已签到（预览）");
+          else toast("已进入会议现场页（预览）");
+          return;
+        }
+
+        const detailFocus = e.target.closest("[data-detail='focus']");
+        if (detailFocus) {
+          openSubpage(focusDetail);
+          return;
+        }
+
+        const openBtn = e.target.closest("[data-open]");
+        if (openBtn && !e.target.closest("[data-action]")) {
+          const id = openBtn.dataset.open;
+          const item = todos.find((x) => x.id === id);
+          if (item) openSubpage(item);
+          return;
+        }
+
+        const t = e.target.closest("[data-toast]");
+        if (t && !t.dataset.action && !t.dataset.open && !t.dataset.meet) return toast(t.dataset.toast);
+
+        const a = e.target.closest("[data-action]");
+        if (!a) return;
+        if (a.dataset.action === "approve") {
+          document.getElementById("mt").textContent = "确认同意？";
+          document.getElementById("md").textContent = "将记录为院长审题意见，并进入后续流程。";
+          document.getElementById("modal").classList.add("open");
+          pending = () => {
+            toast("已同意（预览）");
+            closeSubpage();
+          };
+        } else if (a.dataset.action === "sign") {
+          document.getElementById("mt").textContent = "确认签署纪要？";
+          document.getElementById("md").textContent = "将以李院长名义记录签署时间。";
+          document.getElementById("modal").classList.add("open");
+          pending = () => {
+            toast("已签署（预览）");
+            closeSubpage();
+          };
+        } else {
+          toast("进入会议（预览）");
+          closeSubpage();
+        }
+      });
+
+      renderTodos();
+
+      function setDevice(mode) {
+        const shell = document.getElementById("app");
+        shell.classList.remove("mode-phone", "mode-tablet", "mode-desktop");
+        shell.classList.add("mode-" + mode);
+        document.querySelectorAll(".device-bar [data-device]").forEach((b) => {
+          b.classList.toggle("on", b.dataset.device === mode);
+        });
+        try {
+          sessionStorage.setItem("preview-device", mode);
+        } catch (_) {}
+      }
+
+      document.querySelectorAll(".device-bar [data-device]").forEach((b) => {
+        b.addEventListener("click", () => setDevice(b.dataset.device));
+      });
+
+      try {
+        const saved = sessionStorage.getItem("preview-device");
+        if (saved && ["phone", "tablet", "desktop"].includes(saved)) setDevice(saved);
+      } catch (_) {}
+
+      const demoAccounts = {
+        dean: { name: "李院长", role: "院长视图 · 待办优先" },
+        secretary: { name: "王书记", role: "书记视图 · 待办优先" },
+        office: { name: "赵老师", role: "办公室 · 办事视图" },
+        admin: { name: "校级管理员", role: "校级监管视图" },
+      };
+
+      const roleLines = {
+        dean: "计算机学院 · 院长",
+        secretary: "计算机学院 · 党委书记",
+        office: "计算机学院 · 办公室",
+        admin: "组织部 · 校级管理员",
+      };
+
+      function enterApp(username) {
+        const info = demoAccounts[username] || { name: username, role: "演示账号视图" };
+        document.getElementById("loginScreen").classList.add("hidden");
+        document.getElementById("appMain").classList.remove("hidden");
+        document.querySelector(".status").style.background = "var(--card)";
+        titles.todo[1] = info.role;
+        switchTab("todo");
+        const meName = document.querySelector("#page-me .me-profile h3");
+        const meRole = document.querySelector("#page-me .me-profile .role");
+        const meAvatar = document.querySelector("#page-me .me-profile .avatar");
+        if (meName) meName.textContent = info.name;
+        if (meRole) meRole.textContent = roleLines[username] || "演示账号";
+        if (meAvatar) meAvatar.textContent = info.name.slice(0, 1);
+        toast("欢迎，" + info.name);
+      }
+
+      function showLogin() {
+        closeSubpage();
+        subStack = [];
+        document.getElementById("appMain").classList.add("hidden");
+        document.getElementById("loginScreen").classList.remove("hidden");
+        document.getElementById("loginError").classList.remove("show");
+        document.querySelector(".status").style.background = "transparent";
+      }
+
+      showLogin();
+
+      document.getElementById("loginForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const u = document.getElementById("loginUser").value.trim().toLowerCase();
+        const p = document.getElementById("loginPass").value;
+        if (p === "123456" && demoAccounts[u]) {
+          document.getElementById("loginError").classList.remove("show");
+          enterApp(u);
+        } else if (p === "123456" && u) {
+          // allow any username with demo password for preview
+          demoAccounts[u] = { name: u, role: "演示账号视图" };
+          enterApp(u);
+        } else {
+          document.getElementById("loginError").classList.add("show");
+        }
+      });
+
+      document.querySelectorAll(".quick-accounts [data-acc]").forEach((b) => {
+        b.addEventListener("click", () => {
+          document.getElementById("loginUser").value = b.dataset.acc;
+          document.getElementById("loginPass").value = "123456";
+          document.getElementById("loginError").classList.remove("show");
+        });
+      });
+
+      document.getElementById("logoutBtn").addEventListener("click", () => {
+        showLogin();
+        toast("已退出登录");
+      });
+    </script>
+  </body>
+</html>
