@@ -40,6 +40,7 @@ export class AdminController {
     return this.admin.generateSchoolBriefing(user, {
       mode: dto.mode,
       notify: dto.notify,
+      collegeId: dto.collegeId,
     });
   }
 
@@ -47,11 +48,12 @@ export class AdminController {
   listBriefings(
     @CurrentUser() user: AuthUser,
     @Query('take') take?: string,
+    @Query('collegeId') collegeId?: string,
   ) {
-    return this.admin.listSchoolBriefings(
-      user,
-      take ? Number(take) : 20,
-    );
+    return this.admin.listSchoolBriefings(user, {
+      take: take ? Number(take) : 20,
+      collegeId,
+    });
   }
 
   @Get('briefings/:id')

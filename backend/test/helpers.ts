@@ -25,6 +25,17 @@ export interface TestCtx {
 const TEST_DB = join(__dirname, '..', 'prisma', 'test.db');
 const TEST_UPLOAD = join(__dirname, '..', 'uploads-test');
 
+function resetTestDatabase() {
+  // Prisma 5's SQLite schema engine does not reliably create a missing database
+  // file on newer Node/macOS combinations.  Create the empty file explicitly and
+  // remove every SQLite sidecar so a previous interrupted run cannot retain locks.
+  for (const suffix of ['', '-journal', '-wal', '-shm']) {
+    const path = `${TEST_DB}${suffix}`;
+    if (existsSync(path)) rmSync(path);
+  }
+  writeFileSync(TEST_DB, '');
+}
+
 export async function createTestApp(): Promise<TestCtx> {
   process.env.DATABASE_URL = `file:${TEST_DB}`;
   process.env.JWT_SECRET = 'test-secret';
@@ -37,8 +48,7 @@ export async function createTestApp(): Promise<TestCtx> {
   process.env.LLM_MODEL = '';
   process.env.LLM_PROVIDER = '';
 
-  if (existsSync(TEST_DB)) rmSync(TEST_DB);
-  if (existsSync(`${TEST_DB}-journal`)) rmSync(`${TEST_DB}-journal`);
+  resetTestDatabase();
   if (existsSync(TEST_UPLOAD)) rmSync(TEST_UPLOAD, { recursive: true });
   mkdirSync(TEST_UPLOAD, { recursive: true });
 

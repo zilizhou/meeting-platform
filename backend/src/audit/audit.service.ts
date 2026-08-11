@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types';
-import { hasSchoolWideAccess } from '../common/roles';
+import { isCollegeVisible, prismaCollegeIdFilter } from '../common/roles';
 
 @Injectable()
 export class AuditService {
@@ -44,11 +44,14 @@ export class AuditService {
     } = {},
   ) {
     const take = Math.min(query.take || 100, 200);
-    const collegeFilter = hasSchoolWideAccess(user)
-      ? query.collegeId
+    let collegeFilter: { collegeId?: string | { in: string[] } } = {};
+    if (query.collegeId) {
+      collegeFilter = isCollegeVisible(user, query.collegeId)
         ? { collegeId: query.collegeId }
-        : {}
-      : { collegeId: user.collegeId ?? '__none__' };
+        : { collegeId: '__none__' };
+    } else {
+      collegeFilter = prismaCollegeIdFilter(user);
+    }
 
     return this.prisma.auditLog.findMany({
       where: {

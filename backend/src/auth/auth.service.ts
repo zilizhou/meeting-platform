@@ -17,7 +17,11 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: { username: dto.username },
-      include: { roles: { include: { role: true } }, college: true },
+      include: {
+        roles: { include: { role: true } },
+        college: true,
+        collegeScopes: { select: { collegeId: true } },
+      },
     });
     if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
       throw new UnauthorizedException('用户名或密码错误');
@@ -27,6 +31,7 @@ export class AuthService {
     }
 
     const roles = user.roles.map((r) => r.role.code);
+    const collegeScopeIds = user.collegeScopes.map((s) => s.collegeId);
     const payload: JwtPayload = {
       sub: user.id,
       username: user.username,
@@ -36,7 +41,11 @@ export class AuthService {
     };
     const accessToken = await this.jwt.signAsync(payload);
     await this.audit.log({
-      user: { ...payload, realName: user.realName },
+      user: {
+        ...payload,
+        realName: user.realName,
+        collegeScopeIds,
+      },
       action: 'LOGIN',
       resource: 'User',
       resourceId: user.id,
@@ -53,6 +62,7 @@ export class AuthService {
         collegeName: user.college?.name ?? null,
         isSchoolAdmin: user.isSchoolAdmin,
         roles,
+        collegeScopeIds,
       },
     };
   }
@@ -60,7 +70,11 @@ export class AuthService {
   async me(user: AuthUser) {
     const dbUser = await this.prisma.user.findUnique({
       where: { id: user.sub },
-      include: { roles: { include: { role: true } }, college: true },
+      include: {
+        roles: { include: { role: true } },
+        college: true,
+        collegeScopes: { select: { collegeId: true } },
+      },
     });
     if (!dbUser) throw new UnauthorizedException();
     return {
@@ -72,6 +86,7 @@ export class AuthService {
       collegeName: dbUser.college?.name ?? null,
       isSchoolAdmin: dbUser.isSchoolAdmin,
       roles: dbUser.roles.map((r) => r.role.code),
+      collegeScopeIds: dbUser.collegeScopes.map((s) => s.collegeId),
     };
   }
 }

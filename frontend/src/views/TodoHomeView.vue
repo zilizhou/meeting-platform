@@ -5,9 +5,30 @@
       <h2>待办</h2>
       <p>审题、签署、签到集中办理 · 党组织红 / 党政联席蓝</p>
       <div class="nums">
-        <div><strong>{{ summary.total }}</strong><span>全部</span></div>
-        <div><strong>{{ partyCount }}</strong><span>党组织</span></div>
-        <div><strong>{{ jointCount }}</strong><span>党政联席</span></div>
+        <button
+          type="button"
+          class="num all"
+          :class="{ on: filter === 'all' }"
+          @click="filter = 'all'"
+        >
+          <strong>{{ summary.total }}</strong><span>全部</span>
+        </button>
+        <button
+          type="button"
+          class="num party"
+          :class="{ on: filter === 'party' }"
+          @click="filter = 'party'"
+        >
+          <strong>{{ partyCount }}</strong><span>党组织</span>
+        </button>
+        <button
+          type="button"
+          class="num joint"
+          :class="{ on: filter === 'joint' }"
+          @click="filter = 'joint'"
+        >
+          <strong>{{ jointCount }}</strong><span>党政联席</span>
+        </button>
       </div>
     </div>
 

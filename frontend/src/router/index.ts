@@ -62,6 +62,16 @@ const router = createRouter({
           component: () => import('@/views/PartyTopicsView.vue'),
         },
         {
+          path: 'party-import',
+          name: 'party-import',
+          component: () => import('@/views/PartyImportView.vue'),
+        },
+        {
+          path: 'meeting-import',
+          name: 'meeting-import',
+          component: () => import('@/views/PartyImportView.vue'),
+        },
+        {
           /** 党组织会议列表已并入会议首页 */
           path: 'party-meetings',
           redirect: { path: '/meet', query: { tab: 'party' } },
@@ -123,17 +133,18 @@ function isSchoolViewerOnly(auth: ReturnType<typeof useAuthStore>) {
   return !isAdmin && roles.includes('SCHOOL_VIEWER')
 }
 
-/** 校级查阅无需学院会务页 */
+/** 校级查阅无需学院会务页（智能体保留） */
 const VIEWER_BLOCKED = new Set([
   '/todo',
   '/workspace',
   '/meet',
   '/work',
-  '/agent',
   '/roster',
   '/users',
   '/topic-create',
   '/party-topics',
+  '/party-import',
+  '/meeting-import',
   '/topics',
 ])
 

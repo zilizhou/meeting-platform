@@ -11,6 +11,8 @@ export interface AuthUserInfo {
   collegeName?: string | null
   isSchoolAdmin: boolean
   roles: string[]
+  /** 校级查阅分管学院；空数组表示全校 */
+  collegeScopeIds?: string[]
 }
 
 export const useAuthStore = defineStore('auth', () => {

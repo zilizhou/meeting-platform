@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser, Roles } from '../common/decorators';
 import { AuthUser } from '../common/types';
 import { RoleCode } from '../common/constants';
-import { hasSchoolWideAccess } from '../common/roles';
+import { prismaCollegeIdFilter } from '../common/roles';
 
 @ApiTags('compliance')
 @ApiBearerAuth()
@@ -32,9 +32,7 @@ export class ComplianceController {
   ) {
     return this.prisma.complianceLog.findMany({
       where: {
-        ...(hasSchoolWideAccess(user)
-          ? {}
-          : { collegeId: user.collegeId ?? undefined }),
+        ...prismaCollegeIdFilter(user),
         ...(topicId ? { topicId } : {}),
         ...(meetingId ? { meetingId } : {}),
       },

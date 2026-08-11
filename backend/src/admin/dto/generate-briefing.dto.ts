@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsOptional } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 
 export class GenerateBriefingDto {
   @IsOptional()
@@ -9,4 +9,9 @@ export class GenerateBriefingDto {
   @IsOptional()
   @IsBoolean()
   notify?: boolean;
+
+  /** 指定学院；空则按当前账号可见范围（全校或分管） */
+  @IsOptional()
+  @IsString()
+  collegeId?: string;
 }

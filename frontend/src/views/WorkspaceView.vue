@@ -307,10 +307,10 @@ function applyBoard(target: FlowBoard, data: any) {
 
 async function load() {
   try {
-    const [todos, flow] = await Promise.all([
+    const [todos, flow] = (await Promise.all([
       http.get('/workspace/todos'),
       http.get('/workspace/flow-board'),
-    ])
+    ])) as any[]
     Object.assign(summary, todos.summary)
     items.value = todos.items || []
     applyBoard(jointBoard, flow.joint || {})

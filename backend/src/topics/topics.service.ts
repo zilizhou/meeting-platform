@@ -21,7 +21,7 @@ import {
   SupervisionStatus,
   TopicStatus,
 } from '../common/constants';
-import { hasSchoolWideAccess } from '../common/roles';
+import { isCollegeVisible, prismaCollegeIdFilter } from '../common/roles';
 import {
   materialsForCategory,
   withEmergencyMaterials,
@@ -178,7 +178,7 @@ export class TopicsService {
 
   /** 议题库中「修改/删除」权限：本人提交，或学院/学校管理员 */
   private assertCanManage(user: AuthUser, topic: { collegeId: string; proposerId: string }) {
-    if (!hasSchoolWideAccess(user) && topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, topic.collegeId)) {
       throw new ForbiddenException('无权操作该议题');
     }
     const isAdmin = this.isTopicAdmin(user);
@@ -322,7 +322,7 @@ export class TopicsService {
   async list(user: AuthUser, meetingType?: string) {
     return this.prisma.topic.findMany({
       where: {
-        ...(hasSchoolWideAccess(user) ? {} : { collegeId: user.collegeId ?? undefined }),
+        ...prismaCollegeIdFilter(user),
         ...(meetingType ? { meetingType } : {}),
       },
       include: {
@@ -371,7 +371,7 @@ export class TopicsService {
       },
     });
     if (!topic) throw new NotFoundException('议题不存在');
-    if (!hasSchoolWideAccess(user) && topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, topic.collegeId)) {
       throw new ForbiddenException('无权查看');
     }
 
@@ -421,7 +421,7 @@ export class TopicsService {
       include: { topic: true },
     });
     if (!material) throw new NotFoundException('材料不存在');
-    if (!hasSchoolWideAccess(user) && material.topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, material.topic.collegeId)) {
       throw new ForbiddenException();
     }
     if (!material.uploaded) {
@@ -525,7 +525,7 @@ export class TopicsService {
       include: { topic: true },
     });
     if (!material) throw new NotFoundException('材料不存在');
-    if (!hasSchoolWideAccess(user) && material.topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, material.topic.collegeId)) {
       throw new ForbiddenException();
     }
     if (
@@ -592,7 +592,7 @@ export class TopicsService {
       include: { topic: true },
     });
     if (!material) throw new NotFoundException('材料不存在');
-    if (!hasSchoolWideAccess(user) && material.topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, material.topic.collegeId)) {
       throw new ForbiddenException();
     }
     if (!material.filePath || !material.uploaded) {

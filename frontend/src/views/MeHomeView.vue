@@ -91,6 +91,29 @@
         </div>
 
         <div class="block">
+          <div class="label">使用帮助</div>
+          <button class="item" type="button" @click="restartGuide">
+            <div class="ico">引</div>
+            <div>
+              <strong>重新开始新手引导</strong>
+              <em>按当前身份介绍入口与办理步骤</em>
+            </div>
+            <span class="chev">›</span>
+          </button>
+          <div class="item mode-item">
+            <div class="ico">模</div>
+            <div>
+              <strong>界面模式</strong>
+              <em>新手模式显示“我要办理”和操作提示</em>
+            </div>
+            <div class="mode-switch" aria-label="界面模式">
+              <button type="button" :class="{ on: onboarding.state.mode === 'novice' }" @click="onboarding.setMode('novice')">新手</button>
+              <button type="button" :class="{ on: onboarding.state.mode === 'expert' }" @click="onboarding.setMode('expert')">熟练</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="block">
           <div class="label">关于</div>
           <div class="item static">
             <div class="ico">系</div>
@@ -113,9 +136,11 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
+import { useOnboarding } from '@/composables/useOnboarding'
 
 const auth = useAuthStore()
 const router = useRouter()
+const onboarding = useOnboarding()
 const unread = ref(0)
 const summary = reactive({
   partyReview: 0,
@@ -172,6 +197,11 @@ async function load() {
 function onLogout() {
   auth.logout()
   router.push('/login')
+}
+
+function restartGuide() {
+  onboarding.restartWelcome()
+  router.push(isViewerOnly.value ? '/admin' : '/work')
 }
 
 onMounted(load)
@@ -280,6 +310,11 @@ onMounted(load)
 .item.static {
   cursor: default;
 }
+
+.mode-item { cursor: default; }
+.mode-switch { display: flex; margin-left: auto; padding: 2px; border-radius: 9px; background: #eef2f5; }
+.mode-switch button { border: 0; border-radius: 7px; padding: 6px 9px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+.mode-switch button.on { background: #fff; color: var(--joint); box-shadow: 0 1px 4px rgba(15, 45, 75, .14); font-weight: 700; }
 
 .ico {
   width: 36px;

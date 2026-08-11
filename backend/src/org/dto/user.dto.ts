@@ -72,6 +72,15 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: '校级查阅分管学院；传空数组表示全校',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  collegeScopeIds?: string[];
 }
 
 export class ResetPasswordDto {

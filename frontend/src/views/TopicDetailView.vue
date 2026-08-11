@@ -320,7 +320,7 @@
             <el-upload
               v-if="!String(row.filePath || '').startsWith('party-resolution://')"
               :show-file-list="false"
-              :http-request="(opt) => onUpload(row, opt)"
+              :http-request="(opt: any) => onUpload(row, opt)"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.txt,.zip"
             >
               <el-button link type="primary" :loading="uploadingId === row.id">上传</el-button>

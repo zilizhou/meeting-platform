@@ -116,4 +116,13 @@ export class CreateSystemUserDto {
   @IsOptional()
   @IsBoolean()
   isSchoolAdmin?: boolean;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: '校级查阅分管学院；空或不传表示全校',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  collegeScopeIds?: string[];
 }

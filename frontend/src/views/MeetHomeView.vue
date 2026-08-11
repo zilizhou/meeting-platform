@@ -1,13 +1,31 @@
 <template>
   <div>
-    <div class="ui-hero is-official">
+    <div class="ui-hero is-official" :class="{ party: activeTab === 'party' }">
       <div class="eyebrow"><b></b> 会议现场 · 分轨办理</div>
       <h2>会议</h2>
-      <p>党组织会议、党政联席会议与归档会议统一入口</p>
+      <p>
+        当前：{{ activeTab === 'party' ? '党组织会议' : '党政联席会议' }} · 按状态查阅本轨会议
+      </p>
       <div class="nums">
-        <div><strong>{{ partyList.length }}</strong><span>党组织会议</span></div>
-        <div><strong>{{ jointList.length }}</strong><span>联席会议</span></div>
-        <div><strong>{{ archivedList.length }}</strong><span>归档</span></div>
+        <button
+          type="button"
+          class="num"
+          :class="[
+            activeTab === 'party' ? 'party' : 'joint',
+            { on: statusFilter === 'active' },
+          ]"
+          @click="setStatus('active')"
+        >
+          <strong>{{ currentActiveCount }}</strong><span>进行中</span>
+        </button>
+        <button
+          type="button"
+          class="num all"
+          :class="{ on: statusFilter === 'archived' }"
+          @click="setStatus('archived')"
+        >
+          <strong>{{ currentArchivedCount }}</strong><span>已归档</span>
+        </button>
       </div>
     </div>
 
@@ -18,7 +36,7 @@
         class="party"
         :aria-selected="activeTab === 'party'"
         :class="{ on: activeTab === 'party' }"
-        @click="activeTab = 'party'"
+        @click="setTab('party')"
       >
         党组织会议
       </button>
@@ -27,18 +45,9 @@
         role="tab"
         :aria-selected="activeTab === 'joint'"
         :class="{ on: activeTab === 'joint' }"
-        @click="activeTab = 'joint'"
+        @click="setTab('joint')"
       >
         党政联席会议
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'archived'"
-        :class="{ on: activeTab === 'archived' }"
-        @click="activeTab = 'archived'"
-      >
-        归档会议
       </button>
     </div>
 
@@ -49,7 +58,7 @@
       </h3>
       <div class="ui-sec-actions">
         <button
-          v-if="activeTab === 'party' && roles.canCreateMeeting.value"
+          v-if="statusFilter === 'active' && activeTab === 'party' && roles.canCreateMeeting.value"
           class="ui-btn party"
           type="button"
           @click="openCreateParty"
@@ -57,7 +66,15 @@
           创建会议
         </button>
         <button
-          v-if="activeTab === 'joint' && roles.canCreateMeeting.value"
+          v-if="activeTab === 'party' && roles.canCreateMeeting.value"
+          class="ui-btn light"
+          type="button"
+          @click="router.push({ path: '/meeting-import', query: { type: 'party' } })"
+        >
+          历史会议导入
+        </button>
+        <button
+          v-if="statusFilter === 'active' && activeTab === 'joint' && roles.canCreateMeeting.value"
           class="ui-btn"
           type="button"
           @click="openCreateJoint"
@@ -65,7 +82,15 @@
           创建会议
         </button>
         <button
-          v-if="activeTab === 'archived'"
+          v-if="activeTab === 'joint' && roles.canCreateMeeting.value"
+          class="ui-btn light"
+          type="button"
+          @click="router.push({ path: '/meeting-import', query: { type: 'joint' } })"
+        >
+          历史会议导入
+        </button>
+        <button
+          v-if="statusFilter === 'archived'"
           class="ui-btn light"
           type="button"
           @click="router.push('/archives')"
@@ -81,16 +106,34 @@
     <div v-else-if="!currentList.length" class="ui-empty">
       {{ emptyText }}
       <div
-        v-if="activeTab === 'party' && roles.canCreateMeeting.value"
+        v-if="statusFilter === 'active' && activeTab === 'party' && roles.canCreateMeeting.value"
         style="margin-top: 10px"
       >
         <button class="ui-btn party" type="button" @click="openCreateParty">去创建会议</button>
       </div>
       <div
-        v-if="activeTab === 'joint' && roles.canCreateMeeting.value"
+        v-if="statusFilter === 'active' && activeTab === 'joint' && roles.canCreateMeeting.value"
         style="margin-top: 10px"
       >
         <button class="ui-btn" type="button" @click="openCreateJoint">去创建会议</button>
+      </div>
+      <div
+        v-if="statusFilter === 'archived' && roles.canCreateMeeting.value"
+        style="margin-top: 10px"
+      >
+        <button
+          class="ui-btn"
+          :class="{ party: activeTab === 'party' }"
+          type="button"
+          @click="
+            router.push({
+              path: '/meeting-import',
+              query: { type: activeTab === 'party' ? 'party' : 'joint' },
+            })
+          "
+        >
+          历史会议导入
+        </button>
       </div>
     </div>
 
@@ -105,21 +148,16 @@
             v-for="m in g.meetings"
             :key="m.id"
             class="ui-card"
-            :class="cardTrack(m)"
+            :class="cardTrack"
             type="button"
             style="width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit"
             @click="open(m)"
           >
             <div class="top">
-              <span class="ui-tag" :class="cardTrack(m)">本月第 {{ m.monthIndex }} 次</span>
-              <span v-if="activeTab === 'archived'" class="ui-tag" :class="cardTrack(m)">
-                {{ typeLabel(m.meetingType) }}
-              </span>
-              <span class="ui-tag" :class="activeTab !== 'archived' ? cardTrack(m) : undefined">
-                {{ statusLabel(m.status) }}
-              </span>
+              <span class="ui-tag" :class="cardTrack">本月第 {{ m.monthIndex }} 次</span>
+              <span class="ui-tag" :class="cardTrack">{{ statusLabel(m.status) }}</span>
               <span
-                v-if="activeTab !== 'archived' && m.canResolve !== undefined"
+                v-if="statusFilter === 'active' && m.canResolve !== undefined"
                 class="ui-tag"
                 :class="m.canResolve ? 'ok' : 'warn'"
               >
@@ -129,8 +167,8 @@
             </div>
             <h4>{{ m.title }}</h4>
             <div class="meta">
-              <template v-if="activeTab === 'archived'">
-                期次：{{ m.periodNo || '—' }} · 归档会议
+              <template v-if="statusFilter === 'archived'">
+                期次：{{ m.periodNo || '—' }} · 时间：{{ formatTime(m.scheduledAt) }} · 已归档
               </template>
               <template v-else>
                 期次：{{ m.periodNo || '—' }} · 时间：{{ formatTime(m.scheduledAt) }} · 议题
@@ -268,7 +306,8 @@ import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 import { groupMeetingsByMonth } from '@/utils/meetingMonthGroups'
 
-type MeetTab = 'party' | 'joint' | 'archived'
+type MeetTab = 'party' | 'joint'
+type StatusFilter = 'active' | 'archived'
 
 interface MeetingItem {
   id: string
@@ -290,10 +329,10 @@ const router = useRouter()
 const route = useRoute()
 const roles = useRoles()
 const activeTab = ref<MeetTab>('party')
+const statusFilter = ref<StatusFilter>('active')
 const loading = ref(false)
-const partyList = ref<MeetingItem[]>([])
-const jointList = ref<MeetingItem[]>([])
-const archivedList = ref<MeetingItem[]>([])
+const partyAll = ref<MeetingItem[]>([])
+const jointAll = ref<MeetingItem[]>([])
 
 const createVisible = ref(false)
 const createMode = ref<'party' | 'joint'>('party')
@@ -317,25 +356,52 @@ const STATUS: Record<string, string> = {
   ARCHIVED: '已归档',
 }
 
+const partyActiveList = computed(() =>
+  partyAll.value.filter((m) => m.status !== 'ARCHIVED'),
+)
+const partyArchivedList = computed(() =>
+  partyAll.value.filter((m) => m.status === 'ARCHIVED'),
+)
+const jointActiveList = computed(() =>
+  jointAll.value.filter((m) => m.status !== 'ARCHIVED'),
+)
+const jointArchivedList = computed(() =>
+  jointAll.value.filter((m) => m.status === 'ARCHIVED'),
+)
+
+const currentActiveCount = computed(() =>
+  activeTab.value === 'party' ? partyActiveList.value.length : jointActiveList.value.length,
+)
+const currentArchivedCount = computed(() =>
+  activeTab.value === 'party'
+    ? partyArchivedList.value.length
+    : jointArchivedList.value.length,
+)
+
 const sectionTitle = computed(() => {
-  if (activeTab.value === 'party') return '党组织会议'
-  if (activeTab.value === 'joint') return '党政联席会议'
-  return '归档会议'
+  const track = activeTab.value === 'party' ? '党组织会议' : '党政联席会议'
+  return statusFilter.value === 'archived' ? `${track} · 已归档` : track
 })
 
 const emptyText = computed(() => {
-  if (activeTab.value === 'party') return '暂无党组织会议'
-  if (activeTab.value === 'joint') return '暂无党政联席会议'
-  return '暂无归档会议'
+  if (statusFilter.value === 'archived') {
+    return activeTab.value === 'party'
+      ? '暂无党组织归档会议'
+      : '暂无党政联席归档会议'
+  }
+  return activeTab.value === 'party' ? '暂无党组织会议' : '暂无党政联席会议'
 })
 
 const currentList = computed(() => {
-  if (activeTab.value === 'party') return partyList.value
-  if (activeTab.value === 'joint') return jointList.value
-  return archivedList.value
+  if (activeTab.value === 'party') {
+    return statusFilter.value === 'archived' ? partyArchivedList.value : partyActiveList.value
+  }
+  return statusFilter.value === 'archived' ? jointArchivedList.value : jointActiveList.value
 })
 
 const monthGroups = computed(() => groupMeetingsByMonth(currentList.value))
+
+const cardTrack = computed(() => (activeTab.value === 'party' ? 'party' : 'joint'))
 
 function isTopicLocked(t: any) {
   return (
@@ -359,17 +425,6 @@ function statusLabel(s: string) {
   return STATUS[s] || s
 }
 
-function typeLabel(meetingType?: string) {
-  return meetingType === 'PARTY_COMMITTEE' ? '党组织会议' : '联席会'
-}
-
-function cardTrack(m: MeetingItem) {
-  if (activeTab.value === 'archived') {
-    return m.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'
-  }
-  return activeTab.value === 'party' ? 'party' : 'joint'
-}
-
 function formatTime(v?: string) {
   if (!v) return '时间待定'
   const d = new Date(v)
@@ -386,11 +441,37 @@ function formatShortTime(v?: string) {
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function applyTabFromQuery() {
+function syncQuery() {
+  const query: Record<string, string> = { tab: activeTab.value }
+  if (statusFilter.value === 'archived') query.status = 'archived'
+  const curTab = String(route.query.tab || 'party')
+  const curStatus = String(route.query.status || '')
+  const nextStatus = query.status || ''
+  if (curTab === query.tab && curStatus === nextStatus) return
+  router.replace({ query })
+}
+
+function applyFromQuery() {
   const tab = String(route.query.tab || '')
-  if (tab === 'party' || tab === 'joint' || tab === 'archived') {
-    activeTab.value = tab
+  // 兼容旧链接：/meet?tab=archived → 党组织 · 已归档
+  if (tab === 'archived') {
+    activeTab.value = 'party'
+    statusFilter.value = 'archived'
+    syncQuery()
+    return
   }
+  if (tab === 'party' || tab === 'joint') activeTab.value = tab
+  statusFilter.value = String(route.query.status || '') === 'archived' ? 'archived' : 'active'
+}
+
+function setTab(tab: MeetTab) {
+  activeTab.value = tab
+  syncQuery()
+}
+
+function setStatus(status: StatusFilter) {
+  statusFilter.value = status
+  syncQuery()
 }
 
 function open(m: MeetingItem) {
@@ -405,14 +486,12 @@ function open(m: MeetingItem) {
 async function load() {
   loading.value = true
   try {
-    const [party, joint, archived]: any[] = await Promise.all([
+    const [party, joint]: any[] = await Promise.all([
       http.get('/meetings', { params: { meetingType: 'PARTY_COMMITTEE' } }),
       http.get('/meetings', { params: { meetingType: 'JOINT_CONFERENCE' } }),
-      http.get('/meetings', { params: { status: 'ARCHIVED' } }),
     ])
-    partyList.value = (party || []).filter((m: MeetingItem) => m.status !== 'ARCHIVED')
-    jointList.value = (joint || []).filter((m: MeetingItem) => m.status !== 'ARCHIVED')
-    archivedList.value = archived || []
+    partyAll.value = party || []
+    jointAll.value = joint || []
   } finally {
     loading.value = false
   }
@@ -448,10 +527,11 @@ async function loadCreateTopics(meetingType: 'PARTY_COMMITTEE' | 'JOINT_CONFEREN
 
 async function openCreateParty() {
   createMode.value = 'party'
-  activeTab.value = 'party'
+  setTab('party')
+  setStatus('active')
   const college = roles.collegeName.value || '本院'
   form.title = `${college}党组织会议`
-  form.periodNo = nextPeriodNo(partyList.value)
+  form.periodNo = nextPeriodNo(partyAll.value)
   form.scheduledAt = defaultScheduledAt()
   form.isMajor = false
   form.topicIds = []
@@ -461,10 +541,11 @@ async function openCreateParty() {
 
 async function openCreateJoint() {
   createMode.value = 'joint'
-  activeTab.value = 'joint'
+  setTab('joint')
+  setStatus('active')
   const college = roles.collegeName.value || '本院'
   form.title = `${college}党政联席会议`
-  form.periodNo = nextPeriodNo(jointList.value)
+  form.periodNo = nextPeriodNo(jointAll.value)
   form.scheduledAt = defaultScheduledAt()
   form.isMajor = false
   form.topicIds = []
@@ -517,12 +598,12 @@ async function submitCreate() {
 }
 
 watch(
-  () => route.query.tab,
-  () => applyTabFromQuery(),
+  () => [route.query.tab, route.query.status],
+  () => applyFromQuery(),
 )
 
 onMounted(() => {
-  applyTabFromQuery()
+  applyFromQuery()
   load()
 })
 </script>

@@ -94,7 +94,17 @@ export class OrgService {
     createdAt: Date;
     college?: { id: string; name: string; code: string } | null;
     roles: { role: { id: string; code: string; name: string } }[];
+    collegeScopes?: {
+      collegeId: string;
+      college?: { id: string; name: string } | null;
+    }[];
   }) {
+    const scopes = u.collegeScopes || [];
+    const collegeScopeIds = scopes.map((s) => s.collegeId);
+    const collegeScopeNames = scopes
+      .map((s) => s.college?.name)
+      .filter((n): n is string => !!n);
+    const isViewer = u.roles.some((r) => r.role.code === RoleCode.SCHOOL_VIEWER);
     return {
       id: u.id,
       username: u.username,
@@ -110,6 +120,14 @@ export class OrgService {
         name: r.role.name,
       })),
       roleCodes: u.roles.map((r) => r.role.code),
+      collegeScopeIds,
+      collegeScopeNames,
+      /** 校级查阅：空=全校；有值=分管学院名 */
+      scopeLabel: isViewer
+        ? collegeScopeNames.length
+          ? collegeScopeNames.join('、')
+          : '全校'
+        : null,
     };
   }
 
@@ -252,15 +270,27 @@ export class OrgService {
   }
 
   async listUsers(user: AuthUser, collegeId?: string) {
-    // 校级可跨院；不传 collegeId 时校级看全校（不含纯校级账号可选）
+    // 校级可跨院；不传 collegeId 时校级看全校（含校级管理员与校级查阅）
     if (user.isSchoolAdmin) {
       const users = await this.prisma.user.findMany({
         where: collegeId
           ? { collegeId }
-          : { OR: [{ collegeId: { not: null } }, { isSchoolAdmin: true }] },
+          : {
+              OR: [
+                { collegeId: { not: null } },
+                { isSchoolAdmin: true },
+                { roles: { some: { role: { code: RoleCode.SCHOOL_VIEWER } } } },
+              ],
+            },
         include: {
           college: { select: { id: true, name: true, code: true } },
           roles: { include: { role: true } },
+          collegeScopes: {
+            select: {
+              collegeId: true,
+              college: { select: { id: true, name: true, code: true } },
+            },
+          },
         },
         orderBy: [{ collegeId: 'asc' }, { realName: 'asc' }],
       });
@@ -275,6 +305,12 @@ export class OrgService {
       include: {
         college: { select: { id: true, name: true, code: true } },
         roles: { include: { role: true } },
+        collegeScopes: {
+          select: {
+            collegeId: true,
+            college: { select: { id: true, name: true, code: true } },
+          },
+        },
       },
       orderBy: { realName: 'asc' },
     });
@@ -398,6 +434,31 @@ export class OrgService {
       });
     }
 
+    if (dto.collegeScopeIds !== undefined) {
+      if (!user.isSchoolAdmin) {
+        throw new ForbiddenException('仅校级管理员可配置分管学院');
+      }
+      if (!targetIsSchoolViewer) {
+        throw new BadRequestException('仅校级查阅账号可配置分管学院');
+      }
+      const scopeIds = [...new Set(dto.collegeScopeIds)];
+      if (scopeIds.length) {
+        const found = await this.prisma.college.findMany({
+          where: { id: { in: scopeIds } },
+          select: { id: true },
+        });
+        if (found.length !== scopeIds.length) {
+          throw new BadRequestException('分管学院存在无效 ID');
+        }
+      }
+      await this.prisma.userCollegeScope.deleteMany({ where: { userId: id } });
+      if (scopeIds.length) {
+        await this.prisma.userCollegeScope.createMany({
+          data: scopeIds.map((collegeId) => ({ userId: id, collegeId })),
+        });
+      }
+    }
+
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
@@ -412,6 +473,12 @@ export class OrgService {
       include: {
         college: { select: { id: true, name: true, code: true } },
         roles: { include: { role: true } },
+        collegeScopes: {
+          select: {
+            collegeId: true,
+            college: { select: { id: true, name: true, code: true } },
+          },
+        },
       },
     });
 

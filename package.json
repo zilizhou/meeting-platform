@@ -8,6 +8,9 @@
     "dev:frontend": "pnpm --dir frontend dev",
     "dev:system": "pnpm --dir frontend dev:system",
     "db:seed": "pnpm --dir backend prisma:seed",
-    "db:setup": "pnpm --dir backend exec prisma migrate dev --name init && pnpm --dir backend prisma:seed"
+    "db:setup": "pnpm --dir backend exec prisma migrate dev --name init && pnpm --dir backend prisma:seed",
+    "build": "pnpm --dir backend build && pnpm --dir frontend build && pnpm --dir frontend build:system",
+    "test": "pnpm --dir backend test:e2e",
+    "verify": "pnpm test && pnpm build"
   }
 }

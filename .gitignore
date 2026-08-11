@@ -22,3 +22,11 @@ backend/prisma/test.db-journal
 *.log
 components.d.ts
 auto-imports.d.ts
+
+# 原始会议材料可能含个人信息或内部事项，只放在本地隔离目录
+private-data/
+incoming/
+/党委会议材料*/
+/*.doc
+/*.docx
+/*.zip

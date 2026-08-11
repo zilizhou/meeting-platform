@@ -46,14 +46,23 @@
 
         <div class="quick">
           <div class="lab">快捷演示账号</div>
-          <div class="chips">
-            <button type="button" class="party" @click="fill('secretary')">书记 secretary</button>
-            <button type="button" class="party" @click="fill('vsecretary')">副书记 vsecretary</button>
-            <button type="button" @click="fill('dean')">院长 dean</button>
-            <button type="button" @click="fill('office')">办公室 office</button>
-            <button type="button" @click="fill('dept')">部门负责人 dept</button>
-            <button type="button" @click="fill('admin')">校级 admin</button>
-            <button type="button" @click="fill('viewer')">校级查阅 viewer</button>
+          <div class="group">
+            <div class="group-lab">学院级</div>
+            <div class="chips">
+              <button type="button" class="party" @click="fill('secretary')">书记 secretary</button>
+              <button type="button" class="party" @click="fill('vsecretary')">副书记 vsecretary</button>
+              <button type="button" @click="fill('dean')">院长 dean</button>
+              <button type="button" @click="fill('office')">学院办公室 office</button>
+              <button type="button" @click="fill('dept')">部门负责人 dept</button>
+            </div>
+          </div>
+          <div class="group">
+            <div class="group-lab">校级</div>
+            <div class="chips">
+              <button type="button" @click="fill('admin')">校级管理 admin</button>
+              <button type="button" @click="fill('viewer')">校级查阅 viewer</button>
+              <button type="button" @click="fill('viewer_vp')">校级分管查阅 viewer_vp</button>
+            </div>
           </div>
         </div>
       </div>
@@ -265,6 +274,16 @@ label input:focus {
   font-size: 12px;
   color: var(--muted);
   margin-bottom: 8px;
+}
+
+.group + .group {
+  margin-top: 10px;
+}
+
+.group-lab {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 6px;
 }
 
 .chips {

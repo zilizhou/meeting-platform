@@ -359,6 +359,17 @@ export class SystemService {
       });
       if (!role) throw new BadRequestException('SCHOOL_VIEWER 角色未初始化');
 
+      const scopeIds = [...new Set(dto.collegeScopeIds || [])];
+      if (scopeIds.length) {
+        const found = await this.prisma.college.findMany({
+          where: { id: { in: scopeIds } },
+          select: { id: true },
+        });
+        if (found.length !== scopeIds.length) {
+          throw new BadRequestException('分管学院存在无效 ID');
+        }
+      }
+
       const password = dto.password || '123456';
       const passwordHash = await bcrypt.hash(password, 8);
       const created = await this.prisma.user.create({
@@ -371,10 +382,19 @@ export class SystemService {
           isSchoolAdmin: false,
           enabled: true,
           roles: { create: [{ roleId: role.id }] },
+          collegeScopes: scopeIds.length
+            ? { create: scopeIds.map((collegeId) => ({ collegeId })) }
+            : undefined,
         },
         include: {
           college: { select: { id: true, name: true, code: true } },
           roles: { include: { role: true } },
+          collegeScopes: {
+            select: {
+              collegeId: true,
+              college: { select: { id: true, name: true, code: true } },
+            },
+          },
         },
       });
 
@@ -386,9 +406,13 @@ export class SystemService {
         detail: {
           username: created.username,
           roleCodes: [RoleCode.SCHOOL_VIEWER],
+          collegeScopeIds: scopeIds,
         },
       });
 
+      const scopeNames = created.collegeScopes
+        .map((s) => s.college?.name)
+        .filter((n): n is string => !!n);
       return {
         id: created.id,
         username: created.username,
@@ -404,6 +428,9 @@ export class SystemService {
           name: r.role.name,
         })),
         roleCodes: created.roles.map((r) => r.role.code),
+        collegeScopeIds: created.collegeScopes.map((s) => s.collegeId),
+        collegeScopeNames: scopeNames,
+        scopeLabel: scopeNames.length ? scopeNames.join('、') : '全校',
       };
     }
 

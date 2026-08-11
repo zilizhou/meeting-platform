@@ -14,7 +14,7 @@ import {
 } from '../common/constants';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-import { hasAnyRole, hasSchoolWideAccess } from '../common/roles';
+import { hasAnyRole, isCollegeVisible, prismaCollegeIdFilter } from '../common/roles';
 import { IsString, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import {
@@ -61,13 +61,11 @@ export class SupervisionsService {
     await this.scanOverdue(user, false);
 
     const tasks = await this.prisma.supervisionTask.findMany({
-      where: hasSchoolWideAccess(user)
-        ? undefined
-        : {
-            resolution: {
-              topic: { collegeId: user.collegeId ?? '__none__' },
-            },
-          },
+      where: {
+        resolution: {
+          topic: prismaCollegeIdFilter(user),
+        },
+      },
       include: {
         resolution: {
           include: {
@@ -93,13 +91,9 @@ export class SupervisionsService {
       where: {
         status: { notIn: [SupervisionStatus.DONE, SupervisionStatus.OVERDUE] },
         dueAt: { lt: now },
-        ...(hasSchoolWideAccess(user)
-          ? {}
-          : {
-              resolution: {
-                topic: { collegeId: user.collegeId ?? '__none__' },
-              },
-            }),
+        resolution: {
+          topic: prismaCollegeIdFilter(user),
+        },
       },
       include: {
         resolution: { include: { topic: true } },
@@ -128,13 +122,9 @@ export class SupervisionsService {
     const overdueCount = await this.prisma.supervisionTask.count({
       where: {
         status: SupervisionStatus.OVERDUE,
-        ...(hasSchoolWideAccess(user)
-          ? {}
-          : {
-              resolution: {
-                topic: { collegeId: user.collegeId ?? undefined },
-              },
-            }),
+        resolution: {
+          topic: prismaCollegeIdFilter(user),
+        },
       },
     });
 
@@ -147,7 +137,7 @@ export class SupervisionsService {
       include: { resolution: { include: { topic: true } } },
     });
     if (!task) throw new NotFoundException('督办任务不存在');
-    if (!hasSchoolWideAccess(user) && task.resolution.topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, task.resolution.topic.collegeId)) {
       throw new ForbiddenException();
     }
     if (!this.canManageTask(user, task.ownerId)) {
@@ -170,7 +160,7 @@ export class SupervisionsService {
       include: { resolution: { include: { topic: true } } },
     });
     if (!task) throw new NotFoundException('督办任务不存在');
-    if (!hasSchoolWideAccess(user) && task.resolution.topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, task.resolution.topic.collegeId)) {
       throw new ForbiddenException();
     }
     if (!this.canManageTask(user, task.ownerId)) {
@@ -192,7 +182,7 @@ export class SupervisionsService {
       include: { resolution: { include: { topic: true } } },
     });
     if (!task) throw new NotFoundException('督办任务不存在');
-    if (!hasSchoolWideAccess(user) && task.resolution.topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, task.resolution.topic.collegeId)) {
       throw new ForbiddenException();
     }
     if (task.status === SupervisionStatus.DONE) {
@@ -248,7 +238,7 @@ export class SupervisionsService {
       },
     });
     if (!task) throw new NotFoundException('督办任务不存在');
-    if (!hasSchoolWideAccess(user) && task.resolution.topic.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, task.resolution.topic.collegeId)) {
       throw new ForbiddenException();
     }
     if (!this.canManageTask(user, task.ownerId)) {

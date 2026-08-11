@@ -419,7 +419,7 @@
           <div class="dialog-label">
             会前材料
             <span v-if="dialogMaterials.length" class="n">
-              {{ dialogMaterials.filter((m) => m.uploaded).length }}/{{ dialogMaterials.length }}
+              {{ dialogMaterials.filter((m: any) => m.uploaded).length }}/{{ dialogMaterials.length }}
             </span>
           </div>
           <div v-if="dialogMaterials.length" class="material-list">
@@ -537,7 +537,7 @@ const dialogTopic = computed(() => {
     proposer: live.proposer || extra.proposer,
     category: live.category || extra.category,
     jointReviews: extra.jointReviews || live.jointReviews,
-    materials: extra.materials || [],
+    materials: extra.materials?.length ? extra.materials : live.materials || [],
   }
 })
 
@@ -580,10 +580,10 @@ function decisionLabel(d?: string) {
   return '待审'
 }
 
-function topicTabLabel(topic: any, idx: number) {
+function topicTabLabel(topic: any, idx: string | number) {
   const title = String(topic.title || '')
   if (title.length <= 8) return title
-  return `议题${idx + 1}`
+  return `议题${Number(idx) + 1}`
 }
 
 function selectTopic(id: string) {

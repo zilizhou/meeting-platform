@@ -7,7 +7,12 @@ import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types';
 import { MeetingType, RoleCode, SupervisionStatus } from '../common/constants';
-import { assertSchoolWideAccess } from '../common/roles';
+import {
+  assertCollegeVisible,
+  assertSchoolWideAccess,
+  getVisibleCollegeIds,
+  prismaCollegeIdFilter,
+} from '../common/roles';
 import { SupervisionsService } from '../supervisions/supervisions.service';
 import { LlmProvider } from '../ai/llm.provider';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -25,6 +30,24 @@ export class AdminService {
 
   assertSchoolAdmin(user: AuthUser) {
     assertSchoolWideAccess(user, '仅校级管理员或校级查阅可访问监管看板');
+  }
+
+  /** 可见学院 where（College.id） */
+  private collegeEntityWhere(user: AuthUser) {
+    const v = getVisibleCollegeIds(user);
+    if (v === 'ALL') return {};
+    if (v.length === 0) return { id: '__none__' };
+    if (v.length === 1) return { id: v[0] };
+    return { id: { in: v } };
+  }
+
+  /** 请求指定学院时校验可见性，否则用分管范围 */
+  private meetingCollegeWhere(user: AuthUser, collegeId?: string) {
+    if (collegeId) {
+      assertCollegeVisible(user, collegeId);
+      return { collegeId };
+    }
+    return prismaCollegeIdFilter(user);
   }
 
   /** 当月区间（按会议排期优先，其次创建时间） */
@@ -61,30 +84,39 @@ export class AdminService {
     };
   }
 
-  /** 全校/分院本月两会召开情况（按规定应每月召开） */
-  private async computeMonthHolding() {
+  /** 全校/分管范围本月两会召开情况（按规定应每月召开） */
+  private async computeMonthHolding(user: AuthUser) {
     const { start, end, label, year, month } = this.currentMonthRange();
+    const collegeWhere = this.collegeEntityWhere(user);
+    const meetingScope = prismaCollegeIdFilter(user);
     const [colleges, monthPartyMeetings, monthJointMeetings] = await Promise.all([
       this.prisma.college.findMany({
+        where: collegeWhere,
         select: { id: true, name: true, code: true },
         orderBy: { code: 'asc' },
       }),
       this.prisma.meeting.findMany({
-        where: this.monthMeetingWhere(
-          undefined,
-          MeetingType.PARTY_COMMITTEE,
-          start,
-          end,
-        ),
+        where: {
+          ...meetingScope,
+          ...this.monthMeetingWhere(
+            undefined,
+            MeetingType.PARTY_COMMITTEE,
+            start,
+            end,
+          ),
+        },
         select: { collegeId: true },
       }),
       this.prisma.meeting.findMany({
-        where: this.monthMeetingWhere(
-          undefined,
-          MeetingType.JOINT_CONFERENCE,
-          start,
-          end,
-        ),
+        where: {
+          ...meetingScope,
+          ...this.monthMeetingWhere(
+            undefined,
+            MeetingType.JOINT_CONFERENCE,
+            start,
+            end,
+          ),
+        },
         select: { collegeId: true },
       }),
     ]);
@@ -134,6 +166,11 @@ export class AdminService {
     this.assertSchoolAdmin(user);
     await this.supervisions.scanOverdue(user, false);
 
+    const scope = prismaCollegeIdFilter(user);
+    const supervisionScope = {
+      resolution: { topic: scope },
+    };
+
     const [
       collegeCount,
       jointMeetingCount,
@@ -149,26 +186,29 @@ export class AdminService {
       recentMeetings,
       month,
     ] = await Promise.all([
-      this.prisma.college.count(),
+      this.prisma.college.count({ where: this.collegeEntityWhere(user) }),
       this.prisma.meeting.count({
-        where: { meetingType: MeetingType.JOINT_CONFERENCE },
+        where: { meetingType: MeetingType.JOINT_CONFERENCE, ...scope },
       }),
       this.prisma.meeting.count({
-        where: { meetingType: MeetingType.PARTY_COMMITTEE },
+        where: { meetingType: MeetingType.PARTY_COMMITTEE, ...scope },
       }),
       this.prisma.topic.count({
-        where: { meetingType: MeetingType.PARTY_COMMITTEE },
+        where: { meetingType: MeetingType.PARTY_COMMITTEE, ...scope },
       }),
       this.prisma.topic.count({
-        where: { meetingType: MeetingType.JOINT_CONFERENCE },
+        where: { meetingType: MeetingType.JOINT_CONFERENCE, ...scope },
       }),
-      this.prisma.transferLink.count(),
-      this.prisma.supervisionTask.count(),
+      this.prisma.transferLink.count({
+        where: { sourceTopic: scope },
+      }),
+      this.prisma.supervisionTask.count({ where: supervisionScope }),
       this.prisma.supervisionTask.count({
-        where: { status: SupervisionStatus.DONE },
+        where: { status: SupervisionStatus.DONE, ...supervisionScope },
       }),
       this.prisma.supervisionTask.count({
         where: {
+          ...supervisionScope,
           OR: [
             { status: SupervisionStatus.OVERDUE },
             {
@@ -178,9 +218,10 @@ export class AdminService {
           ],
         },
       }),
-      this.prisma.complianceLog.count(),
-      this.prisma.complianceLog.count({ where: { passed: false } }),
+      this.prisma.complianceLog.count({ where: scope }),
+      this.prisma.complianceLog.count({ where: { passed: false, ...scope } }),
       this.prisma.meeting.findMany({
+        where: scope,
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -188,7 +229,7 @@ export class AdminService {
           _count: { select: { topics: true } },
         },
       }),
-      this.computeMonthHolding(),
+      this.computeMonthHolding(user),
     ]);
 
     return {
@@ -220,6 +261,7 @@ export class AdminService {
     this.assertSchoolAdmin(user);
     const { start, end, label: monthLabel } = this.currentMonthRange();
     const colleges = await this.prisma.college.findMany({
+      where: this.collegeEntityWhere(user),
       orderBy: { code: 'asc' },
     });
 
@@ -341,7 +383,7 @@ export class AdminService {
     this.assertSchoolAdmin(user);
     return this.prisma.meeting.findMany({
       where: {
-        ...(query?.collegeId ? { collegeId: query.collegeId } : {}),
+        ...this.meetingCollegeWhere(user, query?.collegeId),
         ...(query?.meetingType ? { meetingType: query.meetingType } : {}),
       },
       include: {
@@ -366,16 +408,18 @@ export class AdminService {
   async warnings(user: AuthUser) {
     this.assertSchoolAdmin(user);
     await this.supervisions.scanOverdue(user, false);
+    const scope = prismaCollegeIdFilter(user);
 
     const [failedLogs, overdueTasks, unsignedMinutes, precheckMissing] =
       await Promise.all([
         this.prisma.complianceLog.findMany({
-          where: { passed: false },
+          where: { passed: false, ...scope },
           orderBy: { createdAt: 'desc' },
           take: 50,
         }),
         this.prisma.supervisionTask.findMany({
           where: {
+            resolution: { topic: scope },
             OR: [
               { status: SupervisionStatus.OVERDUE },
               {
@@ -402,7 +446,10 @@ export class AdminService {
           take: 50,
         }),
         this.prisma.minutes.findMany({
-          where: { effectiveAt: null },
+          where: {
+            effectiveAt: null,
+            meeting: scope,
+          },
           include: {
             meeting: {
               select: {
@@ -419,6 +466,7 @@ export class AdminService {
         }),
         this.prisma.topic.findMany({
           where: {
+            ...scope,
             meetingType: MeetingType.JOINT_CONFERENCE,
             needPartyPrecheck: true,
             relatedPartyResolutionId: null,
@@ -482,7 +530,7 @@ export class AdminService {
       monthMissing: [] as Array<Record<string, unknown>>,
     };
 
-    const monthHolding = await this.computeMonthHolding();
+    const monthHolding = await this.computeMonthHolding(user);
     pack.monthMissing = [
       ...monthHolding.missingParty.map((c) => ({
         type: 'MONTH_PARTY_MISSING',
@@ -506,7 +554,12 @@ export class AdminService {
 
   async transfers(user: AuthUser, collegeId?: string) {
     this.assertSchoolAdmin(user);
+    if (collegeId) assertCollegeVisible(user, collegeId);
+    const scope = prismaCollegeIdFilter(user);
     const links = await this.prisma.transferLink.findMany({
+      where: collegeId
+        ? { sourceTopic: { collegeId } }
+        : { sourceTopic: scope },
       include: {
         sourceTopic: {
           select: {
@@ -531,24 +584,23 @@ export class AdminService {
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
-    if (!collegeId) return links;
-    return links.filter((l) => l.sourceTopic.collegeId === collegeId);
+    return links;
   }
 
   /** 组装巡视材料包所需结构化数据（供 ZIP 写入） */
   async buildInspectionPackData(user: AuthUser, collegeId?: string) {
     this.assertSchoolAdmin(user);
+    if (collegeId) assertCollegeVisible(user, collegeId);
+    const scope = this.meetingCollegeWhere(user, collegeId);
     const [overview, colleges, meetings, transfers, warnings, supervisions, complianceLogs] =
       await Promise.all([
         this.overview(user),
         this.collegeStats(user),
         this.meetingLedger(user, { collegeId }),
-        this.transfers(user),
+        this.transfers(user, collegeId),
         this.warnings(user),
         this.prisma.supervisionTask.findMany({
-          where: collegeId
-            ? { resolution: { topic: { collegeId } } }
-            : undefined,
+          where: { resolution: { topic: scope } },
           include: {
             owner: { select: { realName: true, username: true } },
             resolution: {
@@ -567,7 +619,7 @@ export class AdminService {
           take: 500,
         }),
         this.prisma.complianceLog.findMany({
-          where: collegeId ? { collegeId } : undefined,
+          where: scope,
           orderBy: { createdAt: 'desc' },
           take: 1000,
         }),
@@ -575,7 +627,7 @@ export class AdminService {
 
     // 抽样会议全宗：最近 5 场（或指定学院全部最近 5 场）
     const sampleMeetings = await this.prisma.meeting.findMany({
-      where: collegeId ? { collegeId } : undefined,
+      where: scope,
       orderBy: { createdAt: 'desc' },
       take: 5,
       include: {
@@ -624,49 +676,213 @@ export class AdminService {
     };
   }
 
+  /** 简报范围：单院 / 分管多院 / 全校 */
+  private async resolveBriefScope(user: AuthUser, collegeId?: string) {
+    if (collegeId) {
+      assertCollegeVisible(user, collegeId);
+      const c = await this.prisma.college.findUnique({
+        where: { id: collegeId },
+        select: { id: true, name: true },
+      });
+      if (!c) throw new NotFoundException('学院不存在');
+      return {
+        scopeKey: `COLLEGE:${c.id}`,
+        collegeId: c.id,
+        collegeIds: [c.id] as string[],
+        titlePrefix: c.name,
+        narrativeUnit: `学院「${c.name}」`,
+        rateLabel: '该院',
+        isSingleCollege: true,
+      };
+    }
+    const visible = getVisibleCollegeIds(user);
+    if (visible === 'ALL') {
+      return {
+        scopeKey: 'ALL',
+        collegeId: null as string | null,
+        collegeIds: null as string[] | null,
+        titlePrefix: '全校二级学院',
+        narrativeUnit: '全校纳入监测二级学院',
+        rateLabel: '全校',
+        isSingleCollege: false,
+      };
+    }
+    const colleges = await this.prisma.college.findMany({
+      where: { id: { in: visible } },
+      select: { id: true, name: true },
+      orderBy: { code: 'asc' },
+    });
+    const names = colleges.map((c) => c.name);
+    return {
+      scopeKey: `SCOPE:${[...visible].sort().join(',')}`,
+      collegeId: null as string | null,
+      collegeIds: visible,
+      titlePrefix: '分管学院',
+      narrativeUnit: `分管范围内二级学院（${names.join('、') || '无'}）`,
+      rateLabel: '分管范围',
+      isSingleCollege: false,
+    };
+  }
+
+  private briefingTitle(
+    mode: 'monthly' | 'realtime',
+    titlePrefix: string,
+    monthLabel: string,
+  ) {
+    return mode === 'realtime'
+      ? `${titlePrefix}双会实时快报（${monthLabel}）`
+      : `${titlePrefix}双会月度情况汇报（${monthLabel}）`;
+  }
+
+  private parseBriefMeta(metaJson: string | null): Record<string, unknown> {
+    try {
+      return metaJson ? JSON.parse(metaJson) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** 当前用户是否可见该简报（按分管 / 学院筛选） */
+  private isBriefingVisibleToUser(
+    user: AuthUser,
+    meta: Record<string, unknown>,
+    filterCollegeId?: string,
+  ) {
+    const scopeKey = String(meta.scopeKey || 'ALL');
+    const metaCollegeId =
+      typeof meta.collegeId === 'string' ? meta.collegeId : null;
+    const metaCollegeIds = Array.isArray(meta.collegeIds)
+      ? (meta.collegeIds as string[])
+      : metaCollegeId
+        ? [metaCollegeId]
+        : null;
+
+    if (filterCollegeId) {
+      // 筛单院时只展示「该院」简报，不含全校/分管汇总
+      return metaCollegeId === filterCollegeId;
+    }
+
+    const visible = getVisibleCollegeIds(user);
+    if (visible === 'ALL') {
+      // 管理员默认列表：看全校简报 + 自己生成的分管/单院简报均可
+      return true;
+    }
+    // 分管查阅：不可见「全校」旧简报
+    if (scopeKey === 'ALL' || (!meta.scopeKey && !metaCollegeId)) return false;
+    if (metaCollegeId) return visible.includes(metaCollegeId);
+    if (metaCollegeIds) {
+      return metaCollegeIds.every((id) => visible.includes(id));
+    }
+    return scopeKey === `SCOPE:${[...visible].sort().join(',')}`;
+  }
+
   /**
    * 面向组织部 / 校领导的双会情况汇报。
    * 数字以系统统计为准；AI 仅做文书润色，不得改数。
+   * collegeId 有值 → 单院；空 → 全校或当前账号分管范围。
    */
   async generateSchoolBriefing(
     user: AuthUser,
-    query?: { mode?: 'monthly' | 'realtime'; notify?: boolean },
+    query?: {
+      mode?: 'monthly' | 'realtime';
+      notify?: boolean;
+      collegeId?: string;
+    },
   ) {
     this.assertSchoolAdmin(user);
     const mode = query?.mode === 'realtime' ? 'realtime' : 'monthly';
     const notify = Boolean(query?.notify);
+    const scope = await this.resolveBriefScope(
+      user,
+      query?.collegeId || undefined,
+    );
 
     const [overview, warnings, colleges] = await Promise.all([
       this.overview(user),
       this.warnings(user),
       this.collegeStats(user),
     ]);
+
+    const idSet = scope.collegeIds ? new Set(scope.collegeIds) : null;
+    const inScope = (collegeId?: string | null) =>
+      !idSet || (!!collegeId && idSet.has(collegeId));
+
+    const collegeRows = colleges.filter((c) => inScope(c.collegeId));
     const month = overview.month;
+    const byCollege = (month.byCollege || []).filter((c: any) =>
+      inScope(c.collegeId),
+    );
+    const missingParty = (month.missingParty || []).filter((c: any) =>
+      inScope(c.collegeId),
+    );
+    const missingJoint = (month.missingJoint || []).filter((c: any) =>
+      inScope(c.collegeId),
+    );
+    const partyHeldCount = byCollege.filter((c: any) => c.partyHeld).length;
+    const jointHeldCount = byCollege.filter((c: any) => c.jointHeld).length;
+    const bothOkCount = byCollege.filter((c: any) => c.bothOk).length;
+
+    const filterWarn = (items: any[]) =>
+      (items || []).filter((i) => inScope(i.collegeId));
+    const monthMissing = filterWarn(warnings.monthMissing);
+    const complianceFails = filterWarn(warnings.complianceFails);
+    const overdueSupervisions = filterWarn(warnings.overdueSupervisions);
+    const unsignedMinutes = filterWarn(warnings.unsignedMinutes);
+    const precheckMissing = filterWarn(warnings.precheckMissing);
+
+    const title = this.briefingTitle(mode, scope.titlePrefix, month.label);
     const facts = {
       mode,
       generatedAt: new Date().toISOString(),
       monthLabel: month.label,
       year: month.year,
       month: month.month,
-      collegeCount: month.collegeCount,
-      bothOkCount: month.bothOkCount,
-      partyHeldCount: month.partyHeldCount,
-      jointHeldCount: month.jointHeldCount,
-      missingPartyCount: month.missingPartyCount,
-      missingJointCount: month.missingJointCount,
-      missingParty: month.missingParty,
-      missingJoint: month.missingJoint,
+      scopeKey: scope.scopeKey,
+      collegeId: scope.collegeId,
+      collegeIds: scope.collegeIds,
+      titlePrefix: scope.titlePrefix,
+      narrativeUnit: scope.narrativeUnit,
+      rateLabel: scope.rateLabel,
+      title,
+      collegeCount: collegeRows.length,
+      bothOkCount,
+      partyHeldCount,
+      jointHeldCount,
+      missingPartyCount: missingParty.length,
+      missingJointCount: missingJoint.length,
+      missingParty,
+      missingJoint,
       warningCounts: {
-        monthMissing: (warnings.monthMissing || []).length,
-        complianceFails: (warnings.complianceFails || []).length,
-        overdueSupervisions: (warnings.overdueSupervisions || []).length,
-        unsignedMinutes: (warnings.unsignedMinutes || []).length,
-        precheckMissing: (warnings.precheckMissing || []).length,
+        monthMissing: monthMissing.length,
+        complianceFails: complianceFails.length,
+        overdueSupervisions: overdueSupervisions.length,
+        unsignedMinutes: unsignedMinutes.length,
+        precheckMissing: precheckMissing.length,
       },
-      supervisionOverdue: overview.supervisionOverdue,
-      supervisionDoneRate: overview.supervisionDoneRate,
-      compliancePassRate: overview.compliancePassRate,
-      colleges: colleges.map((c) => ({
+      supervisionOverdue: overdueSupervisions.length,
+      supervisionDoneRate:
+        collegeRows.length === 0
+          ? overview.supervisionDoneRate
+          : Number(
+              (
+                collegeRows.reduce(
+                  (s, c) => s + (c.supervisionDoneRate || 0),
+                  0,
+                ) / collegeRows.length
+              ).toFixed(3),
+            ),
+      compliancePassRate:
+        collegeRows.length === 0
+          ? overview.compliancePassRate
+          : Number(
+              (
+                collegeRows.reduce(
+                  (s, c) => s + (c.compliancePassRate ?? 1),
+                  0,
+                ) / collegeRows.length
+              ).toFixed(3),
+            ),
+      colleges: collegeRows.map((c) => ({
         name: c.name,
         monthPartyHeld: c.monthPartyHeld,
         monthJointHeld: c.monthJointHeld,
@@ -691,12 +907,12 @@ export class AdminService {
           '1. 不得篡改、遗漏用户提供的任何数字与学院名单；',
           '2. 不得编造未提供的学院、会议、比例；',
           '3. 文风庄重简洁，适合校领导阅；分「总体研判—重点问题—工作建议」三段；',
-          '4. 保留「明德同枢」口径：制度硬校验、全流程留痕、AI 不替代审签。',
+          '4. 保留「明德同枢」口径：制度硬校验、全流程留痕、AI 不替代审签；',
+          `5. 汇报范围是「${scope.narrativeUnit}」，禁止写成超出该范围的「全校」口径（除非范围本身就是全校）。`,
         ].join('\n'),
         `请将下列事实材料润色为完整汇报正文（不要输出 JSON）：\n\n${factText}`,
         { demoKind: 'material_summary', fallbackOnNetworkError: true },
       );
-      // demo 回退时优先用我们自己的事实稿，避免通用摘要跑题
       if (!polished.demo && polished.text?.trim()) {
         outputText = polished.text.trim();
         provider = polished.provider;
@@ -712,37 +928,36 @@ export class AdminService {
 
     const row = await this.prisma.aiGeneration.create({
       data: {
-        collegeId: null,
+        collegeId: scope.collegeId,
         userId: user.sub,
         kind: SCHOOL_BRIEF_KIND,
         provider,
         model,
-        promptVersion: 'school-brief-v1',
+        promptVersion: 'school-brief-v2',
         inputDigest: digest,
         outputText,
         metaJson: JSON.stringify({
           ...facts,
           demo,
-          title:
-            mode === 'realtime'
-              ? `全校二级学院双会实时快报（${month.label}）`
-              : `全校二级学院双会月度情况汇报（${month.label}）`,
+          title,
         }),
       },
     });
 
     let notified = 0;
     if (notify) {
-      notified = await this.notifySchoolAdminsBriefing(row.id, mode, month.label);
+      notified = await this.notifySchoolAdminsBriefing(
+        row.id,
+        mode,
+        month.label,
+        title,
+      );
     }
 
     return {
       id: row.id,
       mode,
-      title:
-        mode === 'realtime'
-          ? `全校二级学院双会实时快报（${month.label}）`
-          : `全校二级学院双会月度情况汇报（${month.label}）`,
+      title,
       content: outputText,
       provider,
       model,
@@ -753,14 +968,20 @@ export class AdminService {
     };
   }
 
-  async listSchoolBriefings(user: AuthUser, take = 20) {
+  async listSchoolBriefings(
+    user: AuthUser,
+    opts?: { take?: number; collegeId?: string },
+  ) {
     this.assertSchoolAdmin(user);
+    if (opts?.collegeId) assertCollegeVisible(user, opts.collegeId);
+    const take = Math.min(Math.max(opts?.take ?? 20, 1), 50);
     const rows = await this.prisma.aiGeneration.findMany({
       where: { kind: SCHOOL_BRIEF_KIND },
       orderBy: { createdAt: 'desc' },
-      take: Math.min(Math.max(take, 1), 50),
+      take: 80,
       select: {
         id: true,
+        collegeId: true,
         provider: true,
         model: true,
         metaJson: true,
@@ -768,25 +989,35 @@ export class AdminService {
         outputText: true,
       },
     });
-    return rows.map((r) => {
-      let meta: Record<string, unknown> = {};
-      try {
-        meta = r.metaJson ? JSON.parse(r.metaJson) : {};
-      } catch {
-        meta = {};
-      }
-      return {
+    return rows
+      .map((r) => {
+        const meta = this.parseBriefMeta(r.metaJson);
+        if (r.collegeId && !meta.collegeId) meta.collegeId = r.collegeId;
+        return { r, meta };
+      })
+      .filter(({ meta }) =>
+        this.isBriefingVisibleToUser(user, meta, opts?.collegeId),
+      )
+      .slice(0, take)
+      .map(({ r, meta }) => ({
         id: r.id,
-        title: (meta.title as string) || '全校二级学院双会情况汇报',
+        title:
+          (meta.title as string) ||
+          this.briefingTitle(
+            (meta.mode as 'monthly' | 'realtime') || 'monthly',
+            (meta.titlePrefix as string) || '全校二级学院',
+            (meta.monthLabel as string) || '',
+          ),
         mode: (meta.mode as string) || 'monthly',
         monthLabel: (meta.monthLabel as string) || '',
+        scopeKey: (meta.scopeKey as string) || 'ALL',
+        collegeId: (meta.collegeId as string) || r.collegeId || null,
         provider: r.provider,
         model: r.model,
         demo: Boolean(meta.demo),
         preview: r.outputText.slice(0, 160),
         createdAt: r.createdAt,
-      };
-    });
+      }));
   }
 
   async getSchoolBriefing(user: AuthUser, id: string) {
@@ -795,15 +1026,20 @@ export class AdminService {
     if (!row || row.kind !== SCHOOL_BRIEF_KIND) {
       throw new NotFoundException('简报不存在');
     }
-    let meta: Record<string, unknown> = {};
-    try {
-      meta = row.metaJson ? JSON.parse(row.metaJson) : {};
-    } catch {
-      meta = {};
+    const meta = this.parseBriefMeta(row.metaJson);
+    if (row.collegeId && !meta.collegeId) meta.collegeId = row.collegeId;
+    if (!this.isBriefingVisibleToUser(user, meta)) {
+      throw new ForbiddenException('无权查阅该简报');
     }
     return {
       id: row.id,
-      title: (meta.title as string) || '全校二级学院双会情况汇报',
+      title:
+        (meta.title as string) ||
+        this.briefingTitle(
+          (meta.mode as 'monthly' | 'realtime') || 'monthly',
+          (meta.titlePrefix as string) || '全校二级学院',
+          (meta.monthLabel as string) || '',
+        ),
       mode: (meta.mode as string) || 'monthly',
       content: row.outputText,
       provider: row.provider,
@@ -818,6 +1054,9 @@ export class AdminService {
     mode: string;
     generatedAt: string;
     monthLabel: string;
+    title: string;
+    narrativeUnit: string;
+    rateLabel: string;
     collegeCount: number;
     bothOkCount: number;
     partyHeldCount: number;
@@ -838,21 +1077,19 @@ export class AdminService {
     }>;
   }) {
     const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
-    const title =
-      facts.mode === 'realtime'
-        ? `明德同枢｜全校二级学院双会实时快报（${facts.monthLabel}）`
-        : `明德同枢｜全校二级学院双会月度情况汇报（${facts.monthLabel}）`;
     const missParty = facts.missingParty.map((c) => c.name).join('、') || '无';
     const missJoint = facts.missingJoint.map((c) => c.name).join('、') || '无';
-    const bothOk = facts.colleges.filter((c) => c.monthBothOk).map((c) => c.name);
+    const bothOk = facts.colleges
+      .filter((c) => c.monthBothOk)
+      .map((c) => c.name);
     const lines = [
-      title,
+      `明德同枢｜${facts.title}`,
       `生成时间：${new Date(facts.generatedAt).toLocaleString('zh-CN')}`,
       '',
       '一、总体研判',
-      `截至当前，全校纳入监测二级学院 ${facts.collegeCount} 所。${facts.monthLabel}党组织会议已开 ${facts.partyHeldCount} 所、党政联席会议已开 ${facts.jointHeldCount} 所，双会齐全 ${facts.bothOkCount} 所。`,
+      `截至当前，${facts.narrativeUnit}共 ${facts.collegeCount} 所。${facts.monthLabel}党组织会议已开 ${facts.partyHeldCount} 所、党政联席会议已开 ${facts.jointHeldCount} 所，双会齐全 ${facts.bothOkCount} 所。`,
       `双会齐全学院：${bothOk.join('、') || '暂无'}。`,
-      `全校督办办结率 ${pct(facts.supervisionDoneRate)}，合规通过率 ${pct(facts.compliancePassRate)}，逾期督办 ${facts.supervisionOverdue} 条。`,
+      `${facts.rateLabel}督办办结率 ${pct(facts.supervisionDoneRate)}，合规通过率 ${pct(facts.compliancePassRate)}，逾期督办 ${facts.supervisionOverdue} 条。`,
       '',
       '二、重点问题',
       `1. 本月未开党组织会议（${facts.missingPartyCount}）：${missParty}。`,
@@ -860,7 +1097,7 @@ export class AdminService {
       `3. 预警合计：缺开 ${facts.warningCounts.monthMissing}、合规失败 ${facts.warningCounts.complianceFails}、督办逾期 ${facts.warningCounts.overdueSupervisions}、纪要未双签 ${facts.warningCounts.unsignedMinutes}、前置把关缺失 ${facts.warningCounts.precheckMissing}。`,
       '',
       '三、工作建议',
-      '1. 请组织部对照缺开清单，督促相关学院尽快完成当月排期与召开留痕。',
+      '1. 请对照缺开清单，督促相关学院尽快完成当月排期与召开留痕。',
       '2. 对督办逾期、纪要未双签事项开展定向催办，提高闭环率。',
       '3. 继续坚持「制度硬校验、全流程留痕、AI 不替代审签」，保证程序合规与责任清晰。',
       '',
@@ -873,6 +1110,7 @@ export class AdminService {
     briefingId: string,
     mode: string,
     monthLabel: string,
+    reportTitle: string,
   ) {
     const admins = await this.prisma.user.findMany({
       where: {
@@ -886,8 +1124,8 @@ export class AdminService {
     });
     const title =
       mode === 'realtime'
-        ? `【实时快报】全校双会进展（${monthLabel}）`
-        : `【月度汇报】全校双会进展（${monthLabel}）`;
+        ? `【实时快报】${reportTitle}`
+        : `【月度汇报】${reportTitle}`;
     const res = await this.notifications.notifyMany(
       admins.map((a) => ({
         userId: a.id,

@@ -5,9 +5,30 @@
       <h2>党组织会议议题库</h2>
       <p>学院党组织会议历次议题的集中管理入口</p>
       <div class="nums">
-        <div><strong>{{ topics.length }}</strong><span>全部</span></div>
-        <div><strong>{{ countOf(['PENDING_REVIEW', 'DEFERRED']) }}</strong><span>待审</span></div>
-        <div><strong>{{ countOf(['RESOLVED']) }}</strong><span>已决议</span></div>
+        <button
+          type="button"
+          class="num all"
+          :class="{ on: activeTab === 'all' }"
+          @click="activeTab = 'all'"
+        >
+          <strong>{{ topics.length }}</strong><span>全部</span>
+        </button>
+        <button
+          type="button"
+          class="num party"
+          :class="{ on: activeTab === 'review' }"
+          @click="activeTab = 'review'"
+        >
+          <strong>{{ countOf(['PENDING_REVIEW', 'DEFERRED']) }}</strong><span>待审</span>
+        </button>
+        <button
+          type="button"
+          class="num party"
+          :class="{ on: activeTab === 'resolved' }"
+          @click="activeTab = 'resolved'"
+        >
+          <strong>{{ countOf(['RESOLVED']) }}</strong><span>已决议</span>
+        </button>
       </div>
     </div>
 

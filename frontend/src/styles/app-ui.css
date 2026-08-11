@@ -300,7 +300,8 @@ body,
 
 .ui-hero .nums {
   display: flex;
-  gap: 18px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 14px;
 }
 
@@ -309,11 +310,119 @@ body,
   font-size: 22px;
   font-weight: 700;
   font-family: var(--font-serif);
+  line-height: 1.15;
 }
 
 .ui-hero .nums span {
   font-size: 12px;
   opacity: 0.75;
+}
+
+/* 顶栏数字与下方 tab 联动高亮 */
+.ui-hero .nums .num {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 8px 14px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  opacity: 0.78;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.ui-hero .nums .num strong {
+  font-size: 24px;
+}
+
+.ui-hero .nums .num:hover:not(.on) {
+  background: rgba(255, 255, 255, 0.12);
+  opacity: 0.92;
+}
+
+.ui-hero .nums .num.on {
+  opacity: 1;
+  transform: translateY(-1px);
+  font-weight: inherit;
+}
+
+.ui-hero .nums .num.on span {
+  opacity: 1;
+  font-weight: 700;
+}
+
+.ui-hero .nums .num.on::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 4px;
+  height: 3px;
+  border-radius: 99px;
+  background: currentColor;
+}
+
+/* 全部：暖色琥珀，避免与联席蓝混淆 */
+.ui-hero .nums .num.all.on {
+  background: #f0c36a;
+  color: #3d2a0a;
+  box-shadow: 0 4px 14px rgba(240, 195, 106, 0.45);
+}
+
+.ui-hero .nums .num.all.on::after {
+  background: #8a5a12;
+}
+
+/* 党组织：墨红 */
+.ui-hero .nums .num.party.on {
+  background: #c45a5a;
+  color: #fff8f8;
+  box-shadow: 0 4px 14px rgba(196, 90, 90, 0.5);
+}
+
+.ui-hero .nums .num.party.on::after {
+  background: #fff;
+}
+
+/* 党政联席：政务蓝 */
+.ui-hero .nums .num.joint.on {
+  background: #3d7fd4;
+  color: #f4f8ff;
+  box-shadow: 0 4px 14px rgba(61, 127, 212, 0.5);
+}
+
+.ui-hero .nums .num.joint.on::after {
+  background: #fff;
+}
+
+/* 归档 / 综合等中性项：亮白 */
+.ui-hero .nums .num.neutral.on {
+  background: #fff;
+  color: #14325c;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.35);
+}
+
+.ui-hero .nums .num.neutral.on::after {
+  background: #14325c;
+}
+
+/* 党委红轨 hero 上的「全部」仍用琥珀，其余默认走 party */
+.ui-hero.party .nums .num:not(.all):not(.joint):not(.neutral).on {
+  background: #c45a5a;
+  color: #fff8f8;
+  box-shadow: 0 4px 14px rgba(196, 90, 90, 0.5);
+}
+
+.ui-hero.party .nums .num:not(.all):not(.joint):not(.neutral).on::after {
+  background: #fff;
 }
 
 .ui-filter {

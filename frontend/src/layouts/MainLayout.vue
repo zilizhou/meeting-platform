@@ -59,6 +59,7 @@
         {{ t.label }}
       </button>
     </nav>
+    <OnboardingGuide />
   </div>
 </template>
 
@@ -68,6 +69,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useRoles } from '@/composables/useRoles'
 import http from '@/api/http'
+import OnboardingGuide from '@/components/OnboardingGuide.vue'
 
 interface TabItem {
   name: string
@@ -83,7 +85,7 @@ const { isSchoolAdmin, isSchoolViewer } = useRoles()
 const todoCount = ref(0)
 let timer: number | undefined
 
-/** 纯校级查阅：导航只保留监管相关，避免学院会务干扰 */
+/** 纯校级查阅：监管相关 + 智能体，避免学院会务干扰 */
 const isViewerShell = computed(
   () => isSchoolViewer.value && !isSchoolAdmin.value,
 )
@@ -139,6 +141,12 @@ const viewerTabs: TabItem[] = [
     label: '档案',
     path: '/archives',
     icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v8A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-10Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+  },
+  {
+    name: 'agent',
+    label: '智能体',
+    path: '/agent',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8"/><path d="M9.2 12.2h.01M14.8 12.2h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M9.2 14.6c.8.9 1.7 1.3 2.8 1.3s2-.4 2.8-1.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   },
   {
     name: 'me',

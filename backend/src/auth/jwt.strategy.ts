@@ -17,7 +17,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload): Promise<AuthUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { roles: { include: { role: true } } },
+      include: {
+        roles: { include: { role: true } },
+        collegeScopes: { select: { collegeId: true } },
+      },
     });
     if (!user) {
       throw new UnauthorizedException('账号不存在或已删除');
@@ -32,6 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       collegeId: user.collegeId,
       isSchoolAdmin: user.isSchoolAdmin,
       roles: user.roles.map((r) => r.role.code),
+      collegeScopeIds: user.collegeScopes.map((s) => s.collegeId),
     };
   }
 }

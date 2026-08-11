@@ -28,6 +28,12 @@ const router = createRouter({
           meta: { tab: 'users' },
         },
         {
+          path: 'viewers',
+          name: 'viewers',
+          component: () => import('@/views/SystemAdminView.vue'),
+          meta: { tab: 'viewers' },
+        },
+        {
           path: 'categories',
           name: 'categories',
           component: () => import('@/views/SystemAdminView.vue'),

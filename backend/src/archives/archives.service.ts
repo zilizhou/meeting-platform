@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types';
 import { MeetingStatus } from '../common/constants';
-import { hasSchoolWideAccess } from '../common/roles';
+import { isCollegeVisible, prismaCollegeIdFilter } from '../common/roles';
 
 @Injectable()
 export class ArchivesService {
@@ -23,9 +23,7 @@ export class ArchivesService {
       status?: string;
     },
   ) {
-    const collegeFilter = hasSchoolWideAccess(user)
-      ? {}
-      : { collegeId: user.collegeId ?? '__none__' };
+    const collegeFilter = prismaCollegeIdFilter(user);
 
     const yearStart =
       query.year && Number.isFinite(query.year)
@@ -160,7 +158,7 @@ export class ArchivesService {
       },
     });
     if (!meeting) throw new NotFoundException('会议不存在');
-    if (!hasSchoolWideAccess(user) && meeting.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, meeting.collegeId)) {
       throw new ForbiddenException();
     }
     return meeting;

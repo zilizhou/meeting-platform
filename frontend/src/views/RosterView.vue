@@ -114,8 +114,8 @@ async function load() {
     }),
     http.get('/org/users', { params: { collegeId: collegeId.value } }),
   ])
-  roster.value = r
-  users.value = u
+  roster.value = r as any
+  users.value = u as any
 }
 
 function openAdd() {

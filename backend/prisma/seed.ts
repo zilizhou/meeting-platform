@@ -920,9 +920,30 @@ async function main() {
   // 业务 mock 全部归属网络空间安全学院
   await seedMockBusiness(seeded);
 
+  // 分管查阅演示：副校长看文学院 + 网安学院（空列表=全校的 viewer 已在前面创建）
+  const litId = seeded.find((s) => s.college.code === 'LIT')?.college.id;
+  const cyberId = seeded.find((s) => s.college.code === 'CYBER')?.college.id;
+  if (litId && cyberId) {
+    await prisma.user.create({
+      data: {
+        username: 'viewer_vp',
+        passwordHash,
+        realName: '分管副校长',
+        title: '副校长',
+        isSchoolAdmin: false,
+        roles: { create: [{ roleId: roleMap.SCHOOL_VIEWER }] },
+        collegeScopes: {
+          create: [{ collegeId: litId }, { collegeId: cyberId }],
+        },
+      },
+    });
+  }
+
   console.log('Seed OK');
   console.log('演示账号（密码均为 123456）：');
-  console.log('  校级: admin（管理员）/ viewer（查阅）');
+  console.log(
+    '  校级: admin（管理员）/ viewer（全校查阅）/ viewer_vp（分管查阅）',
+  );
   console.log(
     '  网络空间安全学院: office / secretary / vsecretary / dean / vicedean / dept',
   );
@@ -932,7 +953,9 @@ async function main() {
   console.log(
     '  物理工程学院: sci_office / sci_secretary / sci_vsecretary / sci_dean / sci_vicedean / sci_dept',
   );
-  console.log(`校级管理员: ${schoolAdmin.username}；校级查阅: viewer`);
+  console.log(
+    `校级管理员: ${schoolAdmin.username}；全校查阅: viewer；分管查阅: viewer_vp`,
+  );
   console.log(
     '提示: mock 在网安学院；用 dean / secretary / vsecretary / dept 登录即可看到。',
   );

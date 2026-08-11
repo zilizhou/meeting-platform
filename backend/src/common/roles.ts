@@ -27,7 +27,7 @@ export function isSchoolViewerRole(user: AuthUser) {
 
 /**
  * 校级跨院访问范围：管理员或查阅角色。
- * 用于列表/详情的学院过滤；写操作仍须单独用角色校验，勿把查阅当超管。
+ * 用于能否进监管看板；写操作仍须单独用角色校验。
  */
 export function hasSchoolWideAccess(user: AuthUser) {
   return isSchoolAdminRole(user) || isSchoolViewerRole(user);
@@ -36,6 +36,51 @@ export function hasSchoolWideAccess(user: AuthUser) {
 export function assertSchoolWideAccess(user: AuthUser, message?: string) {
   if (!hasSchoolWideAccess(user)) {
     throw new ForbiddenException(message || '仅校级管理员或校级查阅可访问');
+  }
+}
+
+/**
+ * 可见学院：
+ * - 校级管理员 → ALL
+ * - 校级查阅 + 分管列表为空 → ALL（校长/书记）
+ * - 校级查阅 + 有分管 → 分管学院
+ * - 学院用户 → 本院
+ */
+export function getVisibleCollegeIds(user: AuthUser): 'ALL' | string[] {
+  if (isSchoolAdminRole(user)) return 'ALL';
+  if (isSchoolViewerRole(user)) {
+    const scopes = user.collegeScopeIds || [];
+    return scopes.length === 0 ? 'ALL' : scopes;
+  }
+  if (user.collegeId) return [user.collegeId];
+  return [];
+}
+
+/** Prisma where 片段：按可见学院过滤 collegeId 字段 */
+export function prismaCollegeIdFilter(
+  user: AuthUser,
+): { collegeId?: string | { in: string[] } } {
+  const v = getVisibleCollegeIds(user);
+  if (v === 'ALL') return {};
+  if (v.length === 0) return { collegeId: '__none__' };
+  if (v.length === 1) return { collegeId: v[0] };
+  return { collegeId: { in: v } };
+}
+
+export function isCollegeVisible(user: AuthUser, collegeId: string | null | undefined) {
+  if (!collegeId) return false;
+  const v = getVisibleCollegeIds(user);
+  if (v === 'ALL') return true;
+  return v.includes(collegeId);
+}
+
+export function assertCollegeVisible(
+  user: AuthUser,
+  collegeId: string | null | undefined,
+  message?: string,
+) {
+  if (!isCollegeVisible(user, collegeId)) {
+    throw new ForbiddenException(message || '无权查看该学院数据');
   }
 }
 

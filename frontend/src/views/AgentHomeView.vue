@@ -98,6 +98,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
+import { useRoles } from '@/composables/useRoles'
 
 interface AgentAction {
   id: string
@@ -119,6 +120,10 @@ interface ChatMsg {
 
 const route = useRoute()
 const router = useRouter()
+const { isSchoolViewer, isSchoolAdmin } = useRoles()
+const isViewerOnly = computed(
+  () => isSchoolViewer.value && !isSchoolAdmin.value,
+)
 const loading = ref(false)
 const input = ref('')
 const sessionId = ref('')
@@ -132,13 +137,22 @@ const messages = ref<ChatMsg[]>([
   },
 ])
 
-const quickAsks = ['今日简报', '我有哪些待办？', '督办预警', '缺席书面意见算不算票？']
-
-const statusNote = computed(() =>
-  configured.value
-    ? '可问今日简报、待办、议题与规则。审题/表决须您确认。'
-    : '演示/知识库模式 · 辅助不替代审签',
+const quickAsks = computed(() =>
+  isViewerOnly.value
+    ? ['本月召开简报', '缺开与预警', '督办逾期情况', '缺席书面意见算不算票？']
+    : ['今日简报', '我有哪些待办？', '督办预警', '缺席书面意见算不算票？'],
 )
+
+const statusNote = computed(() => {
+  if (isViewerOnly.value) {
+    return configured.value
+      ? '可问召开态势、缺开预警、督办与议事规则。只读辅助，不替代审签。'
+      : '演示/知识库模式 · 校级查阅只读辅助'
+  }
+  return configured.value
+    ? '可问今日简报、待办、议题与规则。审题/表决须您确认。'
+    : '演示/知识库模式 · 辅助不替代审签'
+})
 
 const dialogRounds = computed(() =>
   Math.max(0, messages.value.filter((m) => m.role === 'user').length),

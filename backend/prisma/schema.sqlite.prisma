@@ -27,6 +27,7 @@ model College {
   updatedAt DateTime @updatedAt
 
   users         User[]
+  viewerScopes  UserCollegeScope[]
   rosters       RosterMember[]
   meetings      Meeting[]
   topics        Topic[]
@@ -47,6 +48,8 @@ model User {
   updatedAt     DateTime @updatedAt
 
   college              College?              @relation(fields: [collegeId], references: [id])
+  // 校级查阅分管学院；空列表表示可看全校
+  collegeScopes        UserCollegeScope[]
   roles                UserRole[]
   rosterMemberships    RosterMember[]
   proposedTopics       Topic[]               @relation("TopicProposer")
@@ -60,6 +63,21 @@ model User {
   auditLogs            AuditLog[]
   notifications        Notification[]
   materialReceipts     MaterialReadReceipt[]
+}
+
+// 校级查阅账号的分管学院；无记录 = 全校可见
+model UserCollegeScope {
+  id        String   @id @default(cuid())
+  userId    String
+  collegeId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  college College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, collegeId])
+  @@index([userId])
+  @@index([collegeId])
 }
 
 model Role {

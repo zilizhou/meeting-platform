@@ -8,4 +8,6 @@ export interface JwtPayload {
 
 export interface AuthUser extends JwtPayload {
   realName: string;
+  /** 校级查阅分管学院；空数组表示全校 */
+  collegeScopeIds: string[];
 }

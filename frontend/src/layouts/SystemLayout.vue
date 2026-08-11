@@ -4,7 +4,7 @@
     <aside class="sider">
       <div class="brand">
         <div class="brand-title">系统管理端</div>
-        <div class="brand-sub">学院 · 用户 · 分类字典</div>
+        <div class="brand-sub">学院 · 用户 · 分管 · 分类</div>
         <el-button class="sider-close" text @click="navOpen = false">关闭</el-button>
       </div>
       <el-menu
@@ -15,6 +15,7 @@
       >
         <el-menu-item index="/colleges">学院管理</el-menu-item>
         <el-menu-item index="/users">全校用户</el-menu-item>
+        <el-menu-item index="/viewers">分管领导</el-menu-item>
         <el-menu-item index="/categories">议题分类</el-menu-item>
       </el-menu>
       <div class="sider-foot">
@@ -67,6 +68,7 @@ const navOpen = ref(false)
 const titleMap: Record<string, string> = {
   colleges: '学院管理',
   users: '全校用户',
+  viewers: '分管领导',
   categories: '议题分类',
 }
 

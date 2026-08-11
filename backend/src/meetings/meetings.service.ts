@@ -19,7 +19,7 @@ import {
   SupervisionStatus,
   TopicStatus,
 } from '../common/constants';
-import { assertAnyRole, hasSchoolWideAccess, PARTY_MINUTES_SIGN_ROLES, STAFF_ROLES } from '../common/roles';
+import { assertAnyRole, isCollegeVisible, prismaCollegeIdFilter, PARTY_MINUTES_SIGN_ROLES, STAFF_ROLES } from '../common/roles';
 import {
   AbsentOpinionDto,
   CreateMeetingDto,
@@ -90,6 +90,9 @@ export class MeetingsService {
     const topicsToAttach = await this.prisma.topic.findMany({
       where: { id: { in: topicIds } },
     });
+    if (topicsToAttach.length !== new Set(topicIds).size) {
+      throw new BadRequestException('部分议题不存在，不能创建会议');
+    }
     for (const t of topicsToAttach) {
       if (t.collegeId !== collegeId) throw new ForbiddenException('议题不属于本院');
       if (t.meetingType !== meetingType) {
@@ -99,6 +102,31 @@ export class MeetingsService {
       }
       if (t.meetingId) {
         throw new BadRequestException(`议题「${t.title}」已入其他会议议程`);
+      }
+      if (t.status !== TopicStatus.APPROVED) {
+        throw new BadRequestException(
+          meetingType === MeetingType.JOINT_CONFERENCE
+            ? `议题「${t.title}」尚未完成书记、院长双审，不能入议程`
+            : `议题「${t.title}」尚未完成书记审题，不能入议程`,
+        );
+      }
+
+      if (meetingType === MeetingType.JOINT_CONFERENCE) {
+        const dualReview = await this.compliance.checkDualReview(t.id);
+        if (!dualReview.passed) {
+          throw new BadRequestException(
+            `议题「${t.title}」未完成书记、院长双审，不能入会议程`,
+          );
+        }
+      }
+
+      if (t.isTempMotion) {
+        const tempMotion = await this.compliance.checkTempMotion(t.id);
+        if (!tempMotion.passed) {
+          throw new BadRequestException(
+            `临时动议「${t.title}」未完成规定审签，不能入会议程`,
+          );
+        }
       }
     }
 
@@ -126,7 +154,6 @@ export class MeetingsService {
     });
 
     if (topicIds.length) {
-      await this.autoApproveOnAgenda(user, collegeId, meetingType, topicsToAttach);
       await this.prisma.topic.updateMany({
         where: { id: { in: topicIds } },
         data: { meetingId: meeting.id, status: TopicStatus.ON_AGENDA },
@@ -157,64 +184,10 @@ export class MeetingsService {
     return this.detail(user, meeting.id);
   }
 
-  /**
-   * 创建会议时勾选入会即视为审题通过：不再要求提前完成书记（联席会+院长）审题，
-   * 仅补一条审题通过记录用于留痕追溯，随后议题状态在 create() 中统一转为 ON_AGENDA。
-   */
-  private async autoApproveOnAgenda(
-    user: AuthUser,
-    collegeId: string,
-    meetingType: string,
-    topics: { id: string; status: string }[],
-  ) {
-    const pending = topics.filter(
-      (t) => t.status !== TopicStatus.APPROVED && t.status !== TopicStatus.ON_AGENDA,
-    );
-    if (!pending.length) return;
-
-    const collegeUsers = await this.prisma.user.findMany({
-      where: { collegeId },
-      include: { roles: { include: { role: true } } },
-    });
-    const secretary = collegeUsers.find((u) =>
-      u.roles.some((r) => r.role.code === RoleCode.SECRETARY),
-    );
-    const dean = collegeUsers.find((u) => u.roles.some((r) => r.role.code === RoleCode.DEAN));
-    const note = '选入会议议程，系统自动记为审题通过';
-
-    for (const t of pending) {
-      const reviewData = (side: string, reviewerId: string) => ({
-        where: { topicId_side: { topicId: t.id, side } },
-        create: {
-          topicId: t.id,
-          side,
-          reviewerId,
-          decision: ReviewDecision.APPROVED,
-          comment: note,
-          decidedAt: new Date(),
-        },
-        update: {
-          reviewerId,
-          decision: ReviewDecision.APPROVED,
-          comment: note,
-          decidedAt: new Date(),
-        },
-      });
-      await this.prisma.jointReview.upsert(
-        reviewData(JointReviewSide.SECRETARY, secretary?.id || user.sub),
-      );
-      if (meetingType === MeetingType.JOINT_CONFERENCE) {
-        await this.prisma.jointReview.upsert(
-          reviewData(JointReviewSide.DEAN, dean?.id || user.sub),
-        );
-      }
-    }
-  }
-
   async list(user: AuthUser, meetingType?: string, status?: string) {
     return this.prisma.meeting.findMany({
       where: {
-        ...(hasSchoolWideAccess(user) ? {} : { collegeId: user.collegeId ?? undefined }),
+        ...prismaCollegeIdFilter(user),
         ...(meetingType ? { meetingType } : {}),
         ...(status ? { status } : {}),
       },
@@ -235,6 +208,7 @@ export class MeetingsService {
           include: {
             category: { select: { id: true, name: true } },
             proposer: { select: { id: true, realName: true, title: true } },
+            materials: { orderBy: { createdAt: 'asc' } },
             jointReviews: true,
             resolution: true,
             votes: {
@@ -255,7 +229,7 @@ export class MeetingsService {
       },
     });
     if (!meeting) throw new NotFoundException('会议不存在');
-    if (!hasSchoolWideAccess(user) && meeting.collegeId !== user.collegeId) {
+    if (!isCollegeVisible(user, meeting.collegeId)) {
       throw new ForbiddenException();
     }
     return meeting;
@@ -547,7 +521,7 @@ export class MeetingsService {
     dto: AbsentOpinionDto,
   ) {
     const meeting = await this.detail(user, meetingId);
-    this.assertInSession(meeting, '登记缺席意见');
+    this.assertInSession(meeting, '登记缺席意见', true);
     const topic = meeting.topics.find((t) => t.id === topicId);
     if (!topic) throw new NotFoundException('议题不在本次会议');
 

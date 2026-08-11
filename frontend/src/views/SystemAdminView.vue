@@ -12,7 +12,7 @@
       :closable="false"
       show-icon
       style="margin-bottom: 12px"
-      title="本端维护主数据（学院 / 用户 / 议题分类）。报表、预警、巡视导出请到业务端「校级监管」。"
+      title="本端维护主数据（学院 / 用户 / 分管领导 / 议题分类）。报表、预警、巡视导出请到业务端「校级监管」。"
     />
 
     <!-- 学院 -->
@@ -72,7 +72,7 @@
         <el-table-column label="学院" width="160">
           <template #default="{ row }">{{ row.college?.name || '校级' }}</template>
         </el-table-column>
-        <el-table-column label="角色" min-width="200">
+        <el-table-column label="角色" min-width="180">
           <template #default="{ row }">
             <el-tag
               v-for="r in row.roles || []"
@@ -84,6 +84,19 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="分管范围" min-width="200">
+          <template #default="{ row }">
+            <template v-if="isViewerRow(row)">
+              <el-tag
+                size="small"
+                :type="(row.collegeScopeIds || []).length ? 'warning' : 'info'"
+              >
+                {{ row.scopeLabel || '全校' }}
+              </el-tag>
+            </template>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
             <el-tag size="small" :type="row.enabled === false ? 'danger' : 'success'">
@@ -91,9 +104,17 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openUserEdit(row)">编辑</el-button>
+            <el-button
+              v-if="isViewerRow(row)"
+              link
+              type="primary"
+              @click="openScopeEdit(row)"
+            >
+              设分管
+            </el-button>
             <el-button link type="warning" @click="resetPwd(row)">重置密码</el-button>
             <el-button
               link
@@ -110,6 +131,65 @@
             >
               删除
             </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- 分管领导 -->
+    <div v-else-if="panel === 'viewers'">
+      <el-alert
+        type="success"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+        title="为校级查阅账号配置分管学院：不选=全校可见；多选=仅看所选学院（如副校长分管）。"
+      />
+      <div class="toolbar">
+        <el-input
+          v-model="viewerKeyword"
+          clearable
+          placeholder="姓名/账号"
+          style="width: 180px"
+          @keyup.enter="loadUsers"
+        />
+        <el-button type="primary" @click="openViewerCreate">新增分管领导</el-button>
+        <el-button @click="loadUsers">刷新</el-button>
+      </div>
+      <el-table :data="viewerUsers" stripe v-loading="loadingUsers">
+        <el-table-column prop="realName" label="姓名" width="120" />
+        <el-table-column prop="username" label="账号" width="140" />
+        <el-table-column prop="title" label="职务" width="140">
+          <template #default="{ row }">{{ row.title || '校级查阅' }}</template>
+        </el-table-column>
+        <el-table-column label="分管学院" min-width="280">
+          <template #default="{ row }">
+            <template v-if="(row.collegeScopeIds || []).length">
+              <el-tag
+                v-for="name in row.collegeScopeNames || []"
+                :key="name"
+                size="small"
+                type="warning"
+                style="margin-right: 4px; margin-bottom: 2px"
+              >
+                {{ name }}
+              </el-tag>
+            </template>
+            <el-tag v-else size="small" type="info">全校</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.enabled === false ? 'danger' : 'success'">
+              {{ row.enabled === false ? '禁用' : '启用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="260" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openScopeEdit(row)">设置分管学院</el-button>
+            <el-button link type="primary" @click="openUserEdit(row)">编辑资料</el-button>
+            <el-button link type="warning" @click="resetPwd(row)">重置密码</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -189,7 +269,7 @@
           <el-radio-group v-model="userForm.accountType">
             <el-radio value="college">学院用户</el-radio>
             <el-radio value="school">校级管理员</el-radio>
-            <el-radio value="viewer">校级查阅</el-radio>
+            <el-radio value="viewer">校级查阅 / 分管领导</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item v-if="!userEditingId" label="账号">
@@ -213,6 +293,29 @@
               :value="c.id"
             />
           </el-select>
+        </el-form-item>
+        <el-form-item
+          v-if="userForm.accountType === 'viewer' || isEditingViewer"
+          label="分管学院"
+        >
+          <el-select
+            v-model="userForm.collegeScopeIds"
+            multiple
+            clearable
+            filterable
+            placeholder="不选 = 全校；多选 = 仅分管所选学院"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="c in colleges"
+              :key="c.id"
+              :label="c.name"
+              :value="c.id"
+            />
+          </el-select>
+          <div class="hint">
+            空=全校（校长/书记等）；多选=副校长等分管领导，业务端态势与简报仅见所选学院
+          </div>
         </el-form-item>
         <el-form-item
           v-if="userEditingId || userForm.accountType === 'college'"
@@ -242,6 +345,46 @@
       <template #footer>
         <el-button @click="userVisible = false">取消</el-button>
         <el-button type="primary" @click="submitUser">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="scopeVisible"
+      title="设置分管学院"
+      width="520px"
+      destroy-on-close
+    >
+      <div v-if="scopeTarget" class="scope-head">
+        <strong>{{ scopeTarget.realName }}</strong>
+        <span>（{{ scopeTarget.username }} · {{ scopeTarget.title || '校级查阅' }}）</span>
+      </div>
+      <el-form label-width="100px">
+        <el-form-item label="分管学院">
+          <el-select
+            v-model="scopeCollegeIds"
+            multiple
+            clearable
+            filterable
+            placeholder="不选 = 全校可见"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="c in colleges"
+              :key="c.id"
+              :label="c.name"
+              :value="c.id"
+            />
+          </el-select>
+          <div class="hint">
+            保存后立即生效：该领导登录业务端，态势 / 简报 / 巡视导出均按此处范围过滤。
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="scopeVisible = false">取消</el-button>
+        <el-button type="primary" :loading="scopeSaving" @click="submitScope">
+          保存分管范围
+        </el-button>
       </template>
     </el-dialog>
 
@@ -320,8 +463,14 @@ const loadingCats = ref(false)
 
 const userCollegeId = ref('')
 const userKeyword = ref('')
+const viewerKeyword = ref('')
 const catMeetingType = ref('JOINT_CONFERENCE')
 const catScope = ref('school')
+
+const scopeVisible = ref(false)
+const scopeSaving = ref(false)
+const scopeTarget = ref<any>(null)
+const scopeCollegeIds = ref<string[]>([])
 
 const collegeVisible = ref(false)
 const collegeEditingId = ref('')
@@ -338,7 +487,15 @@ const userForm = reactive({
   password: '123456',
   accountType: 'college' as 'college' | 'school' | 'viewer',
   isSchoolAdmin: false,
+  collegeScopeIds: [] as string[],
 })
+
+const isEditingViewer = computed(
+  () =>
+    !!userEditingId.value &&
+    (userForm.accountType === 'viewer' ||
+      userForm.roleCodes.includes('SCHOOL_VIEWER')),
+)
 
 const catVisible = ref(false)
 const catEditingId = ref('')
@@ -372,6 +529,27 @@ const filteredUsers = computed(() => {
   )
 })
 
+function isViewerRow(row: any) {
+  const codes = row.roleCodes || row.roles?.map((r: any) => r.code) || []
+  return codes.includes('SCHOOL_VIEWER') && !row.isSchoolAdmin
+}
+
+const viewerUsers = computed(() => {
+  const kw = viewerKeyword.value.trim().toLowerCase()
+  return users.value.filter((u) => {
+    if (!isViewerRow(u)) return false
+    if (!kw) return true
+    return (
+      String(u.realName || '')
+        .toLowerCase()
+        .includes(kw) ||
+      String(u.username || '')
+        .toLowerCase()
+        .includes(kw)
+    )
+  })
+})
+
 async function loadColleges() {
   loadingColleges.value = true
   try {
@@ -386,9 +564,12 @@ async function loadColleges() {
 async function loadUsers() {
   loadingUsers.value = true
   try {
+    // 分管领导页必须拉全量（含 collegeId 为空的校级查阅）
+    const filterCollege =
+      panel.value === 'viewers' ? '' : userCollegeId.value
     users.value = await http.get('/org/users', {
       params: {
-        ...(userCollegeId.value ? { collegeId: userCollegeId.value } : {}),
+        ...(filterCollege ? { collegeId: filterCollege } : {}),
       },
     })
     if (!roleOptions.value.length) {
@@ -422,12 +603,47 @@ async function loadPanel() {
   const p = panel.value
   if (p === 'colleges') {
     await loadColleges()
-  } else if (p === 'users') {
+  } else if (p === 'users' || p === 'viewers') {
     if (!colleges.value.length) await loadColleges()
     await loadUsers()
   } else {
     if (!colleges.value.length) await loadColleges()
     await loadCategories()
+  }
+}
+
+function openViewerCreate() {
+  openUserCreate()
+  userForm.accountType = 'viewer'
+  userForm.roleCodes = []
+  userForm.title = '副校长'
+  userForm.collegeScopeIds = []
+}
+
+function openScopeEdit(row: any) {
+  scopeTarget.value = row
+  scopeCollegeIds.value = [...(row.collegeScopeIds || [])]
+  scopeVisible.value = true
+}
+
+async function submitScope() {
+  if (!scopeTarget.value?.id) return
+  scopeSaving.value = true
+  try {
+    await http.patch(`/org/users/${scopeTarget.value.id}`, {
+      collegeScopeIds: scopeCollegeIds.value,
+    })
+    ElMessage.success(
+      scopeCollegeIds.value.length
+        ? `已设置分管 ${scopeCollegeIds.value.length} 所学院`
+        : '已设为全校查阅（未限定分管学院）',
+    )
+    scopeVisible.value = false
+    await loadUsers()
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  } finally {
+    scopeSaving.value = false
   }
 }
 
@@ -492,6 +708,7 @@ function openUserCreate() {
   userForm.password = '123456'
   userForm.accountType = 'college'
   userForm.isSchoolAdmin = false
+  userForm.collegeScopeIds = []
   userVisible.value = true
 }
 
@@ -512,16 +729,23 @@ function openUserEdit(row: any) {
         )
       ? 'viewer'
       : 'college'
+  userForm.collegeScopeIds = [...(row.collegeScopeIds || [])]
   userVisible.value = true
 }
 
 async function submitUser() {
   try {
     if (userEditingId.value) {
-      if (userForm.isSchoolAdmin || userForm.accountType === 'viewer') {
+      if (userForm.isSchoolAdmin) {
         await http.patch(`/org/users/${userEditingId.value}`, {
           realName: userForm.realName,
           title: userForm.title,
+        })
+      } else if (userForm.accountType === 'viewer') {
+        await http.patch(`/org/users/${userEditingId.value}`, {
+          realName: userForm.realName,
+          title: userForm.title,
+          collegeScopeIds: userForm.collegeScopeIds,
         })
       } else {
         await http.patch(`/org/users/${userEditingId.value}`, {
@@ -552,6 +776,7 @@ async function submitUser() {
           title: userForm.title || '校级查阅',
           password: userForm.password || '123456',
           roleCodes: ['SCHOOL_VIEWER'],
+          collegeScopeIds: userForm.collegeScopeIds,
         })
       } else {
         if (!userForm.collegeId) {
@@ -704,5 +929,22 @@ onMounted(loadPanel)
 }
 .deny {
   padding: 40px 0;
+}
+.hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+.muted {
+  color: #94a3b8;
+}
+.scope-head {
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: #334155;
+}
+.scope-head strong {
+  color: #0f172a;
 }
 </style>

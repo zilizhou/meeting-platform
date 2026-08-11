@@ -17,6 +17,7 @@ import { ArchivesModule } from './archives/archives.module';
 import { SystemModule } from './system/system.module';
 import { AiModule } from './ai/ai.module';
 import { AgentModule } from './agent/agent.module';
+import { PartyImportModule } from './party-import/party-import.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AgentModule } from './agent/agent.module';
     SystemModule,
     AiModule,
     AgentModule,
+    PartyImportModule,
   ],
 })
 export class AppModule {}

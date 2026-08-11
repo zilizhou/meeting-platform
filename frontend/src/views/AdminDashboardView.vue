@@ -15,7 +15,13 @@
     <div class="ui-hero is-official">
       <div class="eyebrow">
         <b></b>
-        {{ isViewerOnly ? '校级查阅' : '校级监管 · 一期' }}
+        {{
+          isViewerOnly
+            ? scopeHint
+              ? `校级查阅 · ${scopeHint}`
+              : '校级查阅'
+            : '校级监管 · 一期'
+        }}
       </div>
       <h2>两会态势总览</h2>
       <p>
@@ -70,7 +76,7 @@
         扫描逾期
       </el-button>
       <el-button type="success" :loading="exporting" @click="exportPack">
-        {{ collegeId ? '导出本院巡视包' : '导出全校巡视包' }}
+        {{ exportPackLabel }}
       </el-button>
     </div>
 
@@ -79,7 +85,9 @@
       <div class="brief-head">
         <div>
           <h3>AI 领导简报</h3>
-          <p>面向组织部与学校主要领导 · 数字以系统为准 · AI 仅润色文书</p>
+          <p>
+            {{ briefScopeHint }} · 数字以系统为准 · AI 仅润色文书
+          </p>
         </div>
         <div class="brief-actions">
           <el-button
@@ -389,6 +397,38 @@ const isViewerOnly = computed(() => {
   return !schoolAdmin && roles.includes('SCHOOL_VIEWER')
 })
 
+const scopeHint = computed(() => {
+  if (!isViewerOnly.value) return ''
+  const ids = auth.user?.collegeScopeIds || []
+  return ids.length === 0 ? '全校' : `分管 ${ids.length} 所学院`
+})
+
+/** 分管查阅（有 collegeScopes） */
+const isScopedViewer = computed(() => {
+  if (!isViewerOnly.value) return false
+  return (auth.user?.collegeScopeIds || []).length > 0
+})
+
+const selectedCollegeName = computed(() => {
+  if (!collegeId.value) return ''
+  const row = colleges.value.find((c) => (c.collegeId || c.id) === collegeId.value)
+  return row?.name || ''
+})
+
+const exportPackLabel = computed(() => {
+  if (collegeId.value) return '导出本院巡视包'
+  if (isScopedViewer.value) return '导出分管巡视包'
+  return '导出全校巡视包'
+})
+
+const briefScopeHint = computed(() => {
+  if (collegeId.value && selectedCollegeName.value) {
+    return `范围：${selectedCollegeName.value}`
+  }
+  if (isScopedViewer.value) return '范围：当前分管学院'
+  return '面向组织部与学校主要领导'
+})
+
 const month = computed(() => overview.value?.month || null)
 const monthLabel = computed(() => month.value?.label || '本月')
 
@@ -488,7 +528,9 @@ function formatTime(v?: string) {
 
 async function loadBriefings() {
   try {
-    briefingList.value = (await http.get('/admin/briefings', { params: { take: 8 } })) as any
+    const params: Record<string, string | number> = { take: 8 }
+    if (collegeId.value) params.collegeId = collegeId.value
+    briefingList.value = (await http.get('/admin/briefings', { params })) as any
   } catch {
     briefingList.value = []
   }
@@ -508,7 +550,11 @@ async function generateBriefing(mode: 'monthly' | 'realtime', notify = false) {
   try {
     const res: any = await http.post(
       '/admin/briefings/generate',
-      { mode, notify },
+      {
+        mode,
+        notify,
+        collegeId: collegeId.value || undefined,
+      },
       { timeout: 60000 },
     )
     activeBriefing.value = res
@@ -550,6 +596,7 @@ function downloadBriefing() {
 async function load() {
   if (!isAdmin.value) return
   loading.value = true
+  activeBriefing.value = null
   try {
     const params = collegeId.value ? { collegeId: collegeId.value } : {}
     const [o, c, m, t, w] = await Promise.all([
@@ -596,9 +643,12 @@ async function exportPack() {
   exporting.value = true
   try {
     const q = collegeId.value ? `?collegeId=${collegeId.value}` : ''
+    const day = new Date().toISOString().slice(0, 10)
     const name = collegeId.value
-      ? `巡视材料包_学院_${new Date().toISOString().slice(0, 10)}.zip`
-      : `巡视材料包_全校_${new Date().toISOString().slice(0, 10)}.zip`
+      ? `巡视材料包_学院_${day}.zip`
+      : isScopedViewer.value
+        ? `巡视材料包_分管_${day}.zip`
+        : `巡视材料包_全校_${day}.zip`
     await downloadWithAuth(`/admin/exports/inspection-pack${q}`, name)
     ElMessage.success('巡视材料包已开始下载')
   } catch (e: any) {
