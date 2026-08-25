@@ -3,7 +3,7 @@
     <div class="ui-hero party">
       <div class="eyebrow"><b></b> 党委红轨 · 议题库</div>
       <h2>党组织会议议题库</h2>
-      <p>学院党组织会议历次议题的集中管理入口。须有「第一议题」入会后方可开会；学院管理员可代审通过或退回。</p>
+      <p>学院党组织会议历次议题的集中管理入口。须有「第一议题」入会后方可开会；学院管理员可审题或代审。</p>
       <div class="nums">
         <button
           type="button"
@@ -33,9 +33,9 @@
     </div>
 
     <div class="rule-banner party">
-      <strong>第一议题 · 代审</strong>
+      <strong>第一议题 · 审题</strong>
       党组织会议必须把「第一议题（政治理论学习）」纳入议程，否则不能开会。
-      学院管理员可在待审议题上代审通过或退回（须电话/当面确认）。
+      学院管理员可直接同意/暂缓，也可在征得书记同意后代审留痕。
       <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
     </div>
     <div v-if="!hasReadyFirstTopic" class="rule-banner warn">
@@ -114,6 +114,22 @@
             提交书记审
           </button>
           <button
+            v-if="roles.canReviewParty.value && t.status === 'PENDING_REVIEW'"
+            class="ui-link"
+            type="button"
+            @click="review(t, 'APPROVED')"
+          >
+            同意
+          </button>
+          <button
+            v-if="roles.canReviewParty.value && t.status === 'PENDING_REVIEW'"
+            class="ui-link"
+            type="button"
+            @click="review(t, 'REJECTED')"
+          >
+            暂缓
+          </button>
+          <button
             v-if="roles.canProxyReview.value && t.status === 'PENDING_REVIEW'"
             class="ui-link"
             type="button"
@@ -151,7 +167,11 @@
           <el-input v-model="editForm.title" />
         </el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="editForm.categoryId" style="width: 100%">
+          <el-select
+            v-model="editForm.categoryId"
+            style="width: 100%"
+            @change="onEditCategory"
+          >
             <el-option
               v-for="c in categories"
               :key="c.id"
@@ -162,6 +182,10 @@
         </el-form-item>
         <el-form-item label="内容">
           <el-input v-model="editForm.content" type="textarea" :rows="6" />
+        </el-form-item>
+        <el-form-item label="第一议题">
+          <el-switch v-model="editForm.isFirstTopic" @change="onEditFirstTopic" />
+          <span class="muted" style="margin-left: 8px; font-size: 12px">政治理论学习，创建会议时必选</span>
         </el-form-item>
         <el-form-item label="重大事项">
           <el-switch v-model="editForm.isMajor" />
@@ -239,6 +263,7 @@ const editForm = reactive({
   title: '',
   content: '',
   categoryId: '',
+  isFirstTopic: false,
   isMajor: false,
   isTempMotion: false,
 })
@@ -366,9 +391,25 @@ function openEdit(t: any) {
   editForm.title = t.title
   editForm.content = t.content || ''
   editForm.categoryId = t.categoryId || ''
+  editForm.isFirstTopic = t.category?.code === 'FIRST_TOPIC'
   editForm.isMajor = Boolean(t.isMajor)
   editForm.isTempMotion = Boolean(t.isTempMotion)
   editVisible.value = true
+}
+
+function onEditCategory() {
+  const cat = categories.value.find((c) => c.id === editForm.categoryId)
+  editForm.isFirstTopic = cat?.code === 'FIRST_TOPIC'
+}
+
+function onEditFirstTopic(checked: boolean) {
+  const first = categories.value.find((c) => c.code === 'FIRST_TOPIC')
+  if (checked) {
+    if (first) editForm.categoryId = first.id
+    else ElMessage.warning('系统未配置第一议题分类')
+  } else if (first && editForm.categoryId === first.id) {
+    editForm.categoryId = ''
+  }
 }
 
 async function saveEdit() {
@@ -409,6 +450,16 @@ async function submitReview(row: any) {
   try {
     await http.post(`/topics/${row.id}/submit-review`)
     ElMessage.success('已提交党委书记审题')
+    await load()
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  }
+}
+
+async function review(row: any, decision: 'APPROVED' | 'REJECTED') {
+  try {
+    await http.post(`/topics/${row.id}/review`, { decision })
+    ElMessage.success(decision === 'APPROVED' ? '已同意' : '已暂缓')
     await load()
   } catch (e: any) {
     ElMessage.error(String(e))

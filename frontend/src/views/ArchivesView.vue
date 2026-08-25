@@ -90,7 +90,7 @@
             {{ (dossier.topics || []).length }} 项
           </el-descriptions-item>
           <el-descriptions-item label="纪要">
-            {{ dossier.minutes?.effectiveAt ? '已生效' : '未生效' }}
+            {{ dossier.minutes?.content || dossier.minutes?.id ? '已保存' : '未保存' }}
           </el-descriptions-item>
         </el-descriptions>
 

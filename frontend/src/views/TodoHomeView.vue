@@ -45,7 +45,7 @@
     </div>
     <div class="rule-banner party">
       <strong>第一议题硬规则</strong>
-      党组织会议须将「第一议题（政治理论学习）」纳入议程，否则不能开会。学院管理员可代审通过或退回。
+      党组织会议须将「第一议题（政治理论学习）」纳入议程，否则不能开会。学院管理员可审题或代审。
     </div>
 
     <div class="ui-filter is-equal" role="tablist">

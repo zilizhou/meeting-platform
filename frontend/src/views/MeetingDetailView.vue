@@ -47,7 +47,7 @@
         标记已召开
       </button>
       <button
-        v-if="roles.canCreateMeeting.value && meeting.status === 'RESOLVED'"
+        v-if="roles.canCreateMeeting.value && meeting.status !== 'ARCHIVED' && hasMinutes"
         class="ui-btn light"
         type="button"
         @click="archive"
@@ -102,7 +102,7 @@
       <div class="minutes-head">
         <h3>
           <i :class="{ party: isParty }"></i>
-          {{ isParty ? '会议纪要' : '会议纪要双签' }}
+          会议纪要
         </h3>
         <button class="ui-link" type="button" @click="exportMinutesWord">导出 Word</button>
       </div>
@@ -131,8 +131,7 @@
         </label>
       </div>
       <p class="minutes-hint">
-        可在系统内编辑正文，也可上传线下已签纪要（Word / PDF）。核对后保存 →
-        {{ isParty ? '书记/副书记' : '书记/院长' }}签署生效。
+        可在系统内编辑正文，也可上传线下纪要（Word / PDF）。核对后保存即可导出或归档。
       </p>
       <p v-if="meeting.minutes?.originalName" class="minutes-file">
         已上传：{{ meeting.minutes.originalName }}
@@ -149,10 +148,7 @@
       />
 
       <div class="minutes-foot">
-        <span class="meta">
-          签署 {{ meeting.minutes?.signs?.map((s: any) => s.side).join('、') || '未签' }}
-          · 生效 {{ meeting.minutes?.effectiveAt || '未生效' }}
-        </span>
+        <span class="meta">{{ minutesMeta }}</span>
         <div class="minutes-foot-actions">
           <button
             v-if="roles.canSaveMinutes.value"
@@ -161,14 +157,6 @@
             @click="saveMinutes"
           >
             保存
-          </button>
-          <button
-            v-if="isParty ? roles.canSignPartyMinutes.value : roles.canSignMinutes.value"
-            class="ui-btn"
-            type="button"
-            @click="signMinutes"
-          >
-            {{ isParty ? '书记签署生效' : '双签生效' }}
           </button>
         </div>
       </div>
@@ -382,6 +370,18 @@ function exportMinutesWord() {
 }
 
 const isParty = computed(() => meeting.value?.meetingType === 'PARTY_COMMITTEE')
+const hasMinutes = computed(() => {
+  const m = meeting.value?.minutes
+  if (!m) return false
+  return Boolean(
+    (m.content && String(m.content).trim()) || m.filePath || m.originalName,
+  )
+})
+const minutesMeta = computed(() => {
+  if (!hasMinutes.value) return '尚未保存纪要'
+  const name = meeting.value?.minutes?.originalName
+  return name ? `已保存 · 附件 ${name}` : '已保存'
+})
 const missingFirstTopic = computed(() => {
   if (!isParty.value) return false
   const topics = meeting.value?.topics || []
@@ -411,7 +411,7 @@ const hasHeroActions = computed(() => {
   ) {
     return true
   }
-  if (roles.canCreateMeeting.value && m.status === 'RESOLVED') return true
+  if (roles.canCreateMeeting.value && m.status !== 'ARCHIVED' && hasMinutes.value) return true
   return false
 })
 
@@ -530,7 +530,7 @@ async function applyTextToMinutes(text: string, source: 'agenda' | 'ai') {
   minutesContent.value = next
   ElMessage.success(
     source === 'ai'
-      ? '已写入正文，请核对后点「保存」再签署'
+      ? '已写入正文，请核对后保存'
       : '已按议程写入正文，请核对补充后保存',
   )
 }
@@ -557,7 +557,7 @@ async function generateMinutesDraft() {
 async function markHeld() {
   try {
     await ElMessageBox.confirm(
-      '确认本场会议已线下召开？确认后可整理并签署纪要。',
+      '确认本场会议已线下召开？确认后可整理纪要。',
       '标记已召开',
       { type: 'warning', confirmButtonText: '已召开', cancelButtonText: '取消' },
     )
@@ -620,16 +620,7 @@ async function downloadMinutesFile() {
 async function saveMinutes() {
   try {
     await http.post(`/meetings/${route.params.id}/minutes`, { content: minutesContent.value })
-    await reloadWithMessage('纪要已保存，已通知签署人')
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
-}
-
-async function signMinutes() {
-  try {
-    await http.post(`/meetings/${route.params.id}/minutes/sign`)
-    await reloadWithMessage('签署成功')
+    await reloadWithMessage('纪要已保存')
   } catch (e: any) {
     ElMessage.error(String(e))
   }

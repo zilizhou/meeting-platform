@@ -22,7 +22,7 @@ import {
   SupervisionStatus,
   TopicStatus,
 } from '../common/constants';
-import { assertAnyRole, isCollegeVisible, prismaCollegeIdFilter, PARTY_MINUTES_SIGN_ROLES, STAFF_ROLES } from '../common/roles';
+import { assertAnyRole, isCollegeVisible, prismaCollegeIdFilter, STAFF_ROLES } from '../common/roles';
 import { assertPartyMeetingCanOpen, FIRST_TOPIC_CODE } from '../common/first-topic';
 import {
   currentPeriodRange,
@@ -469,11 +469,8 @@ export class MeetingsService {
     if (meeting.status === MeetingStatus.ARCHIVED) {
       return meeting;
     }
-    if (!meeting.minutes?.effectiveAt) {
-      throw new BadRequestException('纪要尚未生效，不能归档');
-    }
-    if (meeting.status !== MeetingStatus.RESOLVED) {
-      throw new BadRequestException('仅已决议会议可归档');
+    if (!this.hasMinutesBody(meeting.minutes)) {
+      throw new BadRequestException('请先保存或上传会议纪要，再归档');
     }
 
     await this.prisma.meeting.update({
@@ -835,7 +832,7 @@ export class MeetingsService {
                 {
                   name: '党组织会议决议摘要/依据',
                   requiredKey: 'party_resolution',
-                  isRequired: true,
+                  isRequired: false,
                   uploaded: true,
                   filePath: `party-resolution://${resolution.id}`,
                   originalName: '党组织会议决议关联',
@@ -843,7 +840,7 @@ export class MeetingsService {
                 {
                   name: '调研报告/落实方案',
                   requiredKey: 'survey',
-                  isRequired: true,
+                  isRequired: false,
                 },
               ],
             },
@@ -907,7 +904,7 @@ export class MeetingsService {
       create: { meetingId, content: dto.content },
       update: { content: dto.content, version: { increment: 1 } },
     });
-    await this.notifyMinutesSigners(meeting, meetingId);
+    await this.markResolvedWhenMinutesReady(meetingId, meeting.status);
     return minutes;
   }
 
@@ -978,7 +975,7 @@ export class MeetingsService {
       resourceId: minutes.id,
       detail: { originalName: file.originalname, size: file.size },
     });
-    await this.notifyMinutesSigners(meeting, meetingId);
+    await this.markResolvedWhenMinutesReady(meetingId, meeting.status);
     return this.detail(user, meetingId);
   }
 
@@ -1000,133 +997,25 @@ export class MeetingsService {
     };
   }
 
-  private async notifyMinutesSigners(
-    meeting: { collegeId: string; meetingType: string; title: string },
-    meetingId: string,
-  ) {
-    const collegeUsers = await this.prisma.user.findMany({
-      where: { collegeId: meeting.collegeId },
-      include: { roles: { include: { role: true } } },
-    });
-    const from =
-      meeting.meetingType === MeetingType.PARTY_COMMITTEE ? '?from=party' : '';
-    const payloads = [];
-    for (const u of collegeUsers) {
-      const codes = u.roles.map((r) => r.role.code);
-      const need =
-        meeting.meetingType === MeetingType.PARTY_COMMITTEE
-          ? codes.includes(RoleCode.SECRETARY) ||
-            codes.includes(RoleCode.VICE_SECRETARY)
-          : codes.includes(RoleCode.SECRETARY) || codes.includes(RoleCode.DEAN);
-      if (!need) continue;
-      payloads.push({
-        userId: u.id,
-        collegeId: meeting.collegeId,
-        type: 'MINUTES_SIGN',
-        title: `纪要待签：${meeting.title}`,
-        content: '会议纪要已起草，请及时签署',
-        link: `/meetings/${meetingId}${from}`,
-      });
-    }
-    await this.notifications.notifyMany(payloads);
+  private hasMinutesBody(minutes?: {
+    content?: string | null;
+    filePath?: string | null;
+  } | null) {
+    return Boolean(
+      (minutes?.content && minutes.content.trim()) || minutes?.filePath,
+    );
   }
 
-  async signMinutes(user: AuthUser, meetingId: string) {
-    const meeting = await this.detail(user, meetingId);
-    if (!meeting.minutes) throw new BadRequestException('请先起草纪要');
-
-    const isParty = meeting.meetingType === MeetingType.PARTY_COMMITTEE;
-
-    if (isParty) {
-      assertAnyRole(
-        user,
-        [...PARTY_MINUTES_SIGN_ROLES],
-        '党组织会议纪要仅党委书记或副书记可签署',
-      );
-      const signedByRole = user.roles.includes(RoleCode.SECRETARY)
-        ? RoleCode.SECRETARY
-        : RoleCode.VICE_SECRETARY;
-      await this.prisma.minutesSign.upsert({
-        where: {
-          minutesId_side: {
-            minutesId: meeting.minutes.id,
-            side: JointReviewSide.SECRETARY,
-          },
-        },
-        create: {
-          minutesId: meeting.minutes.id,
-          userId: user.sub,
-          side: JointReviewSide.SECRETARY,
-        },
-        update: {
-          userId: user.sub,
-          signedAt: new Date(),
-        },
-      });
-      await this.prisma.minutes.update({
-        where: { id: meeting.minutes.id },
-        data: { effectiveAt: new Date() },
-      });
-      await this.prisma.meeting.update({
-        where: { id: meetingId },
-        data: { status: MeetingStatus.RESOLVED },
-      });
-      await this.audit.log({
-        user,
-        action: 'SIGN_MINUTES',
-        resource: 'Minutes',
-        resourceId: meeting.minutes.id,
-        detail: {
-          side: 'SECRETARY',
-          meetingType: 'PARTY_COMMITTEE',
-          effective: true,
-          signedByRole,
-        },
-      });
-      return this.detail(user, meetingId);
+  private async markResolvedWhenMinutesReady(
+    meetingId: string,
+    status: string,
+  ) {
+    if (status === MeetingStatus.ARCHIVED || status === MeetingStatus.RESOLVED) {
+      return;
     }
-
-    const side = user.roles.includes(RoleCode.SECRETARY)
-      ? JointReviewSide.SECRETARY
-      : user.roles.includes(RoleCode.DEAN)
-        ? JointReviewSide.DEAN
-        : null;
-    if (!side) throw new ForbiddenException('仅党委书记或院长可签署纪要');
-
-    await this.prisma.minutesSign.upsert({
-      where: {
-        minutesId_side: { minutesId: meeting.minutes.id, side },
-      },
-      create: {
-        minutesId: meeting.minutes.id,
-        userId: user.sub,
-        side,
-      },
-      update: {
-        userId: user.sub,
-        signedAt: new Date(),
-      },
+    await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: { status: MeetingStatus.RESOLVED },
     });
-
-    const check = await this.compliance.checkMinutesSign(meeting.minutes.id);
-    if (check.passed) {
-      await this.prisma.minutes.update({
-        where: { id: meeting.minutes.id },
-        data: { effectiveAt: new Date() },
-      });
-      await this.prisma.meeting.update({
-        where: { id: meetingId },
-        data: { status: MeetingStatus.RESOLVED },
-      });
-    }
-
-    await this.audit.log({
-      user,
-      action: 'SIGN_MINUTES',
-      resource: 'Minutes',
-      resourceId: meeting.minutes.id,
-      detail: { side, effective: check.passed },
-    });
-    return this.detail(user, meetingId);
   }
 }

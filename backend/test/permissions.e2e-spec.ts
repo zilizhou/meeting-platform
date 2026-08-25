@@ -220,4 +220,58 @@ describe('权限与重大事项表决优化（E2E）', () => {
     expect(rejected.body.status).toBe('DEFERRED');
     expect(String(rejected.body.jointReviews?.[0]?.comment || '')).toMatch(/代审/);
   });
+
+  it('学院管理员可直接审核党组织会议与联席会议题', async () => {
+    const partyRes = await request(ctx.app.getHttpServer())
+      .post('/api/topics')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ title: '学院管理员直审党组织议题', meetingType: 'PARTY_COMMITTEE' })
+      .expect(201);
+    const partyId = partyRes.body.id as string;
+    await request(ctx.app.getHttpServer())
+      .post(`/api/topics/${partyId}/submit-review`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(201);
+    const partyReviewed = await request(ctx.app.getHttpServer())
+      .post(`/api/topics/${partyId}/review`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ decision: 'APPROVED' })
+      .expect(201);
+    expect(partyReviewed.body.status).toBe('APPROVED');
+
+    const jointRes = await request(ctx.app.getHttpServer())
+      .post('/api/topics')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ title: '学院管理员直审联席议题' })
+      .expect(201);
+    const jointId = jointRes.body.id as string;
+    await request(ctx.app.getHttpServer())
+      .post(`/api/topics/${jointId}/submit-review`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(201);
+
+    const officeTodos = await request(ctx.app.getHttpServer())
+      .get('/api/workspace/todos')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(200);
+    expect(
+      officeTodos.body.items.some(
+        (i: { type: string; topicId?: string }) =>
+          i.type === 'JOINT_REVIEW' && i.topicId === jointId,
+      ),
+    ).toBe(true);
+
+    const jointReviewed = await request(ctx.app.getHttpServer())
+      .post(`/api/topics/${jointId}/review`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ decision: 'APPROVED' })
+      .expect(201);
+    expect(jointReviewed.body.status).toBe('APPROVED');
+    const sides = (jointReviewed.body.jointReviews || []).map(
+      (r: { side: string; decision: string }) => `${r.side}:${r.decision}`,
+    );
+    expect(sides).toEqual(
+      expect.arrayContaining(['SECRETARY:APPROVED', 'DEAN:APPROVED']),
+    );
+  });
 });

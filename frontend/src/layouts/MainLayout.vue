@@ -59,7 +59,9 @@
         {{ t.label }}
       </button>
     </nav>
+    <!-- 暂时关闭全部引导
     <OnboardingGuide />
+    -->
   </div>
 </template>
 
@@ -69,7 +71,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useRoles } from '@/composables/useRoles'
 import http from '@/api/http'
-import OnboardingGuide from '@/components/OnboardingGuide.vue'
+// import OnboardingGuide from '@/components/OnboardingGuide.vue'
 
 interface TabItem {
   name: string

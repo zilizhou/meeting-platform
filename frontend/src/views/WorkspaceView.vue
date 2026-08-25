@@ -11,7 +11,6 @@
         <div><b>{{ summary.total }}</b><span>全部</span></div>
         <div><b>{{ summary.jointReview }}</b><span>联席双审</span></div>
         <div><b>{{ summary.partyReview }}</b><span>党委审题</span></div>
-        <div><b>{{ summary.minutesSign }}</b><span>纪要签署</span></div>
         <div><b>{{ summary.supervision }}</b><span>督办</span></div>
         <div><b>{{ summary.materialRead }}</b><span>待阅件</span></div>
       </div>
@@ -37,7 +36,7 @@
         <el-input
           v-model="ruleQuestion"
           clearable
-          placeholder="例如：纪要如何双签生效？重大事项如何办理？"
+          placeholder="例如：纪要如何整理归档？重大事项如何办理？"
           @keyup.enter="askRule"
         />
         <el-button type="primary" :loading="ruleAsking" @click="askRule">提问</el-button>
@@ -207,7 +206,7 @@ const quickQuestions = [
   '缺席书面意见算不算票？',
   '列席有没有表决权？',
   '临时动议要谁同意？',
-  '联席会纪要谁签字生效？',
+  '会议纪要如何保存归档？',
   '重大事项法定人数是多少？',
 ]
 

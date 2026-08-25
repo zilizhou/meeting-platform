@@ -92,7 +92,7 @@ export class InspectionExportService {
           可决议: m.canResolve ? '是' : '否',
           重大事项: m.isMajor ? '是' : '否',
           议题数: m.topics?.length || 0,
-          纪要生效: m.minutes?.effectiveAt ? '是' : '否',
+          纪要: m.minutes ? '有' : '无',
           创建时间: m.createdAt,
         })),
         [

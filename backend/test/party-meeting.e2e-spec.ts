@@ -122,21 +122,15 @@ describe('党委会正式开会（E2E）', () => {
       .send({ content: '党委会纪要' })
       .expect(201);
 
-    // 院长不能签党委会纪要
-    await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/minutes/sign`)
-      .set('Authorization', `Bearer ${ctx.users.dean.token}`)
-      .expect(403);
-
-    const signed = await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/minutes/sign`)
-      .set('Authorization', `Bearer ${ctx.users.secretary.token}`)
-      .expect(201);
-    expect(signed.body.minutes.effectiveAt).toBeTruthy();
-    expect(signed.body.status).toBe('RESOLVED');
+    const saved = await request(ctx.app.getHttpServer())
+      .get(`/api/meetings/${meetingId}`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(200);
+    expect(saved.body.minutes?.content).toContain('党委会纪要');
+    expect(saved.body.status).toBe('RESOLVED');
   });
 
-  it('副书记可代主持与签党委纪要，不可审题或形成决议', async () => {
+  it('副书记可代主持，不可审题或形成决议', async () => {
     const topicId = await prepareApprovedPartyTopic('副书记权限边界议题');
 
     // 副书记不可审题（另开待审议题验证）
@@ -219,12 +213,12 @@ describe('党委会正式开会（E2E）', () => {
       .send({ content: '副书记代签纪要测试' })
       .expect(201);
 
-    const signed = await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/minutes/sign`)
-      .set('Authorization', `Bearer ${ctx.users.viceSecretary.token}`)
-      .expect(201);
-    expect(signed.body.minutes.effectiveAt).toBeTruthy();
-    expect(signed.body.status).toBe('RESOLVED');
+    const saved = await request(ctx.app.getHttpServer())
+      .get(`/api/meetings/${meetingId}`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(200);
+    expect(saved.body.minutes?.content).toContain('副书记代签纪要测试');
+    expect(saved.body.status).toBe('RESOLVED');
   });
 
   it('会议列表按 meetingType 隔离', async () => {

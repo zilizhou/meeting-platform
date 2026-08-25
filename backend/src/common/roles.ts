@@ -91,10 +91,17 @@ export const STAFF_ROLES = [
   RoleCode.SCHOOL_ADMIN,
 ] as const;
 
-/** 联席会联审 */
+/** 联席会联审（学院管理员可本人审核，一次完成两侧） */
 export const JOINT_REVIEWER_ROLES = [
   RoleCode.SECRETARY,
   RoleCode.DEAN,
+  RoleCode.COLLEGE_ADMIN,
+] as const;
+
+/** 党委审题（书记或学院管理员）；形成决议仍仅书记 */
+export const PARTY_REVIEWER_ROLES = [
+  RoleCode.SECRETARY,
+  RoleCode.COLLEGE_ADMIN,
 ] as const;
 
 /** 党委审题 / 形成决议（仅书记） */

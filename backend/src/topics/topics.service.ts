@@ -664,22 +664,6 @@ export class TopicsService {
       const pre = await this.compliance.checkPartyPrecheck(topicId);
       if (!pre.passed) throw new BadRequestException(pre.message);
     }
-    const missing = topic.materials.filter((m) => m.isRequired && !m.uploaded);
-    if (missing.length) {
-      throw new BadRequestException(`必填材料未齐备：${missing.map((m) => m.name).join('、')}`);
-    }
-    if (topic.isTempMotion) {
-      const note = topic.materials.find((m) => m.requiredKey === 'temp_motion_note');
-      if (!note?.uploaded) {
-        throw new BadRequestException('临时动议须上传「临时动议说明」材料');
-      }
-    }
-    if (topic.isEmergency) {
-      const note = topic.materials.find((m) => m.requiredKey === 'emergency_note');
-      if (!note?.uploaded) {
-        throw new BadRequestException('紧急临机处置须上传「紧急临机处置说明」材料');
-      }
-    }
 
     const collegeUsers = await this.prisma.user.findMany({
       where: { collegeId: topic.collegeId },
@@ -813,12 +797,17 @@ export class TopicsService {
         }`
       : dto.comment;
 
-    let side: string;
+    const isCollegeAdmin =
+      user.isSchoolAdmin || user.roles.includes(RoleCode.COLLEGE_ADMIN);
+    const isSecretary = user.roles.includes(RoleCode.SECRETARY);
+    const isDean = user.roles.includes(RoleCode.DEAN);
+
+    let sides: string[];
     if (topic.meetingType === MeetingType.PARTY_COMMITTEE) {
-      if (!isProxy && !user.roles.includes(RoleCode.SECRETARY)) {
-        throw new ForbiddenException('仅党委书记可审党组织会议议题');
+      if (!isProxy && !isSecretary && !isCollegeAdmin) {
+        throw new ForbiddenException('仅党委书记或学院管理员可审党组织会议议题');
       }
-      side = JointReviewSide.SECRETARY;
+      sides = [JointReviewSide.SECRETARY];
     } else if (isProxy) {
       if (
         dto.proxySide !== JointReviewSide.SECRETARY &&
@@ -826,33 +815,37 @@ export class TopicsService {
       ) {
         throw new BadRequestException('联席会议题代审须指定书记或院长一侧');
       }
-      side = dto.proxySide;
+      sides = [dto.proxySide];
+    } else if (isSecretary || isDean) {
+      sides = [
+        isSecretary ? JointReviewSide.SECRETARY : JointReviewSide.DEAN,
+      ];
+    } else if (isCollegeAdmin) {
+      sides = [JointReviewSide.SECRETARY, JointReviewSide.DEAN];
     } else {
-      side = user.roles.includes(RoleCode.SECRETARY)
-        ? JointReviewSide.SECRETARY
-        : user.roles.includes(RoleCode.DEAN)
-          ? JointReviewSide.DEAN
-          : '';
-      if (!side) throw new ForbiddenException('仅党委书记或院长可联审');
+      throw new ForbiddenException('仅党委书记、院长或学院管理员可联审');
     }
 
-    await this.prisma.jointReview.upsert({
-      where: { topicId_side: { topicId, side } },
-      create: {
-        topicId,
-        side,
-        reviewerId: user.sub,
-        decision: dto.decision,
-        comment,
-        decidedAt: new Date(),
-      },
-      update: {
-        reviewerId: user.sub,
-        decision: dto.decision,
-        comment,
-        decidedAt: new Date(),
-      },
-    });
+    for (const side of sides) {
+      await this.prisma.jointReview.upsert({
+        where: { topicId_side: { topicId, side } },
+        create: {
+          topicId,
+          side,
+          reviewerId: user.sub,
+          decision: dto.decision,
+          comment,
+          decidedAt: new Date(),
+        },
+        update: {
+          reviewerId: user.sub,
+          decision: dto.decision,
+          comment,
+          decidedAt: new Date(),
+        },
+      });
+    }
+    const side = sides.join(',');
 
     let nextStatus: string;
     if (topic.meetingType === MeetingType.PARTY_COMMITTEE) {
@@ -1051,7 +1044,7 @@ export class TopicsService {
             {
               name: '党组织会议决议摘要/依据',
               requiredKey: 'party_resolution',
-              isRequired: true,
+              isRequired: false,
               uploaded: true,
               filePath: `party-resolution://${resId}`,
               originalName: '党组织会议决议关联',
@@ -1059,7 +1052,7 @@ export class TopicsService {
             {
               name: '调研报告/落实方案',
               requiredKey: 'survey',
-              isRequired: true,
+              isRequired: false,
             },
           ],
         },

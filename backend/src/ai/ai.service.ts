@@ -287,18 +287,13 @@ export class AiService {
       .filter(Boolean)
       .join('\n');
 
-    const signRule =
-      meeting.meetingType === MeetingType.PARTY_COMMITTEE
-        ? '党组织会议纪要仅党委书记签署后生效'
-        : '联席会纪要须党委书记与院长双签后生效';
-
     const systemPrompt = [
       '你是高校二级学院双会议会务秘书助手，根据议题与会后登记的决议起草纪要初稿。',
       '要求：',
       '1. 使用规范公文中文，分节：会议概况、议题议决、其他事项、附注。',
       '2. 忠实于给定的议题标题与决议内容，禁止编造未出现的人名、票数、到会人数。',
       '3. 不要编写现场签到、举手表决等过程细节。',
-      `4. 文末注明：本稿为 AI 辅助初稿，须秘书核对后保存；${signRule}；AI 不得直接签署。`,
+      '4. 文末注明：本稿为 AI 辅助初稿，须秘书核对后保存。系统不办理线上签署生效。',
       '5. 不要输出「建议通过/建议否决」等替代会议结论的语句。',
     ].join('\n');
 
@@ -563,10 +558,7 @@ export class AiService {
       narrative = [
         `推荐分类：${suggestedCategory?.name || '请手动选择'}`,
         ...suggestions.reasons,
-        `预计必填材料：${materials
-          .filter((m) => m.isRequired)
-          .map((m) => m.name)
-          .join('、') || '—'}`,
+        `建议材料（选填）：${materials.map((m) => m.name).join('、') || '—'}`,
         '以上为 AI/规则建议，提交前请人工确认。',
       ].join('\n');
     }
@@ -709,8 +701,6 @@ export class AiService {
       throw new ForbiddenException('无权查看');
     }
 
-    const required = topic.materials.filter((m) => m.isRequired);
-    const missing = required.filter((m) => !m.uploaded);
     const uploaded = topic.materials.filter((m) => m.uploaded);
 
     const similar = await this.prisma.topic.findMany({
@@ -734,12 +724,14 @@ export class AiService {
     const checklist = [
       {
         key: 'materials',
-        label: '必填材料',
-        ok: missing.length === 0,
+        label: '会前材料',
+        ok: true,
         detail:
-          missing.length === 0
-            ? `已齐备（${required.length}/${required.length}）`
-            : `缺：${missing.map((m) => m.name).join('、')}`,
+          uploaded.length > 0
+            ? `已上传 ${uploaded.length}/${topic.materials.length}（选填）`
+            : topic.materials.length
+              ? `尚未上传（选填，不阻断提交）`
+              : '无材料清单',
       },
       {
         key: 'precheck',
@@ -854,7 +846,7 @@ export class AiService {
         resolutionType: s.resolution?.resultType || null,
       })),
       uploadedCount: uploaded.length,
-      missingRequired: missing.map((m) => m.name),
+      missingRequired: [] as string[],
       demo: !this.llm.isConfigured(),
     };
 

@@ -30,18 +30,17 @@ export class WorkspaceService {
     const items: TodoItem[] = [];
     const roles = user.roles || [];
 
-    if (roles.includes(RoleCode.SECRETARY) || roles.includes(RoleCode.DEAN)) {
-      items.push(...(await this.pendingJointReviews(user)));
-    }
-    if (roles.includes(RoleCode.SECRETARY)) {
-      items.push(...(await this.pendingPartyReviews(user)));
-    }
+    const isCollegeAdmin =
+      user.isSchoolAdmin || roles.includes(RoleCode.COLLEGE_ADMIN);
     if (
       roles.includes(RoleCode.SECRETARY) ||
-      roles.includes(RoleCode.VICE_SECRETARY) ||
-      roles.includes(RoleCode.DEAN)
+      roles.includes(RoleCode.DEAN) ||
+      isCollegeAdmin
     ) {
-      items.push(...(await this.pendingMinutesSigns(user)));
+      items.push(...(await this.pendingJointReviews(user)));
+    }
+    if (roles.includes(RoleCode.SECRETARY) || isCollegeAdmin) {
+      items.push(...(await this.pendingPartyReviews(user)));
     }
     items.push(...(await this.pendingSupervisions(user)));
     items.push(...(await this.pendingMaterialReads(user)));
@@ -77,7 +76,7 @@ export class WorkspaceService {
       { key: 'REVIEW', label: '书记院长双审' },
       { key: 'APPROVED', label: '入会议程' },
       { key: 'MEETING', label: '开会签到表决' },
-      { key: 'MINUTES', label: '纪要双签' },
+      { key: 'MINUTES', label: '整理纪要' },
       { key: 'SUPERVISION', label: '督办落实' },
       { key: 'ARCHIVED', label: '归档' },
     ];
@@ -86,7 +85,7 @@ export class WorkspaceService {
       { key: 'REVIEW', label: '书记审题' },
       { key: 'APPROVED', label: '入会议程' },
       { key: 'MEETING', label: '开会签到表决' },
-      { key: 'MINUTES', label: '书记签纪要' },
+      { key: 'MINUTES', label: '整理纪要' },
       { key: 'TRANSFER', label: '转联席/督办' },
       { key: 'ARCHIVED', label: '归档' },
     ];
@@ -110,7 +109,7 @@ export class WorkspaceService {
         transferTo: true,
         meeting: {
           include: {
-            minutes: { select: { effectiveAt: true } },
+            minutes: { select: { id: true, content: true, filePath: true } },
           },
         },
         college: { select: { name: true } },
@@ -171,7 +170,11 @@ export class WorkspaceService {
     meeting: {
       id: string;
       status: string;
-      minutes: { effectiveAt: Date | null } | null;
+      minutes: {
+        id: string;
+        content: string | null;
+        filePath: string | null;
+      } | null;
     } | null;
   }) {
     const isParty = t.meetingType === MeetingType.PARTY_COMMITTEE;
@@ -224,7 +227,11 @@ export class WorkspaceService {
     }
 
     if (t.status === TopicStatus.RESOLVED || t.resolution) {
-      const minutesOk = Boolean(t.meeting?.minutes?.effectiveAt);
+      const minutesOk = Boolean(
+        t.meeting?.minutes &&
+          ((t.meeting.minutes.content && t.meeting.minutes.content.trim()) ||
+            t.meeting.minutes.filePath),
+      );
       const meetingArchived = t.meeting?.status === 'ARCHIVED';
       const tasks = t.resolution?.supervisionTasks || [];
       const allDone =
@@ -237,7 +244,7 @@ export class WorkspaceService {
         stepIndex = isParty ? 6 : 6;
       } else if (!minutesOk) {
         stageKey = 'MINUTES';
-        stageLabel = isParty ? '待书记签纪要' : '待纪要双签';
+        stageLabel = '待整理纪要';
         stepIndex = 4;
       } else if (isParty && !t.transferTo && tasks.length === 0) {
         stageKey = 'TRANSFER';
@@ -286,7 +293,35 @@ export class WorkspaceService {
   }
 
   private async pendingJointReviews(user: AuthUser): Promise<TodoItem[]> {
-    const side = user.roles.includes(RoleCode.SECRETARY)
+    const isCollegeAdmin =
+      user.isSchoolAdmin || user.roles.includes(RoleCode.COLLEGE_ADMIN);
+    const isSecretary = user.roles.includes(RoleCode.SECRETARY);
+    const isDean = user.roles.includes(RoleCode.DEAN);
+
+    if (isCollegeAdmin && !isSecretary && !isDean) {
+      const topics = await this.prisma.topic.findMany({
+        where: {
+          meetingType: MeetingType.JOINT_CONFERENCE,
+          status: TopicStatus.PENDING_REVIEW,
+          ...(user.collegeId && !user.isSchoolAdmin
+            ? { collegeId: user.collegeId }
+            : {}),
+        },
+        include: { college: { select: { name: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      return topics.map((t) => ({
+        id: `joint-review-admin-${t.id}`,
+        type: 'JOINT_REVIEW',
+        title: `联席会议题待审：${t.title}`,
+        subtitle: `${t.college?.name || ''} · 学院审核`,
+        meetingType: t.meetingType,
+        topicId: t.id,
+        createdAt: t.createdAt.toISOString(),
+      }));
+    }
+
+    const side = isSecretary
       ? JointReviewSide.SECRETARY
       : JointReviewSide.DEAN;
 
@@ -349,71 +384,6 @@ export class WorkspaceService {
       topicId: t.id,
       createdAt: t.createdAt.toISOString(),
     }));
-  }
-
-  private async pendingMinutesSigns(user: AuthUser): Promise<TodoItem[]> {
-    const isSecretary = user.roles.includes(RoleCode.SECRETARY);
-    const isViceSecretary = user.roles.includes(RoleCode.VICE_SECRETARY);
-    const isDean = user.roles.includes(RoleCode.DEAN);
-
-    const minutesList = await this.prisma.minutes.findMany({
-      where: {
-        effectiveAt: null,
-        meeting: {
-          ...(user.collegeId && !user.isSchoolAdmin
-            ? { collegeId: user.collegeId }
-            : {}),
-        },
-      },
-      include: {
-        signs: true,
-        meeting: {
-          select: {
-            id: true,
-            title: true,
-            meetingType: true,
-            college: { select: { name: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const items: TodoItem[] = [];
-    for (const m of minutesList) {
-      const hasSecretary = m.signs.some((s) => s.side === JointReviewSide.SECRETARY);
-      const hasDean = m.signs.some((s) => s.side === JointReviewSide.DEAN);
-      const isParty = m.meeting.meetingType === MeetingType.PARTY_COMMITTEE;
-
-      let needSign = false;
-      let sideLabel = '';
-      if (isParty) {
-        if ((isSecretary || isViceSecretary) && !hasSecretary) {
-          needSign = true;
-          sideLabel = '书记/副书记签署';
-        }
-      } else {
-        if (isSecretary && !hasSecretary) {
-          needSign = true;
-          sideLabel = '书记签署';
-        } else if (isDean && !hasDean) {
-          needSign = true;
-          sideLabel = '院长签署';
-        }
-      }
-
-      if (!needSign) continue;
-      items.push({
-        id: `minutes-${m.id}-${user.sub}`,
-        type: 'MINUTES_SIGN',
-        title: `纪要待签：${m.meeting.title}`,
-        subtitle: `${m.meeting.college?.name || ''} · ${sideLabel}`,
-        meetingType: m.meeting.meetingType,
-        meetingId: m.meeting.id,
-        createdAt: m.createdAt.toISOString(),
-      });
-    }
-    return items;
   }
 
   private async pendingSupervisions(user: AuthUser): Promise<TodoItem[]> {

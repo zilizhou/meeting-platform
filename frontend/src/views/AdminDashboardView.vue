@@ -312,10 +312,10 @@
               {{ row.actualAttend }}/{{ row.shouldAttend }}
             </template>
           </el-table-column>
-          <el-table-column label="纪要双签" width="110">
+          <el-table-column label="纪要" width="110">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.minutes?.effectiveAt ? 'success' : 'info'">
-                {{ row.minutes?.effectiveAt ? '已生效' : '未生效' }}
+              <el-tag size="small" :type="row.minutes ? 'success' : 'info'">
+                {{ row.minutes ? '已保存' : '未保存' }}
               </el-tag>
             </template>
           </el-table-column>

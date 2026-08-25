@@ -128,14 +128,6 @@ describe('档案检索 / 缺席意见 / 重大调整回流（E2E）', () => {
       .send({ content: '档案测试纪要' })
       .expect(201);
     await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/minutes/sign`)
-      .set('Authorization', `Bearer ${ctx.users.secretary.token}`)
-      .expect(201);
-    await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/minutes/sign`)
-      .set('Authorization', `Bearer ${ctx.users.dean.token}`)
-      .expect(201);
-    await request(ctx.app.getHttpServer())
       .post(`/api/meetings/${meetingId}/archive`)
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
       .expect(201);
@@ -152,7 +144,7 @@ describe('档案检索 / 缺席意见 / 重大调整回流（E2E）', () => {
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
       .expect(200);
     expect(dossier.body.topics?.length).toBeGreaterThan(0);
-    expect(dossier.body.minutes?.effectiveAt).toBeTruthy();
+    expect(dossier.body.minutes).toBeTruthy();
     expect(dossier.body.attendances?.length).toBeGreaterThan(0);
   });
 });

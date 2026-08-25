@@ -222,9 +222,4 @@ export class MeetingsController {
     return file;
   }
 
-  @Post(':id/minutes/sign')
-  @Roles(RoleCode.SECRETARY, RoleCode.VICE_SECRETARY, RoleCode.DEAN)
-  signMinutes(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.meetings.signMinutes(user, id);
-  }
 }

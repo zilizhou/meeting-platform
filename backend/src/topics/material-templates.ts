@@ -91,25 +91,23 @@ const PARTY_TEMPLATES: Record<string, MaterialTemplateItem[]> = {
 const JOINT_DEFAULT: MaterialTemplateItem[] = JOINT_TEMPLATES.OTHER;
 const PARTY_DEFAULT: MaterialTemplateItem[] = PARTY_TEMPLATES.PARTY_OTHER;
 
-/** 按会议类型 + 分类编码生成会前材料清单 */
+/** 按会议类型 + 分类编码生成会前材料清单（均可选，不强制上传） */
 export function materialsForCategory(
   meetingType: string,
   categoryCode?: string | null,
 ): MaterialTemplateItem[] {
-  if (meetingType === MeetingType.PARTY_COMMITTEE) {
-    if (categoryCode && PARTY_TEMPLATES[categoryCode]) {
-      return PARTY_TEMPLATES[categoryCode].map((x) => ({ ...x }));
-    }
-    return PARTY_DEFAULT.map((x) => ({ ...x }));
-  }
-
-  if (categoryCode && JOINT_TEMPLATES[categoryCode]) {
-    return JOINT_TEMPLATES[categoryCode].map((x) => ({ ...x }));
-  }
-  return JOINT_DEFAULT.map((x) => ({ ...x }));
+  const items =
+    meetingType === MeetingType.PARTY_COMMITTEE
+      ? categoryCode && PARTY_TEMPLATES[categoryCode]
+        ? PARTY_TEMPLATES[categoryCode]
+        : PARTY_DEFAULT
+      : categoryCode && JOINT_TEMPLATES[categoryCode]
+        ? JOINT_TEMPLATES[categoryCode]
+        : JOINT_DEFAULT;
+  return items.map((x) => ({ ...x, isRequired: false }));
 }
 
-/** 临时动议额外必填：动议说明 */
+/** 临时动议额外清单：动议说明（选填） */
 export function withTempMotionMaterials(
   items: MaterialTemplateItem[],
   isTempMotion: boolean,
@@ -122,12 +120,12 @@ export function withTempMotionMaterials(
     {
       name: '临时动议说明（事由与紧急理由）',
       requiredKey: 'temp_motion_note',
-      isRequired: true,
+      isRequired: false,
     },
   ];
 }
 
-/** 紧急临机处置额外必填：事后补报说明 */
+/** 紧急临机处置额外清单：事后补报说明（选填） */
 export function withEmergencyMaterials(
   items: MaterialTemplateItem[],
   isEmergency: boolean,
@@ -140,7 +138,7 @@ export function withEmergencyMaterials(
     {
       name: '紧急临机处置说明（事由与事后补报依据）',
       requiredKey: 'emergency_note',
-      isRequired: true,
+      isRequired: false,
     },
   ];
 }

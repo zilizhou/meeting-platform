@@ -55,7 +55,7 @@
           >
             <div class="t">{{ a.title }}</div>
             <div class="d">{{ a.description }}</div>
-            <div class="note">红线：审题 / 决议登记 / 签署须人工确认</div>
+            <div class="note">红线：审题 / 决议登记须人工确认</div>
             <div class="btns">
               <button
                 v-if="a.link && !a.requiresConfirm"
@@ -83,7 +83,7 @@
       <textarea
         v-model="input"
         rows="1"
-        placeholder="例如：帮我看看待签署纪要"
+        placeholder="例如：帮我看看待整理的纪要"
         @keydown.enter.exact.prevent="send"
       />
       <button class="ui-btn" type="button" :disabled="loading" @click="send">

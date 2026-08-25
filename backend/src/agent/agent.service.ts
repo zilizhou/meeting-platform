@@ -528,30 +528,14 @@ export class AgentService {
       return { reply: '无权查看该议题。', actions: [] as AgentAction[] };
     }
 
-    const required = topic.materials.filter((m) => m.isRequired);
-    const missing = required.filter((m) => !m.uploaded);
+    const uploaded = topic.materials.filter((m) => m.uploaded);
     const risks: string[] = [];
-    if (missing.length) {
-      risks.push(`缺必填材料：${missing.map((m) => m.name).join('、')}`);
-    }
     if (
       topic.needPartyPrecheck &&
       !topic.relatedPartyResolutionId &&
       topic.meetingType === MeetingType.JOINT_CONFERENCE
     ) {
       risks.push('已勾选党组织会议前置，但未关联党委决议');
-    }
-    if (topic.isTempMotion) {
-      const ok = topic.materials.some(
-        (m) => m.requiredKey === 'temp_motion_note' && m.uploaded,
-      );
-      if (!ok) risks.push('临时动议缺少动议说明材料');
-    }
-    if (topic.isEmergency) {
-      const ok = topic.materials.some(
-        (m) => m.requiredKey === 'emergency_note' && m.uploaded,
-      );
-      if (!ok) risks.push('紧急临机缺少说明材料');
     }
 
     const reviewLines = topic.jointReviews.length
@@ -577,7 +561,7 @@ export class AgentService {
         .join('、') || '无特殊标记'}`,
       '',
       '材料：',
-      `- 必填 ${required.length}，已上传 ${required.filter((m) => m.uploaded).length}，缺 ${missing.length}`,
+      `- 会前材料 ${topic.materials.length} 项（选填），已上传 ${uploaded.length}`,
       '',
       '审题：',
       ...reviewLines,
@@ -671,7 +655,6 @@ export class AgentService {
       return `- ${t.title}｜决议 ${t.resolution?.resultType || '无'}｜计票赞成 ${approve}/${counted.length}`;
     });
 
-    const signs = meeting.minutes?.signs || [];
     const lines = [
       `【会议简报】${meeting.title}`,
       `状态：${STATUS_LABEL[meeting.status] || meeting.status} · ${party ? '党组织会议' : '联席会'}`,
@@ -683,9 +666,7 @@ export class AgentService {
       '',
       '纪要：',
       meeting.minutes
-        ? `- 已起草 v${meeting.minutes.version}；签署 ${signs.length} 方；${
-            meeting.minutes.effectiveAt ? '已生效' : '未生效'
-          }`
+        ? `- 已起草 v${meeting.minutes.version}`
         : '- 尚未起草',
       '',
       DISCLAIMER,
@@ -725,7 +706,7 @@ export class AgentService {
         );
       }
       if (meeting?.status === MeetingStatus.ENDED) {
-        blockers.push('会议已结束，不能再签到/表决/形成决议，仅可起草签署纪要');
+        blockers.push('会议已结束，不能再签到/表决/形成决议，仅可整理纪要');
       }
       if (meeting?.status === MeetingStatus.ARCHIVED) {
         blockers.push('会议已归档，业务操作已关闭');
@@ -1076,7 +1057,7 @@ export class AgentService {
       `一、待办合计 ${todos.summary.total} 项`,
       `- 联席双审 ${todos.summary.jointReview}`,
       `- 党委审题 ${todos.summary.partyReview}`,
-      `- 纪要签署 ${todos.summary.minutesSign}`,
+      `- 纪要 ${todos.summary.minutesSign}`,
       `- 督办 ${todos.summary.supervision}`,
       `- 待签到 ${todos.summary.checkin}`,
       `- 待阅件 ${todos.summary.materialRead}`,

@@ -1,95 +1,123 @@
 <template>
-  <div v-if="topic" class="detail">
-    <div class="toolbar">
-      <el-button @click="goBack">返回列表</el-button>
-      <el-button @click="load">刷新</el-button>
+  <div v-if="topic" class="detail" :class="{ party: isParty }">
+    <button class="app-back detail-back" type="button" @click="goBack">‹ 返回议题库</button>
+
+    <div class="ui-hero" :class="{ party: isParty, joint: !isParty }">
+      <div class="eyebrow">
+        <b></b> {{ isParty ? '党委红轨' : '联席蓝轨' }} · 议题详情
+      </div>
+      <div class="hero-tags">
+        <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
+          {{ isParty ? '党组织会议' : '党政联席会' }}
+        </span>
+        <span class="ui-tag">{{ statusLabel(topic.status) }}</span>
+        <span v-if="topic.isMajor" class="ui-tag warn">重大事项</span>
+        <span v-if="topic.isTempMotion" class="ui-tag warn">临时动议</span>
+        <span v-if="topic.isEmergency" class="ui-tag warn">紧急临机</span>
+      </div>
+      <h2>{{ topic.title }}</h2>
+      <p>
+        分类 {{ topic.category?.name || '未分类' }}
+        · 提出人 {{ topic.proposer?.realName || '—' }}
+      </p>
+    </div>
+
+    <div class="detail-actions">
+      <button class="ui-btn light" type="button" @click="load">刷新</button>
       <template v-if="isParty">
-        <el-button
+        <button
           v-if="roles.canSubmitReview.value"
-          type="primary"
+          class="ui-btn party"
+          type="button"
           :disabled="!canSubmit"
           @click="submitReview"
         >
           提交书记审
-        </el-button>
-        <el-button
+        </button>
+        <button
           v-if="roles.canReviewParty.value && topic.status === 'PENDING_REVIEW'"
-          type="success"
+          class="ui-btn party"
+          type="button"
           @click="review('APPROVED')"
         >
-          书记同意
-        </el-button>
-        <el-button
+          {{ roles.isSecretary.value ? '书记同意' : '同意' }}
+        </button>
+        <button
           v-if="roles.canReviewParty.value && topic.status === 'PENDING_REVIEW'"
-          type="danger"
+          class="ui-btn light"
+          type="button"
           @click="review('REJECTED')"
         >
           暂缓
-        </el-button>
-        <el-button
+        </button>
+        <button
           v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
-          type="success"
-          plain
+          class="ui-btn light"
+          type="button"
           @click="openProxyReview('APPROVED')"
         >
           代审通过
-        </el-button>
-        <el-button
+        </button>
+        <button
           v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
-          type="danger"
-          plain
+          class="ui-btn light"
+          type="button"
           @click="openProxyReview('REJECTED')"
         >
           代审退回
-        </el-button>
-        <el-button
+        </button>
+        <button
           v-if="roles.canPartyResolve.value"
-          type="warning"
+          class="ui-btn party"
+          type="button"
           :disabled="!canPartyResolve"
           @click="openPartyResolve"
         >
           形成决议
-        </el-button>
+        </button>
       </template>
       <template v-else>
-        <el-button
+        <button
           v-if="roles.canSubmitReview.value"
-          type="primary"
+          class="ui-btn"
+          type="button"
           :disabled="!canSubmit"
           @click="submitReview"
         >
           提交双审
-        </el-button>
-        <el-button
+        </button>
+        <button
           v-if="roles.canReviewJoint.value && topic.status === 'PENDING_REVIEW'"
-          type="success"
+          class="ui-btn"
+          type="button"
           @click="review('APPROVED')"
         >
           同意
-        </el-button>
-        <el-button
+        </button>
+        <button
           v-if="roles.canReviewJoint.value && topic.status === 'PENDING_REVIEW'"
-          type="danger"
+          class="ui-btn light"
+          type="button"
           @click="review('REJECTED')"
         >
           暂缓
-        </el-button>
-        <el-button
+        </button>
+        <button
           v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
-          type="success"
-          plain
+          class="ui-btn light"
+          type="button"
           @click="openProxyReview('APPROVED')"
         >
           代审通过
-        </el-button>
-        <el-button
+        </button>
+        <button
           v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
-          type="danger"
-          plain
+          class="ui-btn light"
+          type="button"
           @click="openProxyReview('REJECTED')"
         >
           代审退回
-        </el-button>
+        </button>
       </template>
     </div>
 
@@ -246,41 +274,6 @@
     <el-card shadow="never" style="margin-top: 16px">
       <template #header>
         <div class="card-head">
-          <span>回避名单</span>
-          <el-button
-            v-if="roles.canManageAvoid.value"
-            size="small"
-            type="primary"
-            @click="saveAvoid"
-          >
-            保存回避设置
-          </el-button>
-        </div>
-      </template>
-      <el-select
-        v-model="avoidUserIds"
-        multiple
-        filterable
-        clearable
-        :disabled="!roles.canManageAvoid.value"
-        placeholder="选择需回避的本院成员"
-        style="width: 100%"
-      >
-        <el-option
-          v-for="u in collegeUsers"
-          :key="u.id"
-          :label="`${u.realName}（${u.title || u.username}）`"
-          :value="u.id"
-        />
-      </el-select>
-      <div class="hint" style="margin-top: 8px">
-        规则：列入回避名单的成员不参与本议题审签。
-      </div>
-    </el-card>
-
-    <el-card shadow="never" style="margin-top: 16px">
-      <template #header>
-        <div class="card-head">
           <span>AI 材料摘要</span>
           <div class="card-actions">
             <el-tag v-if="aiSummary?.demo" size="small" type="warning">演示模式</el-tag>
@@ -323,16 +316,14 @@
       <template #header>
         <div class="card-head">
           <span>会前材料</span>
-          <span class="muted">必填 {{ requiredUploaded }}/{{ requiredTotal }} 已齐备</span>
+          <span class="muted">可上传，不强制齐备</span>
         </div>
       </template>
       <el-table :data="topic.materials || []" size="small">
         <el-table-column prop="name" label="材料名称" min-width="180" />
-        <el-table-column label="必填" width="80">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.isRequired ? 'danger' : 'info'">
-              {{ row.isRequired ? '必填' : '选填' }}
-            </el-tag>
+        <el-table-column label="要求" width="80">
+          <template #default>
+            <el-tag size="small" type="info">选填</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="90">
@@ -572,8 +563,6 @@ const proxyForm = reactive({
   proxySide: 'SECRETARY' as 'SECRETARY' | 'DEAN',
   comment: '',
 })
-const collegeUsers = ref<any[]>([])
-const avoidUserIds = ref<string[]>([])
 const aiSummary = ref<any>(null)
 const aiLoading = ref(false)
 const reviewBrief = ref<any>(null)
@@ -634,13 +623,6 @@ function formatSize(n: number) {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
-
-const requiredTotal = computed(
-  () => (topic.value?.materials || []).filter((m: any) => m.isRequired).length,
-)
-const requiredUploaded = computed(
-  () => (topic.value?.materials || []).filter((m: any) => m.isRequired && m.uploaded).length,
-)
 const hasUploadedMaterial = computed(() =>
   (topic.value?.materials || []).some(
     (m: any) =>
@@ -689,12 +671,6 @@ async function load() {
   const id = String(route.params.id)
   topic.value = await http.get(`/topics/${id}`)
   logs.value = await http.get('/compliance/logs', { params: { topicId: id } })
-  avoidUserIds.value = [...(topic.value?.avoidUserIdList || [])]
-  if (topic.value?.collegeId) {
-    collegeUsers.value = await http.get('/org/users', {
-      params: { collegeId: topic.value.collegeId },
-    })
-  }
   try {
     auditLogs.value = await http.get('/audit/logs', {
       params: { resource: 'Topic', resourceId: id },
@@ -752,18 +728,6 @@ async function generateSummary() {
     ElMessage.error(String(e))
   } finally {
     aiLoading.value = false
-  }
-}
-
-async function saveAvoid() {
-  try {
-    await http.post(`/topics/${route.params.id}/avoid-users`, {
-      userIds: avoidUserIds.value,
-    })
-    ElMessage.success('回避名单已保存')
-    await load()
-  } catch (e: any) {
-    ElMessage.error(String(e))
   }
 }
 
@@ -926,11 +890,42 @@ onMounted(load)
 </script>
 
 <style scoped>
-.toolbar {
+.hero-tags {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
   flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.detail-back {
+  margin-bottom: 10px;
+}
+.detail.party .detail-back {
+  color: var(--party);
+}
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.detail-actions .ui-btn {
+  flex: 1 1 calc(50% - 8px);
+  min-width: 120px;
+  height: 40px;
+  text-align: center;
+}
+.detail-actions .ui-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+@media (min-width: 768px) {
+  .detail-actions {
+    flex-wrap: nowrap;
+  }
+  .detail-actions .ui-btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }
 .grid {
   display: grid;

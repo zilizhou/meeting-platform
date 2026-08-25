@@ -33,7 +33,7 @@
             <span>党组织待办</span>
           </div>
           <div class="stat">
-            <b>{{ summary.jointReview + summary.minutesSign }}</b>
+            <b>{{ summary.jointReview }}</b>
             <span>党政联席待办</span>
           </div>
           <div class="stat warn">
@@ -90,6 +90,7 @@
           </button>
         </div>
 
+        <!-- 暂时关闭全部引导
         <div class="block">
           <div class="label">使用帮助</div>
           <button class="item" type="button" @click="restartGuide">
@@ -112,6 +113,7 @@
             </div>
           </div>
         </div>
+        -->
 
         <div class="block">
           <div class="label">关于</div>
@@ -144,11 +146,11 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
-import { useOnboarding } from '@/composables/useOnboarding'
+// import { useOnboarding } from '@/composables/useOnboarding'
 
 const auth = useAuthStore()
 const router = useRouter()
-const onboarding = useOnboarding()
+// const onboarding = useOnboarding()
 const unread = ref(0)
 const summary = reactive({
   partyReview: 0,
@@ -207,10 +209,10 @@ function onLogout() {
   router.push('/login')
 }
 
-function restartGuide() {
-  onboarding.restartWelcome()
-  router.push(isViewerOnly.value ? '/admin' : '/work')
-}
+// function restartGuide() {
+//   onboarding.restartWelcome()
+//   router.push(isViewerOnly.value ? '/admin' : '/work')
+// }
 
 onMounted(load)
 </script>

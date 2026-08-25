@@ -246,17 +246,45 @@
       </div>
 
       <div class="create-block create-block--topics">
+        <div v-if="createMode === 'party'" class="first-topic-pick">
+          <div class="create-label">
+            第一议题
+            <span class="create-count">必选</span>
+          </div>
+          <p class="create-hint">
+            党组织会议必须选定一项已标记为「第一议题」的议题，否则不能创建。
+          </p>
+          <el-select
+            v-model="form.firstTopicId"
+            filterable
+            clearable
+            style="width: 100%"
+            placeholder="请选择本场会议的第一议题"
+          >
+            <el-option
+              v-for="t in firstTopicOptions"
+              :key="t.id"
+              :label="t.title"
+              :value="t.id"
+            />
+          </el-select>
+          <p v-if="!firstTopicOptions.length" class="create-hint">
+            暂无可用的第一议题。
+            <button class="ui-link" type="button" @click="goTopicCreate">去征集并勾选第一议题</button>
+          </p>
+        </div>
+
         <div class="create-label">
-          入会议题
+          {{ createMode === 'party' ? '其他入会议题' : '入会议题' }}
           <span class="create-count">
-            必选 · 可选 {{ availableTopics.length }} · 已选 {{ form.topicIds.length }}
+            <template v-if="createMode === 'party'">可选</template>
+            <template v-else>必选</template>
+            · 可选 {{ availableTopics.length }} · 已选 {{ form.topicIds.length }}
           </span>
         </div>
         <p class="create-hint">
-          至少勾选 1 项议题方可创建。
-          <template v-if="createMode === 'party'">
-            <b>党组织会议必须勾选「第一议题（政治理论学习）」，否则不能开会。</b>
-          </template>
+          <template v-if="createMode === 'party'">可再勾选其他议题一并入会。</template>
+          <template v-else>至少勾选 1 项议题方可创建。</template>
           已入其他会议的议题不可再选。
         </p>
 
@@ -311,7 +339,7 @@
           class="ui-btn"
           :class="{ party: createMode === 'party' }"
           type="button"
-          :disabled="creating || !form.topicIds.length"
+          :disabled="creating || !canSubmitCreate"
           @click="submitCreate"
         >
           {{ creating ? '创建中…' : '创建会议' }}
@@ -369,6 +397,7 @@ const form = reactive({
   periodNo: '',
   scheduledAt: '',
   isMajor: false,
+  firstTopicId: '',
   topicIds: [] as string[],
 })
 
@@ -441,19 +470,35 @@ function isTopicLocked(t: any) {
   )
 }
 
-const availableTopics = computed(() => topics.value.filter((t) => !isTopicLocked(t)))
+const availableTopics = computed(() =>
+  topics.value.filter((t) => {
+    if (isTopicLocked(t)) return false
+    if (createMode.value === 'party' && t.category?.code === 'FIRST_TOPIC') return false
+    return true
+  }),
+)
+
+const firstTopicOptions = computed(() =>
+  topics.value.filter(
+    (t) => t.category?.code === 'FIRST_TOPIC' && !isTopicLocked(t) && t.status !== 'REJECTED',
+  ),
+)
 
 const pickerTopics = computed(() =>
   topics.value
-    .filter((t) => t.status !== 'REJECTED')
+    .filter((t) => {
+      if (t.status === 'REJECTED') return false
+      if (createMode.value === 'party' && t.category?.code === 'FIRST_TOPIC') return false
+      return true
+    })
     .map((t) => ({ ...t, locked: isTopicLocked(t) }))
-    .sort((a, b) => {
-      const aFirst = a.category?.code === 'FIRST_TOPIC' ? 0 : 1
-      const bFirst = b.category?.code === 'FIRST_TOPIC' ? 0 : 1
-      if (aFirst !== bFirst) return aFirst - bFirst
-      return Number(a.locked) - Number(b.locked)
-    }),
+    .sort((a, b) => Number(a.locked) - Number(b.locked)),
 )
+
+const canSubmitCreate = computed(() => {
+  if (createMode.value === 'party') return Boolean(form.firstTopicId)
+  return form.topicIds.length > 0
+})
 
 function statusLabel(s: string) {
   return STATUS[s] || s
@@ -580,6 +625,7 @@ async function openCreateParty() {
   form.periodNo = nextPeriodNo(partyAll.value)
   form.scheduledAt = defaultScheduledAt()
   form.isMajor = false
+  form.firstTopicId = ''
   form.topicIds = []
   createVisible.value = true
   await loadCreateTopics('PARTY_COMMITTEE')
@@ -594,6 +640,7 @@ async function openCreateJoint() {
   form.periodNo = nextPeriodNo(jointAll.value)
   form.scheduledAt = defaultScheduledAt()
   form.isMajor = false
+  form.firstTopicId = ''
   form.topicIds = []
   createVisible.value = true
   await loadCreateTopics('JOINT_CONFERENCE')
@@ -622,25 +669,34 @@ async function submitCreate() {
     ElMessage.warning('请填写会议名称')
     return
   }
-  if (!form.topicIds.length) {
+  const meetingType =
+    createMode.value === 'party' ? 'PARTY_COMMITTEE' : 'JOINT_CONFERENCE'
+  const topicIds =
+    meetingType === 'PARTY_COMMITTEE'
+      ? [form.firstTopicId, ...form.topicIds.filter((id) => id !== form.firstTopicId)].filter(
+          Boolean,
+        )
+      : [...form.topicIds]
+  if (meetingType === 'PARTY_COMMITTEE' && !form.firstTopicId) {
+    ElMessage.warning('请选择本场会议的第一议题')
+    return
+  }
+  if (!topicIds.length) {
     ElMessage.warning('请至少选择一项入会议题')
     return
   }
-  const meetingType =
-    createMode.value === 'party' ? 'PARTY_COMMITTEE' : 'JOINT_CONFERENCE'
-  if (meetingType === 'PARTY_COMMITTEE') {
-    const selected = topics.value.filter((t) => form.topicIds.includes(t.id))
-    const hasFirst = selected.some((t) => t.category?.code === 'FIRST_TOPIC')
-    if (!hasFirst) {
-      ElMessage.warning('党组织会议须纳入「第一议题（政治理论学习）」后方可开会')
-      return
-    }
-  }
   creating.value = true
   try {
-    await http.post('/meetings', { ...form, meetingType })
+    await http.post('/meetings', {
+      title: form.title,
+      periodNo: form.periodNo,
+      scheduledAt: form.scheduledAt,
+      isMajor: form.isMajor,
+      topicIds,
+      meetingType,
+    })
     ElMessage.success(
-      `${createMode.value === 'party' ? '党组织' : '联席'}会议已创建，已入会 ${form.topicIds.length} 项议题`,
+      `${createMode.value === 'party' ? '党组织' : '联席'}会议已创建，已入会 ${topicIds.length} 项议题`,
     )
     createVisible.value = false
     await load()
@@ -651,14 +707,28 @@ async function submitCreate() {
   }
 }
 
+async function maybeOpenCreateFromQuery() {
+  if (String(route.query.create) !== '1') return
+  if (!roles.canCreateMeeting.value) return
+  const openJoint = activeTab.value === 'joint'
+  const query: Record<string, string> = { tab: openJoint ? 'joint' : 'party' }
+  await router.replace({ query })
+  if (openJoint) await openCreateJoint()
+  else await openCreateParty()
+}
+
 watch(
-  () => [route.query.tab, route.query.status],
-  () => applyFromQuery(),
+  () => [route.query.tab, route.query.status, route.query.create],
+  async () => {
+    applyFromQuery()
+    await maybeOpenCreateFromQuery()
+  },
 )
 
 onMounted(() => {
   applyFromQuery()
   load()
+  maybeOpenCreateFromQuery()
 })
 </script>
 
@@ -727,7 +797,12 @@ onMounted(() => {
   margin-bottom: 18px;
 }
 .create-block--topics {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+}
+.first-topic-pick {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--line);
 }
 .create-label {
   display: flex;

@@ -30,7 +30,7 @@ describe('临时动议与分类材料（E2E）', () => {
     await ctx.app.close();
   });
 
-  it('按分类生成差异化必填材料：师资类含人事方案', async () => {
+    it('按分类生成差异化材料清单：师资类含人事方案', async () => {
     const faculty = await ctx.prisma.categoryDict.create({
       data: {
         meetingType: 'JOINT_CONFERENCE',
@@ -56,10 +56,10 @@ describe('临时动议与分类材料（E2E）', () => {
     expect(
       res.body.materials.find((m: any) => m.requiredKey === 'personnel')
         ?.isRequired,
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('临时动议创建时自动增加动议说明必填项', async () => {
+  it('临时动议创建时自动增加动议说明（选填）', async () => {
     const res = await request(ctx.app.getHttpServer())
       .post('/api/topics')
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
@@ -75,7 +75,23 @@ describe('临时动议与分类材料（E2E）', () => {
       (m: any) => m.requiredKey === 'temp_motion_note',
     );
     expect(note).toBeTruthy();
-    expect(note.isRequired).toBe(true);
+    expect(note.isRequired).toBe(false);
+  });
+
+  it('未上传会前材料也可提交审题', async () => {
+    const res = await request(ctx.app.getHttpServer())
+      .post('/api/topics')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({
+        title: '无材料直接提交',
+        meetingType: 'JOINT_CONFERENCE',
+      })
+      .expect(201);
+
+    await request(ctx.app.getHttpServer())
+      .post(`/api/topics/${res.body.id}/submit-review`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(201);
   });
 
   it('临时动议未双签通过 → 禁止入会议程', async () => {

@@ -14,7 +14,7 @@
 
     <div v-if="isParty" class="rule-banner party">
       <strong>第一议题硬规则</strong>
-      分类请优先选「第一议题（政治理论学习）」。没有第一议题的党组织会议不能创建、不能开会。
+      党组织会议必须有一项「第一议题」。征集时请勾选下方复选框；创建会议时必须选定该项。
     </div>
 
     <!-- 步骤 1：描述 -->
@@ -53,6 +53,15 @@
         <span>议题内容</span>
         <textarea v-model="form.content" rows="12" placeholder="背景、依据与拟议事项" />
       </label>
+
+      <div v-if="isParty" class="checks" style="margin-bottom: 12px">
+        <label class="check">
+          <input v-model="isFirstTopic" type="checkbox" />
+          本议题为第一议题（政治理论学习）
+        </label>
+      </div>
+      <p v-if="isParty && isFirstTopic" class="hint ok">已标记为第一议题，创建党组织会议时须勾选该项。</p>
+
       <label>
         <span>议题分类</span>
         <select v-model="form.categoryId" @change="onCategoryChange">
@@ -61,10 +70,6 @@
             {{ c.code === 'FIRST_TOPIC' ? `第一议题 · ${c.name}` : c.name }}
           </option>
         </select>
-        <p v-if="isParty && isFirstTopicCategory" class="hint ok">当前分类为第一议题。</p>
-        <p v-else-if="isParty" class="hint warn">
-          党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。若本次不是第一议题，请确保议题库里另有已审过的第一议题。
-        </p>
       </label>
 
       <div class="checks">
@@ -121,6 +126,20 @@ const isFirstTopicCategory = computed(() => {
   const cat = categories.value.find((c) => c.id === form.categoryId)
   return cat?.code === 'FIRST_TOPIC'
 })
+const firstTopicCategory = computed(() =>
+  categories.value.find((c) => c.code === 'FIRST_TOPIC'),
+)
+const isFirstTopic = computed({
+  get: () => isFirstTopicCategory.value,
+  set: (checked: boolean) => {
+    if (checked) {
+      if (firstTopicCategory.value) form.categoryId = firstTopicCategory.value.id
+      else ElMessage.warning('系统未配置第一议题分类，请联系管理员')
+    } else if (isFirstTopicCategory.value) {
+      form.categoryId = ''
+    }
+  },
+})
 
 const categories = ref<any[]>([])
 const partyResolved = ref<Array<{ title: string; resolutionId: string }>>([])
@@ -158,10 +177,6 @@ async function loadMeta() {
   categories.value = await http.get('/org/categories', {
     params: { meetingType: meetingType.value },
   })
-  if (isParty.value && !form.categoryId) {
-    const first = categories.value.find((c) => c.code === 'FIRST_TOPIC')
-    if (first) form.categoryId = first.id
-  }
   if (!isParty.value) {
     const partyTopics: any[] = await http.get('/topics', {
       params: { meetingType: 'PARTY_COMMITTEE' },
@@ -219,7 +234,11 @@ async function submitToLibrary() {
     return
   }
   if (!form.categoryId) {
-    ElMessage.warning('请选择议题分类')
+    ElMessage.warning(
+      isParty.value && isFirstTopic.value
+        ? '请勾选「本议题为第一议题」，或选择议题分类'
+        : '请选择议题分类',
+    )
     return
   }
   if (!isParty.value && form.needPartyPrecheck && !form.relatedPartyResolutionId) {
@@ -241,13 +260,11 @@ async function submitToLibrary() {
     if (!isParty.value && form.needPartyPrecheck) {
       payload.relatedPartyResolutionId = form.relatedPartyResolutionId
     }
-    const created: any = await http.post('/topics', payload)
+    await http.post('/topics', payload)
     ElMessage.success('已进入议题库')
     router.push({
       name: isParty.value ? 'party-topics' : 'topics',
     })
-    // 也可进详情完善材料
-    void created
   } catch (e: any) {
     ElMessage.error(String(e))
   } finally {

@@ -62,24 +62,6 @@ export function exportMeetingMinutesDoc(meeting: any) {
     .join('<br/>')
 
   const minutesBody = meeting.minutes?.content || ''
-  const signs = (meeting.minutes?.signs || [])
-    .map((s: any) => {
-      const side =
-        s.side === 'SECRETARY'
-          ? '党委书记'
-          : s.side === 'DEAN'
-            ? '院长'
-            : s.side === 'VICE_SECRETARY'
-              ? '副书记'
-              : s.side
-      const who = s.user?.realName ? ` ${s.user.realName}` : ''
-      return `${side}${who}`
-    })
-    .join('、')
-
-  const signRule = isParty
-    ? '党组织会议纪要经书记（或副书记）签署后生效'
-    : '党政联席会议纪要经党委书记、院长双签后生效'
 
   const html = `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -155,15 +137,9 @@ export function exportMeetingMinutesDoc(meeting: any) {
   <h2>三、会议纪要正文</h2>
   <p>${minutesBody ? nl2br(minutesBody) : '（纪要正文尚未起草）'}</p>
 
-  <div class="sign">
-    <p><b>签署情况：</b>${esc(signs || '未签')}</p>
-    <p><b>生效时间：</b>${esc(formatTime(meeting.minutes?.effectiveAt))}</p>
-    <p><b>签署规则：</b>${esc(signRule)}</p>
-  </div>
-
   <div class="footer">
     <p>导出时间：${esc(formatTime(new Date()))}</p>
-    <p>本文件由曲师大双会管理系统根据议题与会后决议生成，请以签署生效后的正式纪要为准。</p>
+    <p>本文件由曲师大双会管理系统根据议题与会后决议生成，请以系统保存的纪要正文为准。</p>
   </div>
 </body>
 </html>`

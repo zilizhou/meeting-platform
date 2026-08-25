@@ -116,7 +116,7 @@ describe('请假 / 阅件回执 / 归档（E2E）', () => {
     expect(m.receiptCount).toBeGreaterThanOrEqual(1);
   });
 
-  it('纪要生效后可归档，未生效不可归档', async () => {
+  it('保存纪要后可归档，未保存不可归档', async () => {
     const topicId = await createApprovedTopic(ctx, '归档议题');
     const meetingId = await createMeetingWithTopic(ctx, topicId, {
       title: '归档测试会',
@@ -145,14 +145,6 @@ describe('请假 / 阅件回执 / 归档（E2E）', () => {
       .post(`/api/meetings/${meetingId}/minutes`)
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
       .send({ content: '归档测试纪要' })
-      .expect(201);
-    await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/minutes/sign`)
-      .set('Authorization', `Bearer ${ctx.users.secretary.token}`)
-      .expect(201);
-    await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/minutes/sign`)
-      .set('Authorization', `Bearer ${ctx.users.dean.token}`)
       .expect(201);
 
     const archived = await request(ctx.app.getHttpServer())

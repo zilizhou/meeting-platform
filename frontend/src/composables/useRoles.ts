@@ -29,8 +29,8 @@ export function useRoles() {
       has('MEETING_SECRETARY', 'COLLEGE_ADMIN', 'SECRETARY', 'VICE_SECRETARY'),
     ),
     isMeetingSecretary: computed(() => has('MEETING_SECRETARY', 'COLLEGE_ADMIN')),
-    canReviewJoint: computed(() => has('SECRETARY', 'DEAN')),
-    canReviewParty: computed(() => has('SECRETARY')),
+    canReviewJoint: computed(() => has('SECRETARY', 'DEAN', 'COLLEGE_ADMIN')),
+    canReviewParty: computed(() => has('SECRETARY', 'COLLEGE_ADMIN')),
     canProxyReview: computed(() => has('MEETING_SECRETARY', 'COLLEGE_ADMIN')),
     canSeeFullTopicLibrary: computed(() =>
       has(

@@ -1,9 +1,8 @@
-/** 辅助系统两步：整理纪要 → 签署生效（由业务数据推导，不落库） */
+/** 辅助系统：整理纪要后即可归档（由业务数据推导，不落库） */
 
 export interface MeetingFlowInput {
   status?: string
   minutes?: {
-    effectiveAt?: string | null
     id?: string
     content?: string | null
     filePath?: string | null
@@ -14,32 +13,29 @@ export interface MeetingFlowInput {
 export interface MeetingFlowStep {
   index: number
   allDone: boolean
-  key: 'minutes' | 'sign' | 'done'
+  key: 'minutes' | 'done'
   label: string
   nextLabel?: string
 }
 
+function hasMinutes(m: MeetingFlowInput | null | undefined) {
+  const minutes = m?.minutes
+  if (!minutes) return false
+  return Boolean(
+    minutes.id ||
+      (minutes.content && minutes.content.trim()) ||
+      minutes.filePath ||
+      minutes.originalName,
+  )
+}
+
 export function deriveMeetingFlowStep(m: MeetingFlowInput | null | undefined): MeetingFlowStep {
   if (!m) {
-    return { index: 0, allDone: false, key: 'minutes', label: '整理纪要', nextLabel: '签署生效' }
+    return { index: 0, allDone: false, key: 'minutes', label: '整理纪要' }
   }
 
-  if (
-    m.minutes?.effectiveAt ||
-    m.status === 'ARCHIVED' ||
-    m.status === 'RESOLVED'
-  ) {
-    return { index: 1, allDone: true, key: 'done', label: '已完成' }
-  }
-
-  const hasMinutes = !!(
-    m.minutes?.id ||
-    (m.minutes?.content && m.minutes.content.trim()) ||
-    m.minutes?.filePath
-  )
-
-  if (hasMinutes) {
-    return { index: 1, allDone: false, key: 'sign', label: '签署生效' }
+  if (m.status === 'ARCHIVED' || hasMinutes(m)) {
+    return { index: 0, allDone: true, key: 'done', label: '已完成' }
   }
 
   return {
@@ -47,7 +43,6 @@ export function deriveMeetingFlowStep(m: MeetingFlowInput | null | undefined): M
     allDone: false,
     key: 'minutes',
     label: '整理纪要',
-    nextLabel: '签署生效',
   }
 }
 

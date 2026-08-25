@@ -133,7 +133,7 @@ describe('议事规则硬校验（E2E）', () => {
     expect(topic?.resolution?.resultType).toBe('APPROVED');
   });
 
-  it('纪要单签不能生效，双签后生效并生成督办', async () => {
+  it('保存纪要后会议可归档，系统不再办理线上签署', async () => {
     const topicId = await createApprovedTopic(ctx, '双签纪要议题');
     const meetingId = await createMeetingWithTopic(ctx, topicId);
     await checkInUsers(ctx, meetingId, [
@@ -159,19 +159,17 @@ describe('议事规则硬校验（E2E）', () => {
       .send({ content: '测试纪要正文' })
       .expect(201);
 
-    const single = await request(ctx.app.getHttpServer())
+    const saved = await request(ctx.app.getHttpServer())
+      .get(`/api/meetings/${meetingId}`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(200);
+    expect(saved.body.minutes?.content).toContain('测试纪要正文');
+    expect(saved.body.status).toBe('RESOLVED');
+
+    await request(ctx.app.getHttpServer())
       .post(`/api/meetings/${meetingId}/minutes/sign`)
       .set('Authorization', `Bearer ${ctx.users.secretary.token}`)
-      .expect(201);
-    expect(single.body.minutes.effectiveAt).toBeFalsy();
-    expect(single.body.status).not.toBe('RESOLVED');
-
-    const dual = await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/minutes/sign`)
-      .set('Authorization', `Bearer ${ctx.users.dean.token}`)
-      .expect(201);
-    expect(dual.body.minutes.effectiveAt).toBeTruthy();
-    expect(dual.body.status).toBe('RESOLVED');
+      .expect(404);
 
     const tasks = await request(ctx.app.getHttpServer())
       .get('/api/supervisions')

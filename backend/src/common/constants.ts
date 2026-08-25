@@ -8,7 +8,7 @@ export const MeetingStatus = {
   DRAFT: 'DRAFT',
   SCHEDULED: 'SCHEDULED',
   IN_PROGRESS: 'IN_PROGRESS',
-  /** 会中已散会，待纪要签署 */
+  /** 会中已散会，待整理纪要 */
   ENDED: 'ENDED',
   RESOLVED: 'RESOLVED',
   ARCHIVED: 'ARCHIVED',

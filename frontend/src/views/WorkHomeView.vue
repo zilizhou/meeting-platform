@@ -48,14 +48,14 @@
       党组织会议须将「第一议题（政治理论学习）」纳入议程，否则不能创建、不能开会。
     </div>
 
-    <section v-if="onboarding.state.mode === 'novice'" class="task-guide">
+    <section v-if="guideTasks.length" class="task-guide">
       <div class="task-guide-head">
-        <div><small>新手导航</small><h3>我要办理</h3></div>
-        <span>选择一件事，系统分步告诉你怎么做</span>
+        <div><small>快捷办理</small><h3>我要办理</h3></div>
+        <span>按当前身份直达常用事项</span>
       </div>
       <div class="task-guide-list">
-        <button v-for="task in guideTasks" :key="task.key" type="button" @click="onboarding.startGuide(task.key)">
-          <b>{{ task.icon }}</b><span><strong>{{ task.title }}</strong><em>{{ task.desc }}</em></span><i>开始 ›</i>
+        <button v-for="task in guideTasks" :key="task.key" type="button" @click="task.go()">
+          <b>{{ task.icon }}</b><span><strong>{{ task.title }}</strong><em>{{ task.desc }}</em></span><i>前往 ›</i>
         </button>
       </div>
     </section>
@@ -108,7 +108,7 @@
       <button class="w-entry party" type="button" @click="router.push('/party-topics')">
         <div class="ico">库</div>
         <strong>议题库</strong>
-        <em>第一议题 · 审题 · 代审</em>
+        <em>第一议题 · 审题</em>
       </button>
       <button
         class="w-entry party"
@@ -149,7 +149,7 @@
       <button class="w-entry joint" type="button" @click="router.push('/topics')">
         <div class="ico">库</div>
         <strong>议题库</strong>
-        <em>双审与材料</em>
+        <em>双审 · 学院审核</em>
       </button>
       <button
         class="w-entry joint"
@@ -215,27 +215,89 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useOnboarding, type GuideKey } from '@/composables/useOnboarding'
+import { useRoles } from '@/composables/useRoles'
 import http from '@/api/http'
 
 type WorkTab = 'party' | 'joint' | 'general'
 
+interface WorkTask {
+  key: string
+  icon: string
+  title: string
+  desc: string
+  go: () => void
+}
+
 const router = useRouter()
 const auth = useAuthStore()
-const onboarding = useOnboarding()
+const roles = useRoles()
 const activeTab = ref<WorkTab>('party')
 const holding = ref<any>(null)
 
-interface GuideTask { key: GuideKey; icon: string; title: string; desc: string }
-const guideTasks = computed<GuideTask[]>(() => {
-  const roles = auth.user?.roles || []
-  const tasks: GuideTask[] = [
-    { key: 'apply-topic', icon: '题', title: '申报议题', desc: '填写事项并提交审核' },
-    { key: 'archives', icon: '档', title: '查询档案', desc: '检索已归档会议材料' },
-  ]
-  if (roles.some((r) => ['SECRETARY', 'DEAN', 'COLLEGE_ADMIN'].includes(r))) tasks.splice(1, 0, { key: 'review-topic', icon: '审', title: '审核议题', desc: '核对材料并给出意见' })
-  if (roles.some((r) => ['MEETING_SECRETARY', 'COLLEGE_ADMIN', 'SECRETARY'].includes(r))) tasks.splice(1, 0, { key: 'organize-meeting', icon: '会', title: '组织会议', desc: '排期、议程与会前准备' }, { key: 'minutes', icon: '纪', title: '形成纪要', desc: '整理结果、签署并归档' })
-  if (roles.some((r) => ['SCHOOL_ADMIN', 'COLLEGE_ADMIN', 'MEETING_SECRETARY', 'SECRETARY', 'DEAN'].includes(r))) tasks.push({ key: 'supervision', icon: '督', title: '办理督办', desc: '反馈进展并申请办结' })
+const guideTasks = computed<WorkTask[]>(() => {
+  const tasks: WorkTask[] = []
+  if (roles.canCreateTopic.value) {
+    tasks.push({
+      key: 'apply-topic',
+      icon: '题',
+      title: '申报议题',
+      desc: '填写事项并提交审核',
+      go: () =>
+        goCreate(
+          activeTab.value === 'joint' ? 'JOINT_CONFERENCE' : 'PARTY_COMMITTEE',
+        ),
+    })
+  }
+  if (roles.canReviewParty.value || roles.canReviewJoint.value) {
+    tasks.push({
+      key: 'review-topic',
+      icon: '审',
+      title: '审核议题',
+      desc: '核对材料并给出同意或暂缓',
+      go: () =>
+        router.push(activeTab.value === 'joint' ? '/topics' : '/party-topics'),
+    })
+  }
+  if (roles.canCreateMeeting.value) {
+    tasks.push({
+      key: 'create-meeting',
+      icon: '会',
+      title: '创建会议',
+      desc: '选定议题并排期，会中可导出纪要',
+      go: () =>
+        router.push({
+          path: '/meet',
+          query: {
+            tab: activeTab.value === 'joint' ? 'joint' : 'party',
+            create: '1',
+          },
+        }),
+    })
+  }
+  if (
+    roles.has(
+      'SCHOOL_ADMIN',
+      'COLLEGE_ADMIN',
+      'MEETING_SECRETARY',
+      'SECRETARY',
+      'DEAN',
+    )
+  ) {
+    tasks.push({
+      key: 'supervision',
+      icon: '督',
+      title: '办理督办',
+      desc: '反馈进展并申请办结',
+      go: () => router.push('/supervisions'),
+    })
+  }
+  tasks.push({
+    key: 'archives',
+    icon: '档',
+    title: '查询档案',
+    desc: '检索已归档会议材料',
+    go: () => router.push('/archives'),
+  })
   return tasks
 })
 
