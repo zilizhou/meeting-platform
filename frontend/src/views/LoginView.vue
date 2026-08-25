@@ -26,8 +26,8 @@
         <p class="hint">书记 / 院长视图 · 演示密码均为 123456</p>
         <form @submit.prevent="onSubmit">
           <label>
-            <span>账号</span>
-            <input v-model="form.username" autocomplete="username" placeholder="如 dean / secretary" />
+            <span>工号</span>
+            <input v-model="form.username" autocomplete="username" placeholder="请输入学工号" />
           </label>
           <label>
             <span>密码</span>
