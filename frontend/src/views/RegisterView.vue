@@ -130,8 +130,8 @@ const form = reactive({
 onMounted(async () => {
   try {
     const [collegeList, roleList] = await Promise.all([
-      http.get('/auth/colleges'),
-      http.get('/auth/roles'),
+      http.get('/auth/colleges') as Promise<CollegeOption[]>,
+      http.get('/auth/roles') as Promise<RoleOption[]>,
     ])
     colleges.value = collegeList
     roles.value = roleList
