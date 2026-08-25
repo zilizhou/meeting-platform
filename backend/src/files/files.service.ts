@@ -76,4 +76,17 @@ export class FilesService {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     return dir;
   }
+
+  ensureMeetingDir(collegeId: string, meetingId: string) {
+    const dir = join(this.uploadRoot, collegeId, 'meetings', meetingId);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  relativeMeetingPath(collegeId: string, meetingId: string, storedName: string) {
+    return join(collegeId, 'meetings', meetingId, storedName).replace(
+      /\\/g,
+      '/',
+    );
+  }
 }

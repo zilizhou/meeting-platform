@@ -3,24 +3,31 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  StreamableFile,
 } from '@nestjs/common';
+import { createReadStream, existsSync, unlinkSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { ComplianceService } from '../compliance/compliance.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { FilesService } from '../files/files.service';
 import { AuthUser } from '../common/types';
 import {
   JointReviewSide,
   MeetingStatus,
   MeetingType,
   ResolutionType,
-  ReviewDecision,
   RoleCode,
   SupervisionStatus,
   TopicStatus,
 } from '../common/constants';
 import { assertAnyRole, isCollegeVisible, prismaCollegeIdFilter, PARTY_MINUTES_SIGN_ROLES, STAFF_ROLES } from '../common/roles';
 import { assertPartyMeetingCanOpen, FIRST_TOPIC_CODE } from '../common/first-topic';
+import {
+  currentPeriodRange,
+  type FrequencyPeriod,
+} from '../common/academic-term';
 import {
   AbsentOpinionDto,
   CreateMeetingDto,
@@ -38,6 +45,7 @@ export class MeetingsService {
     private readonly compliance: ComplianceService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly files: FilesService,
   ) {}
 
   private requireCollege(user: AuthUser) {
@@ -190,9 +198,9 @@ export class MeetingsService {
       roster.map((r) => ({
         userId: r.userId,
         collegeId,
-        type: 'MEETING_CHECKIN',
-        title: `会议待签到：${dto.title}`,
-        content: '请按时参会并完成签到',
+        type: 'MEETING',
+        title: `会议已排期：${dto.title}`,
+        content: '请知悉会议时间与入会议题；会后由秘书登记决议并整理纪要。',
         link: `/meetings/${meeting.id}${from}`,
       })),
     );
@@ -213,6 +221,7 @@ export class MeetingsService {
             id: true,
             title: true,
             status: true,
+            category: { select: { code: true, name: true } },
             resolution: { select: { id: true } },
           },
         },
@@ -221,6 +230,57 @@ export class MeetingsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /** 本院当前周期两会召开进度（学期/规定频次） */
+  async holding(user: AuthUser) {
+    const collegeId = user.collegeId;
+    if (!collegeId) {
+      throw new ForbiddenException('当前账号未绑定学院');
+    }
+    const rules = await this.prisma.meetingFrequencyRule.findMany();
+    const resolve = (meetingType: string) =>
+      rules.find((r) => r.collegeId === collegeId && r.meetingType === meetingType) ||
+      rules.find((r) => r.collegeId === '' && r.meetingType === meetingType) || {
+        period: 'SEMESTER',
+        requiredCount: 1,
+      };
+    const countIn = async (meetingType: string, start: Date, end: Date) =>
+      this.prisma.meeting.count({
+        where: {
+          collegeId,
+          meetingType,
+          OR: [
+            { scheduledAt: { gte: start, lt: end } },
+            { scheduledAt: null, createdAt: { gte: start, lt: end } },
+          ],
+        },
+      });
+
+    const partyRule = resolve(MeetingType.PARTY_COMMITTEE);
+    const jointRule = resolve(MeetingType.JOINT_CONFERENCE);
+    const partyRange = currentPeriodRange(partyRule.period as FrequencyPeriod);
+    const jointRange = currentPeriodRange(jointRule.period as FrequencyPeriod);
+    const [partyCount, jointCount] = await Promise.all([
+      countIn(MeetingType.PARTY_COMMITTEE, partyRange.start, partyRange.end),
+      countIn(MeetingType.JOINT_CONFERENCE, jointRange.start, jointRange.end),
+    ]);
+    return {
+      label: partyRange.label,
+      period: partyRule.period,
+      party: {
+        required: partyRule.requiredCount,
+        count: partyCount,
+        held: partyCount >= partyRule.requiredCount,
+        label: partyRange.label,
+      },
+      joint: {
+        required: jointRule.requiredCount,
+        count: jointCount,
+        held: jointCount >= jointRule.requiredCount,
+        label: jointRange.label,
+      },
+    };
   }
 
   async detail(user: AuthUser, id: string) {
@@ -285,7 +345,7 @@ export class MeetingsService {
     return updated;
   }
 
-  /** 散会：进行中 → 已结束（待纪要），会中签到/表决/决议关闭 */
+  /** 标记本场已召开：已排期/进行中 → 已结束（待登记决议与纪要） */
   async end(user: AuthUser, id: string) {
     const meeting = await this.detail(user, id);
     if (meeting.status === MeetingStatus.ENDED) {
@@ -297,8 +357,15 @@ export class MeetingsService {
     ) {
       throw new BadRequestException('会议已决议或归档，无需再结束');
     }
-    if (meeting.status !== MeetingStatus.IN_PROGRESS) {
-      throw new BadRequestException('仅进行中的会议可以结束');
+    if (
+      meeting.status !== MeetingStatus.IN_PROGRESS &&
+      meeting.status !== MeetingStatus.SCHEDULED &&
+      meeting.status !== MeetingStatus.DRAFT
+    ) {
+      throw new BadRequestException('当前状态不能标记已召开');
+    }
+    if (meeting.meetingType === MeetingType.PARTY_COMMITTEE) {
+      assertPartyMeetingCanOpen(meeting.meetingType, meeting.topics);
     }
 
     await this.prisma.meeting.update({
@@ -663,34 +730,15 @@ export class MeetingsService {
 
   async resolve(user: AuthUser, meetingId: string, topicId: string, dto: ResolveDto) {
     const meeting = await this.detail(user, meetingId);
-    this.assertInSession(meeting, '形成决议');
+    if (
+      meeting.status === MeetingStatus.ARCHIVED
+    ) {
+      throw new BadRequestException('会议已归档，不能再登记决议');
+    }
     const topic = meeting.topics.find((t) => t.id === topicId);
     if (!topic) throw new NotFoundException('议题不在本次会议');
-
-    const quorum = await this.compliance.checkQuorum(meetingId);
-    if (!quorum.passed) {
-      throw new BadRequestException(quorum.message + '，禁止形成决议');
-    }
-
-    const counted = await this.prisma.voteRecord.findMany({
-      where: { topicId, voteCounted: true, isAbsentOpinion: false },
-    });
-    const approveVotes = counted.filter((v) => v.approve).length;
-    const isMajor = meeting.isMajor || topic.isMajor;
-    const voteRatio = isMajor ? 2 / 3 : 1 / 2;
-    const voteThreshold = meeting.shouldAttend * voteRatio;
-    const passedByVote = approveVotes > voteThreshold;
-
-    if (
-      (dto.resultType === ResolutionType.APPROVED ||
-        dto.resultType === ResolutionType.PRINCIPLE_APPROVED) &&
-      !passedByVote
-    ) {
-      throw new BadRequestException(
-        isMajor
-          ? `重大事项赞成票须超过应到会正式成员三分之二（赞成 ${approveVotes}，应到 ${meeting.shouldAttend}，需 > ${voteThreshold.toFixed(2)}）`
-          : `赞成票未超过应到会正式成员半数（赞成 ${approveVotes}，应到 ${meeting.shouldAttend}）`,
-      );
+    if (topic.resolution) {
+      throw new BadRequestException('该议题已形成决议');
     }
 
     const resolution = await this.prisma.resolution.create({
@@ -835,8 +883,6 @@ export class MeetingsService {
       resourceId: topicId,
       detail: {
         resultType: dto.resultType,
-        approveVotes,
-        shouldAttend: meeting.shouldAttend,
         transferToJoint: Boolean(dto.transferToJoint),
       },
     });
@@ -861,7 +907,103 @@ export class MeetingsService {
       create: { meetingId, content: dto.content },
       update: { content: dto.content, version: { increment: 1 } },
     });
+    await this.notifyMinutesSigners(meeting, meetingId);
+    return minutes;
+  }
 
+  async uploadMinutesFile(user: AuthUser, meetingId: string, file?: Express.Multer.File) {
+    if (!file) throw new BadRequestException('请选择要上传的纪要文件');
+    this.files.assertAllowed(file.originalname, file.mimetype);
+    const meeting = await this.detail(user, meetingId);
+    if (meeting.status === MeetingStatus.ARCHIVED) {
+      throw new BadRequestException('会议已归档，不能修改纪要');
+    }
+    if (
+      meeting.status !== MeetingStatus.IN_PROGRESS &&
+      meeting.status !== MeetingStatus.ENDED &&
+      meeting.status !== MeetingStatus.RESOLVED &&
+      meeting.status !== MeetingStatus.SCHEDULED &&
+      meeting.status !== MeetingStatus.DRAFT
+    ) {
+      throw new BadRequestException('当前状态不能上传纪要');
+    }
+
+    const dir = this.files.ensureMeetingDir(meeting.collegeId, meetingId);
+    const storedName = this.files.buildStoredName(file.originalname);
+    writeFileSync(join(dir, storedName), file.buffer);
+    const relativePath = this.files.relativeMeetingPath(
+      meeting.collegeId,
+      meetingId,
+      storedName,
+    );
+
+    const existing = meeting.minutes;
+    if (existing?.filePath) {
+      try {
+        const oldAbs = this.files.absolutePath(existing.filePath);
+        if (existsSync(oldAbs)) unlinkSync(oldAbs);
+      } catch {
+        // ignore
+      }
+    }
+
+    const placeholder = existing?.content?.trim()
+      ? existing.content
+      : `线下纪要附件：${file.originalname}`;
+
+    const minutes = await this.prisma.minutes.upsert({
+      where: { meetingId },
+      create: {
+        meetingId,
+        content: placeholder,
+        filePath: relativePath,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+      },
+      update: {
+        filePath: relativePath,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        version: { increment: 1 },
+        ...(existing?.content?.trim() ? {} : { content: placeholder }),
+      },
+    });
+
+    await this.audit.log({
+      user,
+      action: 'UPLOAD',
+      resource: 'Minutes',
+      resourceId: minutes.id,
+      detail: { originalName: file.originalname, size: file.size },
+    });
+    await this.notifyMinutesSigners(meeting, meetingId);
+    return this.detail(user, meetingId);
+  }
+
+  async downloadMinutesFile(user: AuthUser, meetingId: string) {
+    const meeting = await this.detail(user, meetingId);
+    const minutes = meeting.minutes;
+    if (!minutes?.filePath) {
+      throw new NotFoundException('尚未上传线下纪要文件');
+    }
+    const abs = this.files.absolutePath(minutes.filePath);
+    if (!existsSync(abs)) {
+      throw new NotFoundException('纪要文件不存在或已被清理');
+    }
+    const filename = encodeURIComponent(minutes.originalName || '会议纪要');
+    return {
+      file: new StreamableFile(createReadStream(abs)),
+      filename,
+      mimeType: minutes.mimeType || 'application/octet-stream',
+    };
+  }
+
+  private async notifyMinutesSigners(
+    meeting: { collegeId: string; meetingType: string; title: string },
+    meetingId: string,
+  ) {
     const collegeUsers = await this.prisma.user.findMany({
       where: { collegeId: meeting.collegeId },
       include: { roles: { include: { role: true } } },
@@ -887,7 +1029,6 @@ export class MeetingsService {
       });
     }
     await this.notifications.notifyMany(payloads);
-    return minutes;
   }
 
   async signMinutes(user: AuthUser, meetingId: string) {

@@ -3,7 +3,7 @@
     <div class="ui-hero is-official">
       <div class="eyebrow"><b></b> 待办优先 · 少步办结</div>
       <h2>待办</h2>
-      <p>审题、签署、签到集中办理 · 党组织红 / 党政联席蓝</p>
+      <p>审题、会后决议与纪要集中办理 · 党组织会议须有第一议题方可开会</p>
       <div class="nums">
         <button
           type="button"
@@ -30,6 +30,22 @@
           <strong>{{ jointCount }}</strong><span>党政联席</span>
         </button>
       </div>
+    </div>
+
+    <div
+      v-if="holding"
+      class="rule-banner"
+      :class="{ warn: !holding.party?.held || !holding.joint?.held }"
+    >
+      <strong>{{ holding.label }}召开进度</strong>
+      党组织会议 {{ holding.party?.count }}/{{ holding.party?.required }}
+      {{ holding.party?.held ? '已达标' : '未达标' }}
+      · 党政联席会议 {{ holding.joint?.count }}/{{ holding.joint?.required }}
+      {{ holding.joint?.held ? '已达标' : '未达标' }}。
+    </div>
+    <div class="rule-banner party">
+      <strong>第一议题硬规则</strong>
+      党组织会议须将「第一议题（政治理论学习）」纳入议程，否则不能开会。学院管理员可代审通过或退回。
     </div>
 
     <div class="ui-filter is-equal" role="tablist">
@@ -140,6 +156,7 @@ const router = useRouter()
 const loading = ref(true)
 const filter = ref<'all' | 'party' | 'joint'>('all')
 const items = ref<TodoItem[]>([])
+const holding = ref<any>(null)
 const summary = reactive({
   total: 0,
   jointReview: 0,
@@ -210,6 +227,11 @@ async function load() {
     const data: any = await http.get('/workspace/todos')
     items.value = data.items || []
     Object.assign(summary, data.summary || {})
+    try {
+      holding.value = await http.get('/meetings/holding')
+    } catch {
+      holding.value = null
+    }
   } finally {
     loading.value = false
   }
@@ -243,6 +265,27 @@ onMounted(load)
 </script>
 
 <style scoped>
+.rule-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.rule-banner.warn {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+.rule-banner.party {
+  background: #fff7f4;
+  border-color: #f1c6bb;
+}
+.rule-banner strong {
+  display: block;
+  margin-bottom: 2px;
+}
 .focus-card {
   width: 100%;
   display: flex;

@@ -33,7 +33,7 @@
             <span>党组织待办</span>
           </div>
           <div class="stat">
-            <b>{{ summary.jointReview + summary.minutesSign + summary.checkin }}</b>
+            <b>{{ summary.jointReview + summary.minutesSign }}</b>
             <span>党政联席待办</span>
           </div>
           <div class="stat warn">
@@ -84,7 +84,7 @@
             <div class="ico">览</div>
             <div>
               <strong>返回总览</strong>
-              <em>本月召开 · 预警 · AI 简报</em>
+              <em>学期召开 · 预警 · AI 简报</em>
             </div>
             <span class="chev">›</span>
           </button>

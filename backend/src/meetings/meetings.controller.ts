@@ -1,5 +1,8 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Query, Res, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { MeetingsService } from './meetings.service';
 import { CurrentUser, Roles } from '../common/decorators';
 import { AuthUser } from '../common/types';
@@ -38,6 +41,11 @@ export class MeetingsController {
     @Query('status') status?: string,
   ) {
     return this.meetings.list(user, meetingType, status);
+  }
+
+  @Get('holding')
+  holding(@CurrentUser() user: AuthUser) {
+    return this.meetings.holding(user);
   }
 
   @Get(':id')
@@ -166,6 +174,52 @@ export class MeetingsController {
     @Body() dto: MinutesDto,
   ) {
     return this.meetings.saveMinutes(user, id, dto);
+  }
+
+  @Post(':id/minutes/upload')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+      required: ['file'],
+    },
+  })
+  @Roles(
+    RoleCode.MEETING_SECRETARY,
+    RoleCode.COLLEGE_ADMIN,
+    RoleCode.SECRETARY,
+    RoleCode.VICE_SECRETARY,
+  )
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 20 * 1024 * 1024 },
+    }),
+  )
+  uploadMinutes(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.meetings.uploadMinutesFile(user, id, file);
+  }
+
+  @Get(':id/minutes/file')
+  async downloadMinutes(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { file, filename, mimeType } = await this.meetings.downloadMinutesFile(
+      user,
+      id,
+    );
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': `attachment; filename*=UTF-8''${filename}`,
+    });
+    return file;
   }
 
   @Post(':id/minutes/sign')

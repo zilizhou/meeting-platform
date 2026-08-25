@@ -55,7 +55,7 @@
           >
             <div class="t">{{ a.title }}</div>
             <div class="d">{{ a.description }}</div>
-            <div class="note">红线：审题 / 表决 / 签署须人工确认</div>
+            <div class="note">红线：审题 / 决议登记 / 签署须人工确认</div>
             <div class="btns">
               <button
                 v-if="a.link && !a.requiresConfirm"
@@ -133,7 +133,7 @@ const messages = ref<ChatMsg[]>([
   {
     role: 'assistant',
     content:
-      '您好。可问今日简报、待办、议题、督办与议事规则。审题/表决/签署只给建议，须您本人确认，不自动改状态。',
+      '您好。可问今日简报、待办、议题、督办与议事规则。审题/决议/签署只给建议，须您本人确认，不自动改状态。',
   },
 ])
 
@@ -150,7 +150,7 @@ const statusNote = computed(() => {
       : '演示/知识库模式 · 校级查阅只读辅助'
   }
   return configured.value
-    ? '可问今日简报、待办、议题与规则。审题/表决须您确认。'
+    ? '可问今日简报、待办、议题与规则。审题/决议须您确认。'
     : '演示/知识库模式 · 辅助不替代审签'
 })
 

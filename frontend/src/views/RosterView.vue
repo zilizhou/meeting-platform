@@ -16,7 +16,7 @@
       :closable="false"
       show-icon
       style="margin-bottom: 12px"
-      title="正式成员计入法定人数与表决；列席可入会但无表决权。"
+      title="正式成员为会议组成人员名册；列席人员可入会，系统不再记录现场签到与表决。"
     />
 
     <el-table :data="roster" stripe>

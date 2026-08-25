@@ -18,7 +18,7 @@ describe('结束会议（E2E）', () => {
     await ctx.app.close();
   });
 
-  it('进行中可结束；结束后禁止签到/表决，仍可起草纪要', async () => {
+  it('结束后仍可登记决议并起草纪要；禁止签到/表决', async () => {
     const topicId = await createApprovedTopic(ctx, '结束会议议题');
     const meetingId = await createMeetingWithTopic(ctx, topicId, {
       title: '结束会议测试会',
@@ -53,11 +53,13 @@ describe('结束会议（E2E）', () => {
       .send({ method: 'HAND', approve: true })
       .expect(400);
 
-    await request(ctx.app.getHttpServer())
+    const resolved = await request(ctx.app.getHttpServer())
       .post(`/api/meetings/${meetingId}/topics/${topicId}/resolve`)
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .send({ resultType: 'APPROVED', content: '不应通过' })
-      .expect(400);
+      .send({ resultType: 'APPROVED', content: '会后登记通过' })
+      .expect(201);
+    const topic = (resolved.body.topics || []).find((t: any) => t.id === topicId);
+    expect(topic?.resolution?.resultType).toBe('APPROVED');
 
     const minutes = await request(ctx.app.getHttpServer())
       .post(`/api/meetings/${meetingId}/minutes`)

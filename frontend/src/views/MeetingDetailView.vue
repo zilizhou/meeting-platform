@@ -11,10 +11,7 @@
           {{ isParty ? '党组织会议' : '党政联席会' }}
         </span>
         <span class="ui-tag hero-status">{{ statusLabel(meeting.status) }}</span>
-        <span class="ui-tag" :class="meeting.canResolve ? 'ok' : 'warn'">
-          {{ meeting.canResolve ? '法定人数达标' : '法定人数未达标' }}
-        </span>
-        <span v-if="meeting.isMajor" class="ui-tag warn">重大 · 2/3 门槛</span>
+        <span v-if="meeting.isMajor" class="ui-tag warn">重大事项</span>
       </div>
       <h2>{{ meeting.title }}</h2>
       <p>期次 {{ meeting.periodNo || '—' }} · 时间 {{ formatTime(meeting.scheduledAt) || '待定' }}</p>
@@ -24,71 +21,30 @@
         :closable="false"
         show-icon
         style="margin-top: 12px"
-        title="本场党组织会议未纳入第一议题（政治理论学习），不能开始会议或签到开会。"
+        title="本场党组织会议未纳入第一议题（政治理论学习），不能标记已召开。"
       />
       <div class="nums">
-        <div><strong>{{ meeting.actualAttend }}/{{ meeting.shouldAttend }}</strong><span>到会</span></div>
         <div><strong>{{ meeting.topics?.length || 0 }}</strong><span>入会议题</span></div>
-        <div><strong>{{ resolvedCount }}</strong><span>已决议</span></div>
       </div>
     </div>
 
     <div v-if="hasHeroActions" class="detail-actions">
       <button
-        v-if="meeting.status === 'SCHEDULED' || meeting.status === 'IN_PROGRESS'"
-        class="ui-btn"
-        :class="{ party: isParty }"
-        type="button"
-        @click="checkIn"
-      >
-        本人签到
-      </button>
-      <button
-        v-if="meeting.status === 'SCHEDULED' || meeting.status === 'IN_PROGRESS'"
-        class="ui-btn light"
-        type="button"
-        @click="openLeave"
-      >
-        请假报备
-      </button>
-      <button
         v-if="
           (roles.canCreateMeeting.value ||
             roles.canResolve.value ||
             (isParty && roles.canHostPartyMeeting.value)) &&
-          (meeting.status === 'SCHEDULED' || meeting.status === 'DRAFT')
+          (meeting.status === 'SCHEDULED' ||
+            meeting.status === 'DRAFT' ||
+            meeting.status === 'IN_PROGRESS')
         "
         class="ui-btn"
         :class="{ party: isParty }"
         type="button"
         :disabled="missingFirstTopic"
-        @click="start"
+        @click="markHeld"
       >
-        开始会议
-      </button>
-      <button
-        v-if="
-          (roles.canCreateMeeting.value ||
-            roles.canResolve.value ||
-            (isParty && roles.canHostPartyMeeting.value)) &&
-          meeting.status === 'IN_PROGRESS'
-        "
-        class="ui-btn danger"
-        type="button"
-        @click="endMeeting"
-      >
-        结束会议
-      </button>
-      <button
-        v-if="
-          roles.canProxyCheckin.value &&
-          (meeting.status === 'SCHEDULED' || meeting.status === 'IN_PROGRESS')
-        "
-        class="ui-btn light"
-        type="button"
-        @click="checkInAll"
-      >
-        一键全员签到
+        标记已召开
       </button>
       <button
         v-if="roles.canCreateMeeting.value && meeting.status === 'RESOLVED'"
@@ -100,170 +56,49 @@
       </button>
     </div>
 
-    <div class="panel steps-panel">
-      <div class="meeting-flow" :class="{ party: isParty, joint: !isParty }">
-        <button
-          v-for="(step, i) in flowSteps"
-          :key="step.key"
-          type="button"
-          class="flow-item"
-          :class="[flowStepState(i), { clickable: flowStepState(i) !== 'pending' }]"
-          :disabled="flowStepState(i) === 'pending'"
-          @click="focusStep(i)"
-        >
-          <div class="flow-rail">
-            <span class="flow-node">
-              <template v-if="flowStepState(i) === 'done'">✓</template>
-              <template v-else>{{ i + 1 }}</template>
-            </span>
-            <span v-if="i < flowSteps.length - 1" class="flow-connector" />
-          </div>
-          <div class="flow-body">
-            <span class="flow-title flow-title--short">{{ step.short }}</span>
-            <span class="flow-title flow-title--full">{{ step.full }}</span>
-            <span v-if="flowStepState(i) === 'current'" class="flow-badge">进行中</span>
-          </div>
-        </button>
-      </div>
-    </div>
-
-    <div
-      v-if="flowGuide"
-      class="flow-guide"
-      :class="{ party: isParty }"
-    >
-      <div class="flow-guide-text">
-        <strong>{{ flowGuide.title }}</strong>
-        <span>{{ flowGuide.desc }}</span>
-      </div>
-      <button
-        v-if="flowGuide.actionLabel"
-        class="ui-btn"
-        :class="{ party: isParty }"
-        type="button"
-        @click="onFlowGuideAction"
-      >
-        {{ flowGuide.actionLabel }}
-      </button>
-    </div>
-
-    <div id="meeting-flow-checkin" class="panel flow-panel">
+    <div class="panel">
       <div class="ui-sec">
-        <h3><i :class="{ party: isParty }"></i>参会签到</h3>
-        <span class="n">正式 {{ formalChecked }}/{{ formalTotal }} · 列席 {{ attendeeChecked }}/{{ attendeeTotal }}</span>
-      </div>
-      <el-table :data="meeting.attendances || []" size="small" stripe>
-        <el-table-column label="姓名" width="120">
-          <template #default="{ row }">{{ row.user?.realName }}</template>
-        </el-table-column>
-        <el-table-column label="职务" width="140">
-          <template #default="{ row }">{{ row.user?.title || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="身份" width="100">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.isFormal ? 'success' : 'info'">
-              {{ row.isFormal ? '正式' : '列席' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="签到" width="100">
-          <template #default="{ row }">
-            <el-tag v-if="row.leaveNote" size="small" type="info">已请假</el-tag>
-            <el-tag v-else size="small" :type="row.checkedIn ? 'success' : 'warning'">
-              {{ row.checkedIn ? '已签到' : '未签到' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="请假说明" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.leaveNote || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="签到时间" min-width="160">
-          <template #default="{ row }">
-            {{ row.checkedAt ? new Date(row.checkedAt).toLocaleString('zh-CN') : '—' }}
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
-
-    <div id="meeting-flow-agenda" class="panel flow-panel">
-      <div class="ui-sec">
-        <h3><i :class="{ party: isParty }"></i>议程与表决</h3>
-        <span class="n">{{ meeting.topics?.length || 0 }} 项 · 赞成门槛 {{ voteThresholdText }}</span>
+        <h3><i :class="{ party: isParty }"></i>入会议题</h3>
+        <span class="n">{{ meeting.topics?.length || 0 }} 项</span>
       </div>
 
       <el-empty v-if="!meeting.topics?.length" description="暂无入会议题" :image-size="64" />
 
-      <template v-else>
-        <div class="ui-filter-wrap">
-          <div ref="topicFilterEl" class="ui-filter is-scroll" role="tablist">
-            <button
-              v-for="(topic, idx) in meeting.topics"
-              :key="topic.id"
-              type="button"
-              role="tab"
-              :class="{ on: activeTopicId === topic.id, party: isParty }"
-              :aria-selected="activeTopicId === topic.id"
-              @click="selectTopic(topic.id)"
-            >
-              {{ topicTabLabel(topic, idx) }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="activeTopic" class="topic-card" @click="openTopicDialog">
+      <div v-else class="topic-list">
+        <div
+          v-for="(topic, idx) in meeting.topics"
+          :key="topic.id"
+          class="topic-card"
+          @click="openTopicDialog(topic.id)"
+        >
           <div class="topic-card-top">
             <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
-              {{ statusLabel(activeTopic.status) }}
+              议题{{ idx + 1 }}
             </span>
-            <span
-              class="ui-tag"
-              :class="voteStats(activeTopic).canPass ? 'ok' : 'warn'"
-            >
-              {{ voteStats(activeTopic).canPass ? '已达门槛' : '未达门槛' }}
+            <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
+              {{ statusLabel(topic.status) }}
             </span>
-            <span v-if="activeTopic.resolution?.resultType" class="ui-tag ok">
-              已决议
+            <span v-if="topic.category?.code === 'FIRST_TOPIC'" class="ui-tag party">
+              第一议题
             </span>
           </div>
-          <h4 class="topic-card-title">{{ activeTopic.title }}</h4>
-          <div class="topic-card-stats">
-            <span>赞成 <b>{{ voteStats(activeTopic).approve }}</b></span>
-            <span class="dot">·</span>
-            <span>反对 <b>{{ voteStats(activeTopic).reject }}</b></span>
-            <span class="dot">·</span>
-            <span>未表决 <b>{{ voteStats(activeTopic).pending }}</b></span>
-          </div>
+          <h4 class="topic-card-title">{{ topic.title }}</h4>
+          <p v-if="topic.content" class="topic-card-stats">{{ topic.content }}</p>
           <div class="topic-card-foot" @click.stop>
             <button
               class="ui-btn"
               :class="{ party: isParty }"
               type="button"
-              @click="openTopicDialog"
+              @click="openTopicDialog(topic.id)"
             >
-              {{
-                meeting.status === 'IN_PROGRESS' || meeting.status === 'SCHEDULED'
-                  ? '查看详情与表决'
-                  : '查看详情'
-              }}
-            </button>
-            <button
-              v-if="
-                roles.canResolve.value &&
-                (meeting.status === 'IN_PROGRESS' || meeting.status === 'SCHEDULED') &&
-                !activeTopic.resolution
-              "
-              class="ui-btn light"
-              type="button"
-              @click="resolve(activeTopic.id, false)"
-            >
-              形成决议
+              查看详情
             </button>
           </div>
         </div>
-      </template>
+      </div>
     </div>
 
-    <div id="meeting-flow-minutes" class="panel minutes-panel flow-panel">
+    <div class="panel minutes-panel">
       <div class="minutes-head">
         <h3>
           <i :class="{ party: isParty }"></i>
@@ -274,7 +109,7 @@
 
       <div v-if="roles.canSaveMinutes.value" class="minutes-quick">
         <button class="ui-btn" type="button" @click="fillMinutesFromAgenda">
-          按议程一键成稿
+          按议题一键成稿
         </button>
         <button
           class="ui-btn light"
@@ -284,10 +119,24 @@
         >
           {{ minutesAiLoading ? 'AI 生成中…' : 'AI 润色生成' }}
         </button>
+        <label class="ui-btn light minutes-upload">
+          {{ minutesUploading ? '上传中…' : '上传线下纪要' }}
+          <input
+            type="file"
+            hidden
+            accept=".doc,.docx,.pdf,.txt"
+            :disabled="minutesUploading"
+            @change="onMinutesFile"
+          />
+        </label>
       </div>
       <p class="minutes-hint">
-        先「按议程一键成稿」或「AI 润色」写入下文 → 核对修改 → 保存 →
+        可在系统内编辑正文，也可上传线下已签纪要（Word / PDF）。核对后保存 →
         {{ isParty ? '书记/副书记' : '书记/院长' }}签署生效。
+      </p>
+      <p v-if="meeting.minutes?.originalName" class="minutes-file">
+        已上传：{{ meeting.minutes.originalName }}
+        <button class="ui-link" type="button" @click="downloadMinutesFile">下载附件</button>
       </p>
 
       <el-input
@@ -325,24 +174,6 @@
       </div>
     </div>
 
-    <el-dialog v-model="leaveVisible" title="会前请假报备" width="480px">
-      <el-form label-width="80px">
-        <el-form-item label="请假事由">
-          <el-input
-            v-model="leaveReason"
-            type="textarea"
-            :rows="3"
-            placeholder="须会前向主持人报备并留痕"
-          />
-        </el-form-item>
-      </el-form>
-      <div class="hint">说明：请假不影响应到会正式成员基数（法定人数仍按名单计算）。</div>
-      <template #footer>
-        <el-button @click="leaveVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitLeave">提交报备</el-button>
-      </template>
-    </el-dialog>
-
     <el-dialog
       v-model="topicDialogVisible"
       title="议题详情"
@@ -358,6 +189,9 @@
           <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
             {{ statusLabel(dialogTopic.status) }}
           </span>
+          <span v-if="dialogTopic.category?.code === 'FIRST_TOPIC'" class="ui-tag party">
+            第一议题
+          </span>
           <span v-if="dialogTopic.isMajor" class="ui-tag warn">重大</span>
           <span v-if="dialogTopic.isTempMotion" class="ui-tag warn">临时动议</span>
           <span class="muted meta-text">
@@ -367,51 +201,6 @@
             </template>
           </span>
         </div>
-
-        <div class="vote-grid">
-          <div class="vote-cell">
-            <strong>{{ voteStats(dialogTopic).approve }}</strong>
-            <span>赞成</span>
-          </div>
-          <div class="vote-cell">
-            <strong>{{ voteStats(dialogTopic).reject }}</strong>
-            <span>反对</span>
-          </div>
-          <div class="vote-cell">
-            <strong>{{ voteStats(dialogTopic).pending }}</strong>
-            <span>未表决</span>
-          </div>
-          <div class="vote-cell">
-            <strong>{{ voteStats(dialogTopic).absent }}</strong>
-            <span>缺席意见</span>
-          </div>
-          <div class="vote-cell">
-            <strong>{{ voteStats(dialogTopic).avoid }}</strong>
-            <span>回避</span>
-          </div>
-        </div>
-        <div class="vote-threshold">
-          <span
-            class="ui-tag"
-            :class="voteStats(dialogTopic).canPass ? 'ok' : 'warn'"
-          >
-            {{
-              voteStats(dialogTopic).canPass
-                ? '已达通过门槛'
-                : `未达门槛（需 > ${voteStats(dialogTopic).threshold}）`
-            }}
-          </span>
-          <span class="muted">门槛 {{ voteThresholdText }}</span>
-        </div>
-
-        <el-alert
-          v-if="meeting.status === 'ENDED'"
-          type="info"
-          :closable="false"
-          show-icon
-          title="会议已结束，会中表决与决议已关闭。"
-          style="margin-bottom: 12px"
-        />
 
         <div class="dialog-section">
           <div class="dialog-label">议题正文</div>
@@ -464,61 +253,9 @@
           </div>
           <div v-else class="muted">{{ topicDetailLoading ? '加载中…' : '暂无材料' }}</div>
         </div>
-
-        <div class="dialog-section">
-          <div class="dialog-label">
-            讨论记录 · {{ dialogTopic.discussions?.length || 0 }}
-          </div>
-          <div v-if="dialogTopic.discussions?.length" class="discuss-list">
-            <div v-for="d in dialogTopic.discussions" :key="d.id" class="discuss-item">
-              <el-tag size="small" :type="d.isFinal ? 'warning' : 'info'">
-                {{ d.isFinal ? '最后表态' : '发言' }}
-              </el-tag>
-              <span>
-                <b v-if="d.user?.realName">{{ d.user.realName }}</b>
-                {{ d.opinion }}
-              </span>
-              <span v-if="d.reason" class="muted"> · {{ d.reason }}</span>
-            </div>
-          </div>
-          <div v-else class="muted">暂无讨论记录</div>
-        </div>
-
-        <div class="dialog-section">
-          <div class="dialog-label">决议</div>
-          <div class="dialog-content">
-            <template v-if="dialogTopic.resolution">
-              {{ dialogTopic.resolution.resultType }}
-              · {{ dialogTopic.resolution.content || '—' }}
-            </template>
-            <template v-else>尚未形成决议 · 赞成门槛 {{ voteThresholdText }}</template>
-          </div>
-        </div>
       </template>
       <template #footer>
         <div class="dialog-footer-actions">
-          <template
-            v-if="
-              dialogTopic &&
-              (meeting.status === 'IN_PROGRESS' || meeting.status === 'SCHEDULED')
-            "
-          >
-            <button
-              class="ui-btn"
-              :class="{ party: isParty }"
-              type="button"
-              @click="vote(dialogTopic.id, true)"
-            >
-              赞成
-            </button>
-            <button
-              class="ui-btn light"
-              type="button"
-              @click="vote(dialogTopic.id, false)"
-            >
-              反对
-            </button>
-          </template>
           <button class="ui-btn light" type="button" @click="topicDialogVisible = false">
             关闭
           </button>
@@ -529,36 +266,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 import { exportMeetingMinutesDoc } from '@/utils/exportMinutesDoc'
-import {
-  MEETING_FLOW_STEPS,
-  deriveMeetingFlowStep,
-  meetingFlowPanelId,
-  meetingFlowState,
-  type MeetingFlowStep,
-} from '@/utils/meetingFlow'
 
 const route = useRoute()
 const router = useRouter()
 const roles = useRoles()
 const meeting = ref<any>(null)
-const didInitialFocus = ref(false)
 const minutesContent = ref('')
 const minutesDraft = ref<any>(null)
 const minutesDraftText = ref('')
 const minutesAiLoading = ref(false)
-const leaveVisible = ref(false)
-const leaveReason = ref('')
+const minutesUploading = ref(false)
 const activeTopicId = ref('')
 const topicDialogVisible = ref(false)
 const topicDetailLoading = ref(false)
 const topicDetailExtra = ref<any>(null)
-const topicFilterEl = ref<HTMLElement | null>(null)
 
 const activeTopic = computed(() =>
   (meeting.value?.topics || []).find((t: any) => t.id === activeTopicId.value),
@@ -620,17 +347,9 @@ function decisionLabel(d?: string) {
   return '待审'
 }
 
-function topicTabLabel(topic: any, idx: string | number) {
-  const title = String(topic.title || '')
-  if (title.length <= 8) return title
-  return `议题${Number(idx) + 1}`
-}
-
-function selectTopic(id: string) {
-  activeTopicId.value = id
-}
-
-async function openTopicDialog() {
+async function openTopicDialog(topicId?: string) {
+  if (topicId) activeTopicId.value = topicId
+  if (!activeTopicId.value) return
   topicDialogVisible.value = true
   await loadTopicDetailExtra()
 }
@@ -662,129 +381,36 @@ function exportMinutesWord() {
   ElMessage.success('纪要 Word 已开始下载')
 }
 
-watch(activeTopicId, () => {
-  nextTick(() => {
-    topicFilterEl.value?.querySelector('button.on')?.scrollIntoView({
-      behavior: 'smooth',
-      inline: 'center',
-      block: 'nearest',
-    })
-  })
-})
-
 const isParty = computed(() => meeting.value?.meetingType === 'PARTY_COMMITTEE')
 const missingFirstTopic = computed(() => {
   if (!isParty.value) return false
   const topics = meeting.value?.topics || []
   return !topics.some((t: any) => t.category?.code === 'FIRST_TOPIC')
 })
-const voteThresholdText = computed(() =>
-  meeting.value?.isMajor ? '超过应到 2/3' : '超过应到 1/2',
-)
-const resolvedCount = computed(
-  () => (meeting.value?.topics || []).filter((t: any) => t.resolution).length,
-)
 
 function formatTime(v?: string) {
   if (!v) return ''
   return new Date(v).toLocaleString('zh-CN')
 }
 
-const formalTotal = computed(
-  () => (meeting.value?.attendances || []).filter((a: any) => a.isFormal).length,
-)
-const formalChecked = computed(
-  () =>
-    (meeting.value?.attendances || []).filter((a: any) => a.isFormal && a.checkedIn)
-      .length,
-)
-const attendeeTotal = computed(
-  () => (meeting.value?.attendances || []).filter((a: any) => !a.isFormal).length,
-)
-const attendeeChecked = computed(
-  () =>
-    (meeting.value?.attendances || []).filter((a: any) => !a.isFormal && a.checkedIn)
-      .length,
-)
-
-const flow = computed(() => deriveMeetingFlowStep(meeting.value))
-
-const flowSteps = computed(() =>
-  MEETING_FLOW_STEPS.map((s) => ({
-    ...s,
-    full:
-      s.key === 'minutes'
-        ? isParty.value
-          ? '书记/副书记签纪要'
-          : '双签纪要'
-        : s.full,
-  })),
-)
-
-function flowStepState(index: number) {
-  return meetingFlowState(index, flow.value)
-}
-
-const flowGuide = computed(() => {
-  const f = flow.value
-  if (!meeting.value || f.allDone) return null
-  return {
-    title: `当前步骤：${f.label}`,
-    desc: f.nextLabel ? `完成后进入「${f.nextLabel}」` : '请完成本步后继续',
-    actionLabel: '前往当前步骤',
-    targetIndex: f.index,
-  }
-})
-
-function onFlowGuideAction() {
-  if (flowGuide.value) focusStep(flowGuide.value.targetIndex)
-}
-
-function focusStep(index: number, opts?: { smooth?: boolean }) {
-  const state = flowStepState(index)
-  if (state === 'pending' && !flow.value.allDone) return
-  scrollToFlowPanel(index, opts)
-  const step = String(index + 1)
-  if (String(route.query.step || '') !== step) {
-    router.replace({
-      query: { ...route.query, step },
-    })
-  }
-}
-
-async function focusCurrentStep(opts?: { smooth?: boolean }) {
-  await nextTick()
-  const f = flow.value
-  focusStep(f.allDone ? 3 : f.index, opts)
-}
-
-/** 步骤推进后提示并跳到新当前步 */
-async function afterFlowAdvance(prev: MeetingFlowStep, successMsg: string) {
-  await load({ skipAutoFocus: true })
-  const next = flow.value
-  if (next.allDone) {
-    ElMessage.success(successMsg)
-    await focusCurrentStep()
-    return
-  }
-  if (next.index > prev.index || next.key !== prev.key) {
-    ElMessage.success(`${successMsg}。下一步：${next.label}`)
-    await focusCurrentStep()
-    return
-  }
+async function reloadWithMessage(successMsg: string) {
+  await load()
   ElMessage.success(successMsg)
 }
 
 const hasHeroActions = computed(() => {
   const m = meeting.value
   if (!m) return false
-  const inMeet = m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS'
-  if (inMeet) return true
   const canHost =
     roles.canCreateMeeting.value ||
     roles.canResolve.value ||
     (isParty.value && roles.canHostPartyMeeting.value)
-  if (canHost && m.status === 'DRAFT') return true
+  if (
+    canHost &&
+    (m.status === 'DRAFT' || m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS')
+  ) {
+    return true
+  }
   if (roles.canCreateMeeting.value && m.status === 'RESOLVED') return true
   return false
 })
@@ -808,46 +434,6 @@ function statusLabel(s: string) {
   return STATUS_MAP[s] || s
 }
 
-function parseAvoid(topic: any): string[] {
-  try {
-    return JSON.parse(topic.avoidUserIds || '[]')
-  } catch {
-    return []
-  }
-}
-
-function voteStats(topic: any) {
-  const avoidIds = parseAvoid(topic)
-  const formal = (meeting.value?.attendances || []).filter((a: any) => a.isFormal)
-  const should = meeting.value?.shouldAttend || formal.length
-  const ratio = meeting.value?.isMajor || topic.isMajor ? 2 / 3 : 1 / 2
-  const threshold = Number((should * ratio).toFixed(2))
-  const counted = (topic.votes || []).filter(
-    (v: any) => v.voteCounted && !v.isAbsentOpinion,
-  )
-  const absent = (topic.votes || []).filter((v: any) => v.isAbsentOpinion).length
-  const approve = counted.filter((v: any) => v.approve).length
-  const reject = counted.filter((v: any) => v.approve === false).length
-  const votedUserIds = new Set(
-    counted.map((v: any) => v.userId).filter(Boolean),
-  )
-  const pending = formal.filter(
-    (a: any) =>
-      a.checkedIn &&
-      !avoidIds.includes(a.userId) &&
-      !votedUserIds.has(a.userId),
-  ).length
-  return {
-    approve,
-    reject,
-    pending,
-    absent,
-    avoid: avoidIds.length,
-    threshold,
-    canPass: approve > threshold,
-  }
-}
-
 function goBack() {
   router.push({
     path: '/meet',
@@ -855,7 +441,7 @@ function goBack() {
   })
 }
 
-async function load(opts?: { skipAutoFocus?: boolean }) {
+async function load() {
   meeting.value = await http.get(`/meetings/${route.params.id}`)
   const topics = meeting.value?.topics || []
   if (!topics.some((t: any) => t.id === activeTopicId.value)) {
@@ -878,24 +464,9 @@ async function load(opts?: { skipAutoFocus?: boolean }) {
   }
 
   const nextQuery: Record<string, any> = { ...route.query }
+  delete nextQuery.step
   if (meeting.value.meetingType === 'PARTY_COMMITTEE') {
     nextQuery.from = 'party'
-  }
-
-  if (!opts?.skipAutoFocus && !didInitialFocus.value) {
-    didInitialFocus.value = true
-    await nextTick()
-    const f = flow.value
-    let targetIndex = f.allDone ? 3 : f.index
-    const qStep = Number(route.query.step)
-    if (!f.allDone && Number.isFinite(qStep) && qStep >= 1 && qStep <= 4) {
-      const idx = qStep - 1
-      if (meetingFlowState(idx, f) !== 'pending') targetIndex = idx
-    }
-    nextQuery.step = String(targetIndex + 1)
-    scrollToFlowPanel(targetIndex, { smooth: false })
-  } else if (didInitialFocus.value && !nextQuery.step) {
-    nextQuery.step = String((flow.value.allDone ? 3 : flow.value.index) + 1)
   }
 
   const sameQuery =
@@ -906,62 +477,25 @@ async function load(opts?: { skipAutoFocus?: boolean }) {
   }
 }
 
-function scrollToFlowPanel(index: number, opts?: { smooth?: boolean }) {
-  const id = meetingFlowPanelId(index)
-  const el = document.getElementById(id)
-  if (!el) return
-  el.scrollIntoView({
-    behavior: opts?.smooth === false ? 'auto' : 'smooth',
-    block: 'start',
-  })
-  el.classList.remove('flow-panel--flash')
-  void el.offsetWidth
-  el.classList.add('flow-panel--flash')
-  window.setTimeout(() => el.classList.remove('flow-panel--flash'), 1600)
-}
-
-function resolutionLabel(resultType?: string) {
-  const map: Record<string, string> = {
-    APPROVED: '通过',
-    PRINCIPLE_APPROVED: '原则通过',
-    DEFERRED: '暂缓',
-    REJECTED: '未通过',
-  }
-  return map[resultType || ''] || resultType || '待决议'
-}
-
 function buildMinutesOutline(m: any = meeting.value) {
   if (!m) return ''
-  const formalIn = (m.attendances || []).filter((a: any) => a.isFormal && a.checkedIn)
-  const leave = (m.attendances || []).filter((a: any) => a.isFormal && a.leaveNote)
   const lines: string[] = [
     `${m.title}纪要`,
     '',
     `会议时间：${formatTime(m.scheduledAt)}`,
     `期次：${m.periodNo || '—'}`,
-    `出席：${formalIn.map((a: any) => a.user?.realName).filter(Boolean).join('、') || '—'}`,
+    '',
+    '入会议题：',
   ]
-  if (leave.length) {
-    lines.push(
-      `请假：${leave.map((a: any) => `${a.user?.realName || ''}（${a.leaveNote}）`).join('；')}`,
-    )
-  }
-  lines.push('', '议定事项：')
   const topics = m.topics || []
   if (!topics.length) {
     lines.push('（暂无入会议题）')
   } else {
     topics.forEach((t: any, i: number) => {
       lines.push(`${i + 1}. ${t.title}`)
-      if (t.resolution) {
-        const body = t.resolution.content ? `。${t.resolution.content}` : ''
-        lines.push(`   决议：${resolutionLabel(t.resolution.resultType)}${body}`)
-      } else {
-        lines.push('   决议：（待形成）')
-      }
     })
   }
-  lines.push('', '主持人：', '记录人：')
+  lines.push('', '议定事项：', '', '主持人：', '记录人：')
   return lines.join('\n')
 }
 
@@ -1020,62 +554,19 @@ async function generateMinutesDraft() {
   }
 }
 
-async function start() {
-  try {
-    const prev = flow.value
-    await http.post(`/meetings/${route.params.id}/start`)
-    await afterFlowAdvance(prev, '会议已开始')
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
-}
-
-async function endMeeting() {
+async function markHeld() {
   try {
     await ElMessageBox.confirm(
-      '结束后将关闭签到、讨论、表决与形成决议；可继续起草并签署纪要。确认结束会议？',
-      '结束会议',
-      { type: 'warning', confirmButtonText: '结束会议', cancelButtonText: '取消' },
+      '确认本场会议已线下召开？确认后可整理并签署纪要。',
+      '标记已召开',
+      { type: 'warning', confirmButtonText: '已召开', cancelButtonText: '取消' },
     )
   } catch {
     return
   }
   try {
-    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/end`)
-    await afterFlowAdvance(prev, '会议已结束，请起草并签署纪要')
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
-}
-
-async function checkIn() {
-  try {
-    const prev = flow.value
-    await http.post(`/meetings/${route.params.id}/checkin`, {})
-    await afterFlowAdvance(prev, '签到成功')
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
-}
-
-function openLeave() {
-  leaveReason.value = ''
-  leaveVisible.value = true
-}
-
-async function submitLeave() {
-  if (!leaveReason.value.trim()) {
-    ElMessage.warning('请填写请假事由')
-    return
-  }
-  try {
-    await http.post(`/meetings/${route.params.id}/leave`, {
-      reason: leaveReason.value.trim(),
-    })
-    ElMessage.success('请假已报备')
-    leaveVisible.value = false
-    await load()
+    await reloadWithMessage('已标记召开，请整理纪要')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -1091,101 +582,36 @@ async function archive() {
   }
 }
 
-async function checkInAll() {
+async function onMinutesFile(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  minutesUploading.value = true
   try {
-    const prev = flow.value
-    for (const a of meeting.value.attendances || []) {
-      if (!a.checkedIn) {
-        await http.post(`/meetings/${route.params.id}/checkin`, { userId: a.userId })
-      }
-    }
-    await afterFlowAdvance(prev, '全员已签到')
+    const fd = new FormData()
+    fd.append('file', file)
+    await http.post(`/meetings/${route.params.id}/minutes/upload`, fd, { timeout: 60000 })
+    await reloadWithMessage('线下纪要已上传')
   } catch (e: any) {
     ElMessage.error(String(e))
+  } finally {
+    minutesUploading.value = false
   }
 }
 
-async function discuss(topicId: string, opinion: string, isFinal: boolean) {
+async function downloadMinutesFile() {
   try {
-    await http.post(`/meetings/${route.params.id}/topics/${topicId}/discuss`, {
-      opinion,
-      reason: isFinal ? '主要负责人最后表态：同意按议案办理' : '同意按议案办理',
-      isFinal,
+    const res = await http.get(`/meetings/${route.params.id}/minutes/file`, {
+      responseType: 'blob',
     })
-    ElMessage.success(isFinal ? '最后表态已记录' : '发言已记录')
-    await load()
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
-}
-
-async function vote(topicId: string, approve: boolean) {
-  try {
-    await http.post(`/meetings/${route.params.id}/topics/${topicId}/vote`, {
-      method: 'HAND',
-      approve,
-    })
-    ElMessage.success('表决已记录')
-    await load()
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
-}
-
-async function absentOpinion(topicId: string) {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      '缺席书面意见不计票。请填写意见说明',
-      '缺席书面意见',
-      { inputPlaceholder: '缺席事由或意见说明' },
-    )
-    const approve = await ElMessageBox.confirm('是否登记为赞成意见？', '意见类型', {
-      confirmButtonText: '赞成',
-      cancelButtonText: '反对',
-      distinguishCancelAndClose: true,
-    })
-      .then(() => true)
-      .catch((action: string) => {
-        if (action === 'cancel') return false
-        throw action
-      })
-    await http.post(`/meetings/${route.params.id}/topics/${topicId}/absent-opinion`, {
-      approve,
-      reason: value,
-    })
-    ElMessage.success('缺席书面意见已登记（不计票）')
-    await load()
-  } catch (e: any) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error(String(e))
-  }
-}
-
-async function voteAll(topicId: string) {
-  try {
-    const res: any = await http.post(
-      `/meetings/${route.params.id}/topics/${topicId}/vote-all-approve`,
-    )
-    const skip =
-      res.skippedAvoid > 0 ? `，跳过回避 ${res.skippedAvoid} 人` : ''
-    ElMessage.success(`已代录 ${res.count} 票赞成${skip}`)
-    await load()
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
-}
-
-async function resolve(topicId: string, transferToJoint: boolean) {
-  try {
-    const prev = flow.value
-    await http.post(`/meetings/${route.params.id}/topics/${topicId}/resolve`, {
-      resultType: 'APPROVED',
-      content: transferToJoint ? '会议研究通过，转联席会落实' : '会议研究通过',
-      transferToJoint,
-    })
-    await afterFlowAdvance(
-      prev,
-      transferToJoint ? '决议已形成并转联席会' : '决议已形成，督办已生成',
-    )
+    const blob = res instanceof Blob ? res : new Blob([res as any])
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = meeting.value?.minutes?.originalName || '会议纪要'
+    a.click()
+    URL.revokeObjectURL(url)
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -1193,9 +619,8 @@ async function resolve(topicId: string, transferToJoint: boolean) {
 
 async function saveMinutes() {
   try {
-    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/minutes`, { content: minutesContent.value })
-    await afterFlowAdvance(prev, '纪要已保存，已通知签署人')
+    await reloadWithMessage('纪要已保存，已通知签署人')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -1203,9 +628,8 @@ async function saveMinutes() {
 
 async function signMinutes() {
   try {
-    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/minutes/sign`)
-    await afterFlowAdvance(prev, '签署成功')
+    await reloadWithMessage('签署成功')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -1216,10 +640,7 @@ onMounted(load)
 watch(
   () => route.params.id,
   (id, prev) => {
-    if (id && id !== prev) {
-      didInitialFocus.value = false
-      load()
-    }
+    if (id && id !== prev) load()
   },
 )
 </script>
@@ -1287,220 +708,6 @@ watch(
   box-shadow: var(--shadow);
   border: 1px solid var(--line);
 }
-.steps-panel {
-  padding: 16px;
-}
-.meeting-flow {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.flow-item {
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-}
-.flow-item.clickable {
-  cursor: pointer;
-}
-.flow-item.clickable:hover .flow-title {
-  color: var(--joint);
-}
-.detail.party .flow-item.clickable:hover .flow-title {
-  color: var(--party);
-}
-.flow-item:disabled {
-  cursor: default;
-  opacity: 1;
-}
-.flow-guide {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: -4px 0 14px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid #d6e4f5;
-  background: linear-gradient(180deg, #f5f9ff 0%, #eef5fc 100%);
-}
-.flow-guide.party {
-  border-color: #ecd6d6;
-  background: linear-gradient(180deg, #fff8f8 0%, #faf0f0 100%);
-}
-.flow-guide-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.flow-guide-text strong {
-  font-size: 14px;
-  font-family: var(--font-serif);
-  color: var(--text);
-}
-.flow-guide-text span {
-  font-size: 12px;
-  color: var(--muted);
-}
-.flow-panel {
-  scroll-margin-top: 12px;
-  transition: box-shadow 0.35s ease, border-color 0.35s ease;
-}
-.flow-panel--flash {
-  border-color: var(--joint) !important;
-  box-shadow: 0 0 0 3px rgba(61, 127, 212, 0.18);
-}
-.detail.party .flow-panel--flash {
-  border-color: var(--party) !important;
-  box-shadow: 0 0 0 3px rgba(196, 90, 90, 0.18);
-}
-.flow-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 28px;
-  flex-shrink: 0;
-}
-.flow-node {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-  background: #eef1f5;
-  color: #8a94a6;
-  border: 2px solid #dde3eb;
-}
-.flow-connector {
-  flex: 1;
-  width: 2px;
-  min-height: 12px;
-  margin: 4px 0;
-  background: #dde3eb;
-  border-radius: 1px;
-}
-.flow-item.done .flow-node {
-  background: #e6f4ec;
-  color: var(--ok);
-  border-color: #b8dfc9;
-}
-.flow-item.done .flow-connector {
-  background: #b8dfc9;
-}
-.flow-item.current .flow-node {
-  background: var(--joint-soft);
-  color: var(--joint);
-  border-color: var(--joint);
-}
-.meeting-flow.party .flow-item.current .flow-node {
-  background: var(--party-soft);
-  color: var(--party);
-  border-color: var(--party);
-}
-.flow-body {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-  padding: 4px 0 14px;
-  min-height: 28px;
-}
-.flow-item:last-child .flow-body {
-  padding-bottom: 0;
-}
-.flow-title {
-  font-size: 14px;
-  line-height: 1.35;
-  color: #5c6573;
-}
-.flow-item.done .flow-title {
-  color: var(--ok);
-  font-weight: 600;
-}
-.flow-item.current .flow-title {
-  color: #1a2233;
-  font-weight: 700;
-}
-.flow-title--short {
-  display: none;
-}
-.flow-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--joint-soft);
-  color: var(--joint);
-}
-.meeting-flow.party .flow-badge {
-  background: var(--party-soft);
-  color: var(--party);
-}
-@media (min-width: 768px) {
-  .meeting-flow {
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-    position: relative;
-    padding-top: 4px;
-  }
-  .meeting-flow::before {
-    content: '';
-    position: absolute;
-    top: 17px;
-    left: 14px;
-    right: 14px;
-    height: 2px;
-    background: #dde3eb;
-    z-index: 0;
-  }
-  .flow-item {
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    position: relative;
-    z-index: 1;
-    min-width: 0;
-  }
-  .flow-rail {
-    width: auto;
-  }
-  .flow-connector {
-    display: none;
-  }
-  .flow-body {
-    flex-direction: column;
-    align-items: center;
-    padding: 0;
-    text-align: center;
-    width: 100%;
-  }
-  .flow-title--short {
-    display: block;
-    font-size: 13px;
-  }
-  .flow-title--full {
-    display: none;
-  }
-  .flow-badge {
-    margin-top: 2px;
-  }
-}
 .ui-sec h3 i.party {
   background: var(--party);
 }
@@ -1540,6 +747,17 @@ watch(
   height: 36px;
   min-width: 128px;
 }
+.minutes-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.minutes-file {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--text);
+}
 .minutes-hint {
   margin: 0 0 12px;
   color: var(--muted);
@@ -1572,8 +790,14 @@ watch(
   font-size: 12px;
   color: var(--muted);
 }
+.topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
 .topic-card {
-  margin-top: 12px;
+  margin: 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -1584,6 +808,9 @@ watch(
 .topic-card:hover {
   border-color: rgba(26, 79, 139, 0.28);
   box-shadow: 0 6px 16px rgba(15, 53, 95, 0.06);
+}
+.detail.party .topic-card:hover {
+  border-color: rgba(176, 48, 48, 0.28);
 }
 .topic-card-top {
   display: flex;
@@ -1599,20 +826,15 @@ watch(
   color: var(--text);
 }
 .topic-card-stats {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  overflow: hidden;
   margin-top: 8px;
   font-size: 13px;
+  line-height: 1.5;
   color: var(--muted);
-}
-.topic-card-stats b {
-  color: var(--text);
-  font-weight: 700;
-}
-.topic-card-stats .dot {
-  color: #c5ccd6;
 }
 .topic-card-foot {
   display: flex;

@@ -131,7 +131,17 @@
           <el-descriptions-item label="状态">
             <el-tag>{{ statusLabel(topic.status) }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="分类">{{ topic.category?.name || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="分类">
+            {{ topic.category?.name || '—' }}
+            <el-tag
+              v-if="topic.category?.code === 'FIRST_TOPIC'"
+              size="small"
+              type="danger"
+              style="margin-left: 6px"
+            >
+              第一议题
+            </el-tag>
+          </el-descriptions-item>
           <el-descriptions-item label="提出人">{{ topic.proposer?.realName || '—' }}</el-descriptions-item>
           <el-descriptions-item label="重大事项">
             <el-tag size="small" :type="topic.isMajor ? 'danger' : 'info'">
@@ -264,7 +274,7 @@
         />
       </el-select>
       <div class="hint" style="margin-top: 8px">
-        规则：列入回避名单的成员不得参与本议题讨论发言与表决；代录表决时自动跳过。
+        规则：列入回避名单的成员不参与本议题审签。
       </div>
     </el-card>
 

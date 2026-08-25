@@ -13,7 +13,6 @@
         <div><b>{{ summary.partyReview }}</b><span>党委审题</span></div>
         <div><b>{{ summary.minutesSign }}</b><span>纪要签署</span></div>
         <div><b>{{ summary.supervision }}</b><span>督办</span></div>
-        <div><b>{{ summary.checkin }}</b><span>待签到</span></div>
         <div><b>{{ summary.materialRead }}</b><span>待阅件</span></div>
       </div>
     </el-card>
@@ -38,7 +37,7 @@
         <el-input
           v-model="ruleQuestion"
           clearable
-          placeholder="例如：缺席书面意见算不算票？列席有没有表决权？"
+          placeholder="例如：纪要如何双签生效？重大事项如何办理？"
           @keyup.enter="askRule"
         />
         <el-button type="primary" :loading="ruleAsking" @click="askRule">提问</el-button>

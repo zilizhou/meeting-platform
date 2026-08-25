@@ -4,7 +4,10 @@
       <div class="eyebrow"><b></b> 会议现场 · 分轨办理</div>
       <h2>会议</h2>
       <p>
-        当前：{{ activeTab === 'party' ? '党组织会议' : '党政联席会议' }} · 按状态查阅本轨会议
+        当前：{{ activeTab === 'party' ? '党组织会议' : '党政联席会议' }}
+        <template v-if="holding"> · {{ holding.label }}应开
+          {{ currentHold?.required ?? '—' }} 次，已开 {{ currentHold?.count ?? '—' }} 次
+        </template>
       </p>
       <div class="nums">
         <button
@@ -26,7 +29,29 @@
         >
           <strong>{{ currentArchivedCount }}</strong><span>已归档</span>
         </button>
+        <div
+          v-if="currentHold"
+          class="num"
+          :class="[
+            activeTab === 'party' ? 'party' : 'joint',
+            { warn: !currentHold.held },
+          ]"
+        >
+          <strong>{{ currentHold.count }}/{{ currentHold.required }}</strong>
+          <span>{{ holding?.label || '本学期' }}已开</span>
+        </div>
       </div>
+    </div>
+
+    <div v-if="activeTab === 'party'" class="rule-banner party">
+      <strong>第一议题硬规则</strong>
+      党组织会议须将「第一议题（政治理论学习）」纳入议程，否则不能创建本场会议。
+    </div>
+    <div v-if="holding" class="rule-banner" :class="{ warn: currentHold && !currentHold.held }">
+      <strong>{{ holding.label }}频次</strong>
+      {{ activeTab === 'party' ? '党组织会议' : '党政联席会议' }}应开
+      {{ currentHold?.required }} 次，当前已排期/召开 {{ currentHold?.count }} 次。
+      {{ currentHold?.held ? '已达规定频次。' : '尚未达标。' }}
     </div>
 
     <div class="ui-filter is-equal" role="tablist">
@@ -94,7 +119,7 @@
           档案中心
         </button>
         <button class="ui-link" type="button" @click="load">刷新</button>
-        <span class="n">{{ currentList.length }} 场 · {{ monthGroups.length }} 个月</span>
+        <span class="n">{{ currentList.length }} 场 · {{ monthGroups.length }} 个自然月</span>
       </div>
     </div>
 
@@ -150,14 +175,15 @@
             @click="open(m)"
           >
             <div class="top">
-              <span class="ui-tag" :class="cardTrack">本月第 {{ m.monthIndex }} 次</span>
+              <span class="ui-tag" :class="cardTrack">
+                {{ g.label }}第 {{ m.monthIndex }} 场
+              </span>
               <span class="ui-tag" :class="cardTrack">{{ statusLabel(m.status) }}</span>
               <span
-                v-if="statusFilter === 'active' && m.canResolve !== undefined"
-                class="ui-tag"
-                :class="m.canResolve ? 'ok' : 'warn'"
+                v-if="activeTab === 'party' && !meetingHasFirstTopic(m)"
+                class="ui-tag warn"
               >
-                {{ m.canResolve ? '可决议' : '未达标' }}
+                缺第一议题
               </span>
               <span v-if="m.isMajor" class="ui-tag warn">重大</span>
             </div>
@@ -168,8 +194,7 @@
               </template>
               <template v-else>
                 期次：{{ m.periodNo || '—' }} · 时间：{{ formatTime(m.scheduledAt) }} ·
-                {{ flowResumeText(m) }} · 议题 {{ m.topics?.length || 0 }} · 到会
-                {{ m.actualAttend ?? 0 }}/{{ m.shouldAttend ?? 0 }}
+                {{ flowResumeText(m) }} · 议题 {{ m.topics?.length || 0 }}
               </template>
             </div>
             <div class="foot">
@@ -214,7 +239,7 @@
             <span>重大事项会</span>
             <div class="major-row">
               <el-switch v-model="form.isMajor" />
-              <em>开启后法定人数按 2/3</em>
+              <em>开启后按重大事项办理</em>
             </div>
           </label>
         </div>
@@ -228,12 +253,11 @@
           </span>
         </div>
         <p class="create-hint">
-          至少勾选 1 项议题方可创建（{{
-            createMode === 'party' ? '未审题勾选后视为通过' : '未双审勾选后视为通过'
-          }}）。已入其他会议的议题不可再选。
+          至少勾选 1 项议题方可创建。
           <template v-if="createMode === 'party'">
-            党组织会议须纳入「第一议题（政治理论学习）」，否则不能开会。
+            <b>党组织会议必须勾选「第一议题（政治理论学习）」，否则不能开会。</b>
           </template>
+          已入其他会议的议题不可再选。
         </p>
 
         <div class="topic-table" :class="{ party: createMode === 'party' }">
@@ -322,7 +346,7 @@ interface MeetingItem {
   canResolve?: boolean
   actualAttend?: number
   shouldAttend?: number
-  topics?: { id: string }[]
+  topics?: { id: string; category?: { code?: string; name?: string } }[]
 }
 
 const router = useRouter()
@@ -339,6 +363,7 @@ const createMode = ref<'party' | 'joint'>('party')
 const topicsLoading = ref(false)
 const creating = ref(false)
 const topics = ref<any[]>([])
+const holding = ref<any>(null)
 const form = reactive({
   title: '',
   periodNo: '',
@@ -398,6 +423,15 @@ const monthGroups = computed(() => groupMeetingsByMonth(currentList.value))
 
 const cardTrack = computed(() => (activeTab.value === 'party' ? 'party' : 'joint'))
 
+const currentHold = computed(() => {
+  if (!holding.value) return null
+  return activeTab.value === 'party' ? holding.value.party : holding.value.joint
+})
+
+function meetingHasFirstTopic(m: MeetingItem) {
+  return (m.topics || []).some((t) => t.category?.code === 'FIRST_TOPIC')
+}
+
 function isTopicLocked(t: any) {
   return (
     !!t.meetingId ||
@@ -413,7 +447,12 @@ const pickerTopics = computed(() =>
   topics.value
     .filter((t) => t.status !== 'REJECTED')
     .map((t) => ({ ...t, locked: isTopicLocked(t) }))
-    .sort((a, b) => Number(a.locked) - Number(b.locked)),
+    .sort((a, b) => {
+      const aFirst = a.category?.code === 'FIRST_TOPIC' ? 0 : 1
+      const bFirst = b.category?.code === 'FIRST_TOPIC' ? 0 : 1
+      if (aFirst !== bFirst) return aFirst - bFirst
+      return Number(a.locked) - Number(b.locked)
+    }),
 )
 
 function statusLabel(s: string) {
@@ -471,14 +510,10 @@ function setStatus(status: StatusFilter) {
 
 function open(m: MeetingItem) {
   const from = m.meetingType === 'PARTY_COMMITTEE' ? 'party' : undefined
-  const flow = deriveMeetingFlowStep(m as any)
-  const query: Record<string, string> = {}
-  if (from) query.from = from
-  if (!flow.allDone) query.step = String(flow.index + 1)
   router.push({
     name: 'meeting-detail',
     params: { id: m.id },
-    query,
+    query: from ? { from } : {},
   })
 }
 
@@ -495,12 +530,14 @@ function flowResumeLink(m: MeetingItem) {
 async function load() {
   loading.value = true
   try {
-    const [party, joint]: any[] = await Promise.all([
+    const [party, joint, hold]: any[] = await Promise.all([
       http.get('/meetings', { params: { meetingType: 'PARTY_COMMITTEE' } }),
       http.get('/meetings', { params: { meetingType: 'JOINT_CONFERENCE' } }),
+      http.get('/meetings/holding').catch(() => null),
     ])
     partyAll.value = party || []
     jointAll.value = joint || []
+    holding.value = hold
   } finally {
     loading.value = false
   }
@@ -626,6 +663,32 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.rule-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.rule-banner strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+.rule-banner.party {
+  background: #fff7f4;
+  border-color: #f1c6bb;
+}
+.rule-banner.warn {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+.nums .num.warn strong {
+  color: #c2410c;
+}
 .ui-sec h3 i.party {
   background: var(--party);
 }

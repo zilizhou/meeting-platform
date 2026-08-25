@@ -20,7 +20,7 @@
             ? scopeHint
               ? `校级查阅 · ${scopeHint}`
               : '校级查阅'
-            : '校级监管 · 一期'
+            : '校级监管 · 学期频次'
         }}
       </div>
       <h2>两会态势总览</h2>
@@ -169,7 +169,7 @@
       </div>
     </section>
 
-    <!-- 本月缺开（一期核心） -->
+    <!-- 当前周期缺开 -->
     <section class="ui-sec">
       <h3><i></i> {{ monthLabel }}未按规定召开</h3>
       <span class="n">{{ missingRows.length }} 院次</span>

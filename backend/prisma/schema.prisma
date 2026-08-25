@@ -300,13 +300,17 @@ model Resolution {
 }
 
 model Minutes {
-  id          String    @id @default(cuid())
-  meetingId   String    @unique
-  content     String
-  version     Int       @default(1)
-  effectiveAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  meetingId    String    @unique
+  content      String
+  version      Int       @default(1)
+  effectiveAt  DateTime?
+  filePath     String?
+  originalName String?
+  mimeType     String?
+  fileSize     Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   meeting Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   signs   MinutesSign[]

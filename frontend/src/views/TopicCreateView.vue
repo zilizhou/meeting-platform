@@ -3,7 +3,18 @@
     <div class="ui-hero" :class="isParty ? 'party' : 'joint'">
       <div class="eyebrow"><b></b> {{ isParty ? '党委红轨' : '联席蓝轨' }} · 议题征集</div>
       <h2>议题征集</h2>
-      <p>先用自然语言描述事项，AI 辅助生成标题、内容与分类；人工核对后提交进入议题库。</p>
+      <p>
+        {{
+          isParty
+            ? '党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。先描述事项，AI 辅助生成后请人工核对。'
+            : '先用自然语言描述事项，AI 辅助生成标题、内容与分类；人工核对后提交进入议题库。'
+        }}
+      </p>
+    </div>
+
+    <div v-if="isParty" class="rule-banner party">
+      <strong>第一议题硬规则</strong>
+      分类请优先选「第一议题（政治理论学习）」。没有第一议题的党组织会议不能创建、不能开会。
     </div>
 
     <!-- 步骤 1：描述 -->
@@ -46,9 +57,14 @@
         <span>议题分类</span>
         <select v-model="form.categoryId" @change="onCategoryChange">
           <option value="">请选择</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+          <option v-for="c in categories" :key="c.id" :value="c.id">
+            {{ c.code === 'FIRST_TOPIC' ? `第一议题 · ${c.name}` : c.name }}
+          </option>
         </select>
-        <p v-if="isParty" class="hint">党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。</p>
+        <p v-if="isParty && isFirstTopicCategory" class="hint ok">当前分类为第一议题。</p>
+        <p v-else-if="isParty" class="hint warn">
+          党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。若本次不是第一议题，请确保议题库里另有已审过的第一议题。
+        </p>
       </label>
 
       <div class="checks">
@@ -101,6 +117,10 @@ const meetingType = computed(() =>
     : 'JOINT_CONFERENCE',
 )
 const isParty = computed(() => meetingType.value === 'PARTY_COMMITTEE')
+const isFirstTopicCategory = computed(() => {
+  const cat = categories.value.find((c) => c.id === form.categoryId)
+  return cat?.code === 'FIRST_TOPIC'
+})
 
 const categories = ref<any[]>([])
 const partyResolved = ref<Array<{ title: string; resolutionId: string }>>([])
@@ -138,6 +158,10 @@ async function loadMeta() {
   categories.value = await http.get('/org/categories', {
     params: { meetingType: meetingType.value },
   })
+  if (isParty.value && !form.categoryId) {
+    const first = categories.value.find((c) => c.code === 'FIRST_TOPIC')
+    if (first) form.categoryId = first.id
+  }
   if (!isParty.value) {
     const partyTopics: any[] = await http.get('/topics', {
       params: { meetingType: 'PARTY_COMMITTEE' },
@@ -246,6 +270,25 @@ onMounted(loadMeta)
 </script>
 
 <style scoped>
+.rule-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff7f4;
+  border: 1px solid #f1c6bb;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.rule-banner strong {
+  display: block;
+  margin-bottom: 2px;
+}
+.hint.ok {
+  color: #166534;
+}
+.hint.warn {
+  color: #9a3412;
+}
 .panel {
   background: #fff;
   border-radius: 16px;

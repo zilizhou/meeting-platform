@@ -86,20 +86,13 @@
           <el-descriptions-item label="会议">{{ dossier.title }}</el-descriptions-item>
           <el-descriptions-item label="学院">{{ dossier.college?.name }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ statusLabel(dossier.status) }}</el-descriptions-item>
-          <el-descriptions-item label="到会">
-            {{ dossier.actualAttend }}/{{ dossier.shouldAttend }}
+          <el-descriptions-item label="议题">
+            {{ (dossier.topics || []).length }} 项
           </el-descriptions-item>
           <el-descriptions-item label="纪要">
             {{ dossier.minutes?.effectiveAt ? '已生效' : '未生效' }}
           </el-descriptions-item>
         </el-descriptions>
-
-        <h4 style="margin: 16px 0 8px">签到</h4>
-        <div v-for="a in dossier.attendances || []" :key="a.id" class="line">
-          {{ a.user?.realName }} ·
-          {{ a.leaveNote ? '请假' : a.checkedIn ? '已签到' : '未签到' }}
-          · {{ a.isFormal ? '正式' : '列席' }}
-        </div>
 
         <h4 style="margin: 16px 0 8px">议题与决议</h4>
         <div v-for="t in dossier.topics || []" :key="t.id" class="topic-block">
@@ -113,8 +106,6 @@
             {{ (t.materials || []).filter((m: any) => m.uploaded).length }}/{{
               (t.materials || []).length
             }}
-            · 表决 {{ (t.votes || []).filter((v: any) => v.voteCounted).length }} 票 · 缺席意见
-            {{ (t.votes || []).filter((v: any) => v.isAbsentOpinion).length }}
           </div>
           <div v-if="t.resolution?.supervisionTasks?.length" class="muted">
             督办

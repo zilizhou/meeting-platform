@@ -72,55 +72,32 @@ describe('议事规则硬校验（E2E）', () => {
     expect(String(res.body.message)).toContain('党组织会议');
   });
 
-  it('未达半数到会 → 禁止形成决议', async () => {
-    const topicId = await createApprovedTopic(ctx, '法定人数议题');
+  it('无需签到即可登记会后决议', async () => {
+    const topicId = await createApprovedTopic(ctx, '会后决议议题');
     const meetingId = await createMeetingWithTopic(ctx, topicId);
 
-    // 应到 3，只签 1 人（< 1/2）
-    await checkInUsers(ctx, meetingId, [ctx.users.secretary.id]);
-
-    const detail = await request(ctx.app.getHttpServer())
-      .get(`/api/meetings/${meetingId}`)
-      .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .expect(200);
-    expect(detail.body.canResolve).toBe(false);
-
-    await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/topics/${topicId}/vote`)
-      .set('Authorization', `Bearer ${ctx.users.secretary.token}`)
-      .send({ method: 'HAND', approve: true })
-      .expect(201);
-
-    const resolveRes = await request(ctx.app.getHttpServer())
+    const res = await request(ctx.app.getHttpServer())
       .post(`/api/meetings/${meetingId}/topics/${topicId}/resolve`)
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .send({ resultType: 'APPROVED', content: '试图违规通过' })
-      .expect(400);
+      .send({ resultType: 'APPROVED', content: '会议研究通过' })
+      .expect(201);
 
-    expect(String(resolveRes.body.message)).toMatch(/到会人数不足|禁止形成决议/);
+    const topic = (res.body.topics || []).find((t: any) => t.id === topicId);
+    expect(topic?.resolution?.resultType).toBe('APPROVED');
   });
 
-  it('重大事项未达三分之二 → 禁止形成决议', async () => {
+  it('重大事项也可直接登记会后决议', async () => {
     const topicId = await createApprovedTopic(ctx, '重大事项议题', { isMajor: true });
     const meetingId = await createMeetingWithTopic(ctx, topicId, { isMajor: true });
 
-    // 应到 3，签 2 人 = 2/3 刚好达标；先测只签 1 人
-    await checkInUsers(ctx, meetingId, [ctx.users.secretary.id]);
-
-    const detail = await request(ctx.app.getHttpServer())
-      .get(`/api/meetings/${meetingId}`)
-      .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .expect(200);
-    expect(detail.body.isMajor).toBe(true);
-    expect(detail.body.canResolve).toBe(false);
-
-    const resolveRes = await request(ctx.app.getHttpServer())
+    const res = await request(ctx.app.getHttpServer())
       .post(`/api/meetings/${meetingId}/topics/${topicId}/resolve`)
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .send({ resultType: 'APPROVED' })
-      .expect(400);
+      .send({ resultType: 'APPROVED', content: '原则同意' })
+      .expect(201);
 
-    expect(String(resolveRes.body.message)).toMatch(/2\/3|三分之二|到会人数不足|禁止形成决议/);
+    const topic = (res.body.topics || []).find((t: any) => t.id === topicId);
+    expect(topic?.resolution?.resultType).toBe('APPROVED');
   });
 
   it('列席人员无表决权', async () => {
@@ -142,41 +119,18 @@ describe('议事规则硬校验（E2E）', () => {
     expect(String(res.body.message)).toContain('列席');
   });
 
-  it('缺席书面意见不计票：仅 1 张计票赞成不足以过半数通过', async () => {
-    const topicId = await createApprovedTopic(ctx, '缺席不计票议题');
+  it('会后登记决议不依赖现场计票', async () => {
+    const topicId = await createApprovedTopic(ctx, '不计票议题');
     const meetingId = await createMeetingWithTopic(ctx, topicId);
-    // 签到 2/3，法定人数达标
-    await checkInUsers(ctx, meetingId, [
-      ctx.users.secretary.id,
-      ctx.users.dean.id,
-    ]);
-
-    // 仅书记投赞成（1 票）；应到 3，过半数需 >1.5 即至少 2 票
-    await request(ctx.app.getHttpServer())
-      .post(`/api/meetings/${meetingId}/topics/${topicId}/vote`)
-      .set('Authorization', `Bearer ${ctx.users.secretary.token}`)
-      .send({ method: 'HAND', approve: true })
-      .expect(201);
-
-    // 写入缺席书面同意（不计票）
-    await ctx.prisma.voteRecord.create({
-      data: {
-        topicId,
-        userId: ctx.users.viceDean.id,
-        method: 'ORAL',
-        approve: true,
-        voteCounted: false,
-        isAbsentOpinion: true,
-      },
-    });
 
     const res = await request(ctx.app.getHttpServer())
       .post(`/api/meetings/${meetingId}/topics/${topicId}/resolve`)
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .send({ resultType: 'APPROVED' })
-      .expect(400);
+      .send({ resultType: 'APPROVED', content: '线下表决通过后登记' })
+      .expect(201);
 
-    expect(String(res.body.message)).toMatch(/半数|赞成/);
+    const topic = (res.body.topics || []).find((t: any) => t.id === topicId);
+    expect(topic?.resolution?.resultType).toBe('APPROVED');
   });
 
   it('纪要单签不能生效，双签后生效并生成督办', async () => {

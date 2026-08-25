@@ -256,49 +256,17 @@ export class AiService {
       meeting.meetingType === MeetingType.PARTY_COMMITTEE
         ? '党组织会议'
         : '党政联席会';
-    const formal = meeting.attendances.filter((a) => a.isFormal);
-    const checked = formal.filter((a) => a.checkedIn);
-    const leave = formal.filter((a) => a.leaveNote);
-
-    const attendanceLines = [
-      `应到正式成员：${meeting.shouldAttend || formal.length}`,
-      `实到：${meeting.actualAttend || checked.length}`,
-      `已签到：${checked.map((a) => a.user.realName).join('、') || '—'}`,
-      leave.length
-        ? `请假：${leave.map((a) => `${a.user.realName}（${a.leaveNote}）`).join('；')}`
-        : '请假：无',
-      `列席：${meeting.attendances
-        .filter((a) => !a.isFormal)
-        .map((a) => a.user.realName)
-        .join('、') || '无'}`,
-    ];
 
     const topicBlocks = meeting.topics.map((t, idx) => {
-      const discussions = (t.discussions || [])
-        .map(
-          (d) =>
-            `- ${d.user?.realName || '成员'}（${d.user?.title || ''}）：${d.opinion}${
-              d.reason ? `，${d.reason}` : ''
-            }${d.isFinal ? '（最后表态）' : ''}`,
-        )
-        .join('\n');
-      const counted = (t.votes || []).filter(
-        (v) => v.voteCounted && !v.isAbsentOpinion,
-      );
-      const approve = counted.filter((v) => v.approve).length;
-      const reject = counted.filter((v) => v.approve === false).length;
-      const absent = (t.votes || []).filter((v) => v.isAbsentOpinion).length;
       const res = t.resolution;
       return [
         `【议题${idx + 1}：${t.title}】`,
         `状态：${t.status}`,
-        discussions ? `讨论意见：\n${discussions}` : '讨论意见：暂无结构化记录',
-        `表决（计票）：赞成 ${approve}，反对 ${reject}；缺席书面意见 ${absent}（不计票）`,
         res
-          ? `决议：${res.resultType}；${res.content || '—'}${
+          ? `会后登记决议：${res.resultType}；${res.content || '—'}${
               res.isPublic ? '；按规定公开' : ''
             }`
-          : '决议：尚未形成',
+          : '决议：尚未登记',
       ].join('\n');
     });
 
@@ -310,10 +278,7 @@ export class AiService {
         ? `预定时间：${meeting.scheduledAt.toISOString()}`
         : '',
       '',
-      '出席情况：',
-      ...attendanceLines,
-      '',
-      '议题与议决：',
+      '议题与会后决议（本系统不记录现场签到与表决过程）：',
       ...topicBlocks,
       meeting.minutes?.content
         ? `\n现有纪要正文（供参考，可改写）：\n${meeting.minutes.content.slice(0, 2000)}`
@@ -328,11 +293,11 @@ export class AiService {
         : '联席会纪要须党委书记与院长双签后生效';
 
     const systemPrompt = [
-      '你是高校二级学院双会议会务秘书助手，根据结构化会议记录起草纪要初稿。',
+      '你是高校二级学院双会议会务秘书助手，根据议题与会后登记的决议起草纪要初稿。',
       '要求：',
       '1. 使用规范公文中文，分节：会议概况、议题议决、其他事项、附注。',
-      '2. 忠实于给定的签到、讨论、表决、决议数据，禁止编造未出现的人名、票数、决议。',
-      '3. 缺席书面意见须注明「不计票」；列席无表决权。',
+      '2. 忠实于给定的议题标题与决议内容，禁止编造未出现的人名、票数、到会人数。',
+      '3. 不要编写现场签到、举手表决等过程细节。',
       `4. 文末注明：本稿为 AI 辅助初稿，须秘书核对后保存；${signRule}；AI 不得直接签署。`,
       '5. 不要输出「建议通过/建议否决」等替代会议结论的语句。',
     ].join('\n');

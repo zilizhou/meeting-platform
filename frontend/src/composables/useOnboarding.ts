@@ -40,7 +40,7 @@ export const onboardingGuides: Record<GuideKey, GuideDefinition> = {
     title: '认识系统',
     summary: '用 1 分钟了解最常用的入口。',
     steps: [
-      { title: '先看待办', description: '需要你处理的审核、签到、签署和督办会集中在这里。', path: '/todo', action: '打开待办' },
+      { title: '先看待办', description: '需要你处理的审核、纪要签署和督办会集中在这里。', path: '/todo', action: '打开待办' },
       { title: '再看会议', description: '查看即将召开、进行中和已经归档的会议。', path: '/meet', action: '打开会议' },
       { title: '从工作台发起业务', description: '申报议题、管理议题库、组织会议和查询档案都从这里开始。', path: '/work', action: '打开工作台' },
       { title: '需要帮助时', description: '在“我的”页面可以切换熟练模式，或随时重新开始引导。', path: '/me', action: '查看使用帮助' },
@@ -66,13 +66,13 @@ export const onboardingGuides: Record<GuideKey, GuideDefinition> = {
     title: '组织会议', summary: '完成排期、议程和参会准备。', steps: [
       { title: '进入会议管理', description: '选择党组织会议或党政联席会议轨道。', path: '/meet', action: '打开会议管理' },
       { title: '创建并排期', description: '填写时间地点、主持人和参会范围，把已审核议题加入议程。' },
-      { title: '会前核查', description: '确认材料、参会名单和法定人数，避免临会补录。' },
+      { title: '会前核查', description: '确认入会议题和上会材料已齐备。' },
     ],
   },
   minutes: {
     title: '纪要与签署', summary: '从会议记录到双签归档。', steps: [
       { title: '找到对应会议', description: '在会议列表打开已结束、待形成纪要的会议。', path: '/meet', action: '打开会议' },
-      { title: '整理会议结果', description: '核对讨论结论、表决结果和回避情况，再生成或编辑纪要。' },
+      { title: '整理会议结果', description: '按入会议题在系统内编辑纪要，或上传线下纪要后签署。' },
       { title: '完成签署归档', description: '按会议类型完成规定签署；归档后在档案中心检索。', path: '/archives', action: '打开档案中心' },
     ],
   },
@@ -154,10 +154,10 @@ export function useOnboarding() {
   const roleMission = computed(() => {
     if (isViewer.value) return '查看双会态势、预警、督办、档案和领导简报。'
     if (roles.value.includes('SCHOOL_ADMIN')) return '开展校级监管、巡视导出和系统管理。'
-    if (roles.value.includes('MEETING_SECRETARY') || roles.value.includes('COLLEGE_ADMIN')) return '征集议题、组织会议、记录表决、形成纪要并归档。'
+    if (roles.value.includes('MEETING_SECRETARY') || roles.value.includes('COLLEGE_ADMIN')) return '征集议题、组织会议、形成纪要并归档。'
     if (roles.value.includes('SECRETARY')) return '审核议题、主持会议，并完成规定的纪要签署。'
     if (roles.value.includes('DEAN')) return '审核联席议题、参加会议，并完成规定的纪要签署。'
-    return '处理阅件、签到、讨论、表决及分配给你的事项。'
+    return '处理阅件、会后决议及分配给你的事项。'
   })
   const showWelcome = computed(() => Boolean(auth.user) && state.mode === 'novice' && !state.welcomeCompleted)
   const activeGuide = computed(() => state.activeGuideKey ? onboardingGuides[state.activeGuideKey] : null)

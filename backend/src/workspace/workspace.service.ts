@@ -44,7 +44,6 @@ export class WorkspaceService {
       items.push(...(await this.pendingMinutesSigns(user)));
     }
     items.push(...(await this.pendingSupervisions(user)));
-    items.push(...(await this.pendingCheckins(user)));
     items.push(...(await this.pendingMaterialReads(user)));
 
     items.sort((a, b) => {

@@ -7,6 +7,13 @@
       <el-button @click="load">刷新</el-button>
     </div>
 
+    <div class="rule-banner">
+      <strong>可见范围 · 代审</strong>
+      书记、副书记、院长、副院长、学院管理员、会议秘书可看全量议题；列席、委员、部门负责人仅看与自己相关的议题。
+      学院管理员可在待审条目上代审通过或退回（须电话/当面确认）。
+      <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
+    </div>
+
     <el-empty v-if="!topics.length" description="暂无联席会议题">
       <el-button v-if="roles.canCreateTopic.value" type="primary" @click="openCreate">
         去议题征集
@@ -64,7 +71,7 @@
           <span v-if="!row.jointReviews?.length" class="muted">未发起</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="操作" width="360" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="$router.push(`/topics/${row.id}`)">详情</el-button>
           <el-button
@@ -94,10 +101,18 @@
           <el-button
             v-if="roles.canProxyReview.value && row.status === 'PENDING_REVIEW'"
             link
-            type="warning"
-            @click="$router.push(`/topics/${row.id}`)"
+            type="success"
+            @click="openProxyReview(row, 'APPROVED')"
           >
-            代审
+            代审通过
+          </el-button>
+          <el-button
+            v-if="roles.canProxyReview.value && row.status === 'PENDING_REVIEW'"
+            link
+            type="danger"
+            @click="openProxyReview(row, 'REJECTED')"
+          >
+            代审退回
           </el-button>
         </template>
       </el-table-column>
@@ -166,11 +181,51 @@
         <el-button type="primary" @click="create">提交</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="proxyVisible" :title="proxyTitle" width="480px">
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+        title="代审须先电话或当面征得书记/院长同意，系统仅留痕，不替代本人审签。"
+      />
+      <el-form label-width="100px">
+        <el-form-item label="代审一侧">
+          <el-select v-model="proxyForm.proxySide" style="width: 100%">
+            <el-option label="党委书记" value="SECRETARY" />
+            <el-option label="院长" value="DEAN" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="确认方式">
+          <el-select v-model="proxyForm.proxyMethod" style="width: 100%">
+            <el-option label="电话确认" value="PHONE" />
+            <el-option label="当面确认" value="IN_PERSON" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="对方姓名">
+          <el-input v-model="proxyForm.proxyCounterparty" placeholder="被确认的书记或院长姓名" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="proxyForm.comment" type="textarea" :rows="2" placeholder="可选" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="proxyVisible = false">取消</el-button>
+        <el-button
+          :type="proxyForm.decision === 'REJECTED' ? 'danger' : 'primary'"
+          :loading="proxySubmitting"
+          @click="submitProxyReview"
+        >
+          确认{{ proxyForm.decision === 'REJECTED' ? '退回' : '通过' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
@@ -184,6 +239,19 @@ const partyResolved = ref<any[]>([])
 const visible = ref(false)
 const assistLoading = ref(false)
 const assistTip = ref('')
+const proxyVisible = ref(false)
+const proxySubmitting = ref(false)
+const proxyTopicId = ref('')
+const proxyForm = reactive({
+  decision: 'APPROVED' as 'APPROVED' | 'REJECTED',
+  proxyMethod: 'PHONE' as 'PHONE' | 'IN_PERSON',
+  proxyCounterparty: '',
+  proxySide: 'SECRETARY' as 'SECRETARY' | 'DEAN',
+  comment: '',
+})
+const proxyTitle = computed(() =>
+  proxyForm.decision === 'REJECTED' ? '代审退回' : '代审通过',
+)
 const form = reactive({
   title: '',
   content: '',
@@ -345,10 +413,58 @@ async function review(row: any, decision: 'APPROVED' | 'REJECTED') {
   }
 }
 
+function openProxyReview(row: any, decision: 'APPROVED' | 'REJECTED') {
+  proxyTopicId.value = row.id
+  proxyForm.decision = decision
+  proxyForm.proxyMethod = 'PHONE'
+  proxyForm.proxyCounterparty = ''
+  proxyForm.proxySide = 'SECRETARY'
+  proxyForm.comment = ''
+  proxyVisible.value = true
+}
+
+async function submitProxyReview() {
+  if (!proxyForm.proxyCounterparty.trim()) {
+    ElMessage.warning('请填写对方姓名')
+    return
+  }
+  proxySubmitting.value = true
+  try {
+    await http.post(`/topics/${proxyTopicId.value}/review`, {
+      decision: proxyForm.decision,
+      comment: proxyForm.comment || undefined,
+      proxy: true,
+      proxyMethod: proxyForm.proxyMethod,
+      proxyCounterparty: proxyForm.proxyCounterparty.trim(),
+      proxySide: proxyForm.proxySide,
+    })
+    ElMessage.success(proxyForm.decision === 'APPROVED' ? '已代审通过' : '已代审退回')
+    proxyVisible.value = false
+    await load()
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  } finally {
+    proxySubmitting.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
+.rule-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.rule-banner strong {
+  display: block;
+  margin-bottom: 2px;
+}
 .toolbar {
   display: flex;
   gap: 8px;

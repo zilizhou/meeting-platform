@@ -29,16 +29,6 @@ function statusLabel(s: string) {
   return map[s] || s || '—'
 }
 
-function voteStatLine(topic: any) {
-  const counted = (topic.votes || []).filter(
-    (v: any) => v.voteCounted && !v.isAbsentOpinion,
-  )
-  const approve = counted.filter((v: any) => v.approve).length
-  const reject = counted.filter((v: any) => v.approve === false).length
-  const absent = (topic.votes || []).filter((v: any) => v.isAbsentOpinion).length
-  return `赞成 ${approve}，反对 ${reject}；缺席书面意见 ${absent}（不计票）`
-}
-
 export function exportMeetingMinutesDoc(meeting: any) {
   if (!meeting) return
 
@@ -48,29 +38,16 @@ export function exportMeetingMinutesDoc(meeting: any) {
   const title = `${college}${meetingLabel}纪要`
   const period = meeting.periodNo ? `（${esc(meeting.periodNo)}）` : ''
 
-  const formal = (meeting.attendances || []).filter((a: any) => a.isFormal)
-  const checked = formal.filter((a: any) => a.checkedIn)
-  const leave = formal.filter((a: any) => a.leaveNote)
-  const attendees = (meeting.attendances || []).filter((a: any) => !a.isFormal)
-
   const topicHtml = (meeting.topics || [])
     .map((t: any, idx: number) => {
-      const discussions = (t.discussions || [])
-        .map((d: any) => {
-          const who = d.user?.realName || '成员'
-          const titlePart = d.user?.title ? `（${d.user.title}）` : ''
-          const finalMark = d.isFinal ? '【最后表态】' : ''
-          const reason = d.reason ? `：${d.reason}` : ''
-          return `<p class="indent">· ${esc(who)}${esc(titlePart)}${finalMark}${esc(d.opinion || '')}${esc(reason)}</p>`
-        })
-        .join('')
-
       const res = t.resolution
-      const resText = res
-        ? `${statusLabel(res.resultType)}${res.content ? `。${res.content}` : ''}${
-            res.isPublic ? '（按规定公开）' : ''
-          }`
-        : '尚未形成决议'
+      const resLine = res
+        ? `<p><b>会议决议：</b>${esc(
+            `${statusLabel(res.resultType)}${res.content ? `。${res.content}` : ''}${
+              res.isPublic ? '（按规定公开）' : ''
+            }`,
+          )}</p>`
+        : ''
 
       return `
         <h3>${idx + 1}. ${esc(t.title)}</h3>
@@ -79,10 +56,7 @@ export function exportMeetingMinutesDoc(meeting: any) {
           ${t.isMajor ? ' · 重大事项' : ''}
           ${t.proposer?.realName ? ` · 提出人 ${esc(t.proposer.realName)}` : ''}
         </p>
-        <p><b>讨论情况：</b>${discussions ? '' : '暂无结构化记录'}</p>
-        ${discussions || ''}
-        <p><b>表决结果：</b>${esc(voteStatLine(t))}</p>
-        <p><b>会议决议：</b>${esc(resText)}</p>
+        ${resLine}
       `
     })
     .join('<br/>')
@@ -172,25 +146,10 @@ export function exportMeetingMinutesDoc(meeting: any) {
     <p><b>会议名称：</b>${esc(meeting.title)}</p>
     <p><b>会议类型：</b>${esc(meetingLabel)}</p>
     <p><b>会议时间：</b>${esc(formatTime(meeting.scheduledAt))}</p>
-    <p><b>应到正式成员：</b>${esc(meeting.shouldAttend)} 人；
-       <b>实到：</b>${esc(meeting.actualAttend)} 人；
-       <b>法定人数：</b>${meeting.canResolve ? '达标' : '未达标'}
-       ${meeting.isMajor ? '（重大事项 · 2/3 门槛）' : ''}
-    </p>
-    <p><b>出席：</b>${esc(checked.map((a: any) => a.user?.realName).filter(Boolean).join('、') || '—')}</p>
-    <p><b>请假：</b>${
-      leave.length
-        ? esc(
-            leave
-              .map((a: any) => `${a.user?.realName || ''}（${a.leaveNote}）`)
-              .join('；'),
-          )
-        : '无'
-    }</p>
-    <p><b>列席：</b>${esc(attendees.map((a: any) => a.user?.realName).filter(Boolean).join('、') || '无')}</p>
+    ${meeting.isMajor ? '<p><b>事项性质：</b>重大事项</p>' : ''}
   </div>
 
-  <h2>二、议题讨论与议决</h2>
+  <h2>二、议题与决议</h2>
   ${topicHtml || '<p>本次会议无入会议题。</p>'}
 
   <h2>三、会议纪要正文</h2>
@@ -204,7 +163,7 @@ export function exportMeetingMinutesDoc(meeting: any) {
 
   <div class="footer">
     <p>导出时间：${esc(formatTime(new Date()))}</p>
-    <p>本文件由曲师大双会管理系统根据会议现场记录自动生成，请以签署生效后的正式纪要为准。</p>
+    <p>本文件由曲师大双会管理系统根据议题与会后决议生成，请以签署生效后的正式纪要为准。</p>
   </div>
 </body>
 </html>`

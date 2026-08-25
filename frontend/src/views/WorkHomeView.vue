@@ -32,6 +32,22 @@
       </div>
     </div>
 
+    <div
+      v-if="holding"
+      class="rule-banner"
+      :class="{ warn: !holding.party?.held || !holding.joint?.held }"
+    >
+      <strong>{{ holding.label }}召开进度</strong>
+      党组织会议 {{ holding.party?.count }}/{{ holding.party?.required }}
+      {{ holding.party?.held ? '已达标' : '未达标' }}
+      · 党政联席会议 {{ holding.joint?.count }}/{{ holding.joint?.required }}
+      {{ holding.joint?.held ? '已达标' : '未达标' }}。
+    </div>
+    <div v-if="activeTab === 'party'" class="rule-banner party">
+      <strong>第一议题硬规则</strong>
+      党组织会议须将「第一议题（政治理论学习）」纳入议程，否则不能创建、不能开会。
+    </div>
+
     <section v-if="onboarding.state.mode === 'novice'" class="task-guide">
       <div class="task-guide-head">
         <div><small>新手导航</small><h3>我要办理</h3></div>
@@ -92,7 +108,7 @@
       <button class="w-entry party" type="button" @click="router.push('/party-topics')">
         <div class="ico">库</div>
         <strong>议题库</strong>
-        <em>审题与流转</em>
+        <em>第一议题 · 审题 · 代审</em>
       </button>
       <button
         class="w-entry party"
@@ -101,7 +117,7 @@
       >
         <div class="ico">会</div>
         <strong>会议管理</strong>
-        <em>排期 · 现场 · 归档</em>
+        <em>须有第一议题方可开会</em>
       </button>
       <button
         class="w-entry party"
@@ -142,7 +158,7 @@
       >
         <div class="ico">会</div>
         <strong>会议管理</strong>
-        <em>表决 · 双签 · 归档</em>
+        <em>决议 · 纪要 · 归档</em>
       </button>
       <button
         class="w-entry joint"
@@ -184,7 +200,7 @@
       >
         <div class="ico">名</div>
         <strong>参会名单</strong>
-        <em>法定人数依据</em>
+        <em>正式成员名单</em>
       </button>
       <button class="w-entry neutral" type="button" @click="router.push('/agent')">
         <div class="ico">智</div>
@@ -196,10 +212,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useOnboarding, type GuideKey } from '@/composables/useOnboarding'
+import http from '@/api/http'
 
 type WorkTab = 'party' | 'joint' | 'general'
 
@@ -207,6 +224,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const onboarding = useOnboarding()
 const activeTab = ref<WorkTab>('party')
+const holding = ref<any>(null)
 
 interface GuideTask { key: GuideKey; icon: string; title: string; desc: string }
 const guideTasks = computed<GuideTask[]>(() => {
@@ -263,9 +281,38 @@ const currentEntryCount = computed(() => {
 function goCreate(meetingType: string) {
   router.push({ name: 'topic-create', query: { meetingType } })
 }
+
+onMounted(async () => {
+  try {
+    holding.value = await http.get('/meetings/holding')
+  } catch {
+    holding.value = null
+  }
+})
 </script>
 
 <style scoped>
+.rule-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.rule-banner.warn {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+.rule-banner.party {
+  background: #fff7f4;
+  border-color: #f1c6bb;
+}
+.rule-banner strong {
+  display: block;
+  margin-bottom: 2px;
+}
 .task-guide { margin: 14px 0; padding: 16px; border: 1px solid #d9e3eb; border-radius: 17px; background: linear-gradient(135deg, #fff, #f5f8fb); box-shadow: var(--shadow); }
 .task-guide-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .task-guide-head small { color: #7a4548; font-weight: 700; }

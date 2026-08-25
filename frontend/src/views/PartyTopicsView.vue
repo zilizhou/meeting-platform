@@ -3,7 +3,7 @@
     <div class="ui-hero party">
       <div class="eyebrow"><b></b> 党委红轨 · 议题库</div>
       <h2>党组织会议议题库</h2>
-      <p>学院党组织会议历次议题的集中管理入口</p>
+      <p>学院党组织会议历次议题的集中管理入口。须有「第一议题」入会后方可开会；学院管理员可代审通过或退回。</p>
       <div class="nums">
         <button
           type="button"
@@ -30,6 +30,17 @@
           <strong>{{ countOf(['RESOLVED']) }}</strong><span>已决议</span>
         </button>
       </div>
+    </div>
+
+    <div class="rule-banner party">
+      <strong>第一议题 · 代审</strong>
+      党组织会议必须把「第一议题（政治理论学习）」纳入议程，否则不能开会。
+      学院管理员可在待审议题上代审通过或退回（须电话/当面确认）。
+      <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
+    </div>
+    <div v-if="!hasReadyFirstTopic" class="rule-banner warn">
+      <strong>尚未备妥第一议题</strong>
+      议题库里还没有已审过的第一议题。请先征集并完成书记审题，否则无法创建/召开党组织会议。
     </div>
 
     <div class="ui-filter-wrap">
@@ -75,6 +86,7 @@
     <article v-for="t in filteredTopics" :key="t.id" class="ui-card party">
       <div class="top">
         <span class="ui-tag" :class="statusInfo(t).tag">{{ statusInfo(t).label }}</span>
+        <span v-if="t.category?.code === 'FIRST_TOPIC'" class="ui-tag party">第一议题</span>
         <span v-if="t.transferTo" class="ui-tag joint">已转联席会</span>
         <span v-if="t.isMajor" class="ui-tag warn">重大</span>
         <span v-if="t.isTempMotion" class="ui-tag warn">临时动议</span>
@@ -105,9 +117,18 @@
             v-if="roles.canProxyReview.value && t.status === 'PENDING_REVIEW'"
             class="ui-link"
             type="button"
-            @click="$router.push(`/topics/${t.id}?from=party`)"
+            @click="openProxyReview(t, 'APPROVED')"
           >
-            代审
+            代审通过
+          </button>
+          <button
+            v-if="roles.canProxyReview.value && t.status === 'PENDING_REVIEW'"
+            class="ui-link"
+            type="button"
+            style="color: var(--party)"
+            @click="openProxyReview(t, 'REJECTED')"
+          >
+            代审退回
           </button>
           <button v-if="canEdit(t)" class="ui-link" type="button" @click="openEdit(t)">编辑</button>
         </div>
@@ -131,7 +152,12 @@
         </el-form-item>
         <el-form-item label="分类">
           <el-select v-model="editForm.categoryId" style="width: 100%">
-            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+            <el-option
+              v-for="c in categories"
+              :key="c.id"
+              :label="c.code === 'FIRST_TOPIC' ? `第一议题 · ${c.name}` : c.name"
+              :value="c.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="内容">
@@ -147,6 +173,40 @@
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="proxyVisible" :title="proxyTitle" width="480px">
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+        title="代审须先电话或当面征得书记同意，系统仅留痕，不替代本人审签。"
+      />
+      <el-form label-width="100px">
+        <el-form-item label="确认方式">
+          <el-select v-model="proxyForm.proxyMethod" style="width: 100%">
+            <el-option label="电话确认" value="PHONE" />
+            <el-option label="当面确认" value="IN_PERSON" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="对方姓名">
+          <el-input v-model="proxyForm.proxyCounterparty" placeholder="被确认的书记姓名" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="proxyForm.comment" type="textarea" :rows="2" placeholder="可选" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="proxyVisible = false">取消</el-button>
+        <el-button
+          :type="proxyForm.decision === 'REJECTED' ? 'danger' : 'primary'"
+          :loading="proxySubmitting"
+          @click="submitProxyReview"
+        >
+          确认{{ proxyForm.decision === 'REJECTED' ? '退回' : '通过' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -166,6 +226,15 @@ const categories = ref<any[]>([])
 const editVisible = ref(false)
 const saving = ref(false)
 const editingId = ref('')
+const proxyVisible = ref(false)
+const proxySubmitting = ref(false)
+const proxyTopicId = ref('')
+const proxyForm = reactive({
+  decision: 'APPROVED' as 'APPROVED' | 'REJECTED',
+  proxyMethod: 'PHONE' as 'PHONE' | 'IN_PERSON',
+  proxyCounterparty: '',
+  comment: '',
+})
 const editForm = reactive({
   title: '',
   content: '',
@@ -207,6 +276,18 @@ const filteredTopics = computed(() => {
   if (!def || !def.statuses.length) return topics.value
   return topics.value.filter((t) => def.statuses.includes(t.status))
 })
+
+const hasReadyFirstTopic = computed(() =>
+  topics.value.some(
+    (t) =>
+      t.category?.code === 'FIRST_TOPIC' &&
+      ['APPROVED', 'ON_AGENDA', 'RESOLVED'].includes(t.status),
+  ),
+)
+
+const proxyTitle = computed(() =>
+  proxyForm.decision === 'REJECTED' ? '代审退回' : '代审通过',
+)
 
 function countOf(statuses: string[]) {
   if (!statuses.length) return topics.value.length
@@ -334,10 +415,65 @@ async function submitReview(row: any) {
   }
 }
 
+function openProxyReview(t: any, decision: 'APPROVED' | 'REJECTED') {
+  proxyTopicId.value = t.id
+  proxyForm.decision = decision
+  proxyForm.proxyMethod = 'PHONE'
+  proxyForm.proxyCounterparty = ''
+  proxyForm.comment = ''
+  proxyVisible.value = true
+}
+
+async function submitProxyReview() {
+  if (!proxyForm.proxyCounterparty.trim()) {
+    ElMessage.warning('请填写对方姓名')
+    return
+  }
+  proxySubmitting.value = true
+  try {
+    await http.post(`/topics/${proxyTopicId.value}/review`, {
+      decision: proxyForm.decision,
+      comment: proxyForm.comment || undefined,
+      proxy: true,
+      proxyMethod: proxyForm.proxyMethod,
+      proxyCounterparty: proxyForm.proxyCounterparty.trim(),
+    })
+    ElMessage.success(proxyForm.decision === 'APPROVED' ? '已代审通过' : '已代审退回')
+    proxyVisible.value = false
+    await load()
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  } finally {
+    proxySubmitting.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
+.rule-banner {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.rule-banner strong {
+  display: block;
+  margin-bottom: 2px;
+}
+.rule-banner.party {
+  background: #fff7f4;
+  border-color: #f1c6bb;
+}
+.rule-banner.warn {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
 .ui-sec h3 i.party {
   background: var(--party);
 }
