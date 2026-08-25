@@ -24,13 +24,27 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (res) => res.data,
   (err) => {
-    const message = err.response?.data?.message || err.message || '请求失败'
+    const data = err.response?.data
+    const message = data?.message || err.message || '请求失败'
+    const code = data?.code || data?.message?.code
+    if (err.response?.status === 403 && (code === 'PASSWORD_CHANGE_REQUIRED' || data?.message?.code === 'PASSWORD_CHANGE_REQUIRED')) {
+      const auth = useAuthStore()
+      if (auth.user) {
+        auth.user = { ...auth.user, mustChangePassword: true }
+        localStorage.setItem('user', JSON.stringify(auth.user))
+      }
+      router.push('/change-password')
+    }
     if (err.response?.status === 401) {
       const auth = useAuthStore()
-      auth.logout()
+      auth.clearSession()
       router.push('/login')
     }
-    return Promise.reject(Array.isArray(message) ? message.join('；') : message)
+    const msg =
+      typeof message === 'object' && message?.message
+        ? message.message
+        : message
+    return Promise.reject(Array.isArray(msg) ? msg.join('；') : msg)
   },
 )
 

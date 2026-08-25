@@ -124,6 +124,14 @@
           </div>
         </div>
 
+        <button class="item" type="button" @click="router.push('/change-password')">
+          <div class="ico">密</div>
+          <div>
+            <strong>修改密码</strong>
+            <em>定期更换，保障账号安全</em>
+          </div>
+          <span class="chev">›</span>
+        </button>
         <button class="out" type="button" @click="onLogout">退出登录</button>
         <div class="foot">明德同枢 · 曲阜师范大学</div>
       </div>

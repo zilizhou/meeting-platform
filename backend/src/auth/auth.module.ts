@@ -8,6 +8,11 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
+import { PasswordChangeGuard } from './password-change.guard';
+import {
+  jwtExpiresIn,
+  jwtSecretOrThrow,
+} from '../common/password-policy';
 
 @Module({
   imports: [
@@ -15,14 +20,10 @@ import { RolesGuard } from './roles.guard';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const secret = config.get<string>('JWT_SECRET');
-        if (process.env.NODE_ENV === 'production' && !secret) {
-          throw new Error('生产环境必须配置 JWT_SECRET');
-        }
+      useFactory: () => {
         return {
-          secret: secret || 'qfnu-meeting-dev-secret-change-me',
-          signOptions: { expiresIn: '7d' },
+          secret: jwtSecretOrThrow(),
+          signOptions: { expiresIn: jwtExpiresIn() as any },
         };
       },
     }),
@@ -33,6 +34,7 @@ import { RolesGuard } from './roles.guard';
     JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PasswordChangeGuard },
   ],
   exports: [AuthService],
 })

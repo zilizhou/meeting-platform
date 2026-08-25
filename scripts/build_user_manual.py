@@ -87,9 +87,10 @@ def set_table_geometry(table, widths):
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
 
-def set_run_font(run, size=None, bold=None, color=None, font="Noto Sans CJK SC"):
+def set_run_font(run, size=None, bold=None, color=None, font="SimSun"):
     run.font.name = font
-    run._element.get_or_add_rPr().rFonts.set(qn("w:eastAsia"), font)
+    east_asia_font = "宋体" if font == "SimSun" else font
+    run._element.get_or_add_rPr().rFonts.set(qn("w:eastAsia"), east_asia_font)
     run._element.rPr.rFonts.set(qn("w:ascii"), font)
     run._element.rPr.rFonts.set(qn("w:hAnsi"), font)
     run._element.rPr.rFonts.set(qn("w:cs"), font)
@@ -120,11 +121,11 @@ def add_field(paragraph, instruction: str, placeholder=""):
 
 def configure_styles(doc: Document):
     normal = doc.styles["Normal"]
-    normal.font.name = "Noto Sans CJK SC"
-    normal._element.rPr.rFonts.set(qn("w:eastAsia"), "Noto Sans CJK SC")
-    normal._element.rPr.rFonts.set(qn("w:ascii"), "Noto Sans CJK SC")
-    normal._element.rPr.rFonts.set(qn("w:hAnsi"), "Noto Sans CJK SC")
-    normal._element.rPr.rFonts.set(qn("w:cs"), "Noto Sans CJK SC")
+    normal.font.name = "SimSun"
+    normal._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+    normal._element.rPr.rFonts.set(qn("w:ascii"), "SimSun")
+    normal._element.rPr.rFonts.set(qn("w:hAnsi"), "SimSun")
+    normal._element.rPr.rFonts.set(qn("w:cs"), "SimSun")
     normal.font.size = Pt(10.5)
     normal.paragraph_format.space_after = Pt(6)
     normal.paragraph_format.line_spacing = 1.25
@@ -138,11 +139,11 @@ def configure_styles(doc: Document):
     }
     for name, (size, color, before, after) in tokens.items():
         style = doc.styles[name]
-        style.font.name = "Noto Sans CJK SC"
-        style._element.rPr.rFonts.set(qn("w:eastAsia"), "Noto Sans CJK SC")
-        style._element.rPr.rFonts.set(qn("w:ascii"), "Noto Sans CJK SC")
-        style._element.rPr.rFonts.set(qn("w:hAnsi"), "Noto Sans CJK SC")
-        style._element.rPr.rFonts.set(qn("w:cs"), "Noto Sans CJK SC")
+        style.font.name = "SimSun"
+        style._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+        style._element.rPr.rFonts.set(qn("w:ascii"), "SimSun")
+        style._element.rPr.rFonts.set(qn("w:hAnsi"), "SimSun")
+        style._element.rPr.rFonts.set(qn("w:cs"), "SimSun")
         style.font.size = Pt(size)
         style.font.bold = name != "Subtitle"
         style.font.color.rgb = RGBColor.from_string(color)
@@ -152,11 +153,11 @@ def configure_styles(doc: Document):
 
     for name in ("List Bullet", "List Number"):
         style = doc.styles[name]
-        style.font.name = "Noto Sans CJK SC"
-        style._element.rPr.rFonts.set(qn("w:eastAsia"), "Noto Sans CJK SC")
-        style._element.rPr.rFonts.set(qn("w:ascii"), "Noto Sans CJK SC")
-        style._element.rPr.rFonts.set(qn("w:hAnsi"), "Noto Sans CJK SC")
-        style._element.rPr.rFonts.set(qn("w:cs"), "Noto Sans CJK SC")
+        style.font.name = "SimSun"
+        style._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
+        style._element.rPr.rFonts.set(qn("w:ascii"), "SimSun")
+        style._element.rPr.rFonts.set(qn("w:hAnsi"), "SimSun")
+        style._element.rPr.rFonts.set(qn("w:cs"), "SimSun")
         style.font.size = Pt(10.5)
         style.paragraph_format.left_indent = Cm(0.95)
         style.paragraph_format.first_line_indent = Cm(-0.45)
@@ -191,6 +192,10 @@ def add_markdown_table(doc, rows):
     widths = [CONTENT_DXA // cols] * cols
     widths[-1] += CONTENT_DXA - sum(widths)
     set_table_geometry(table, widths)
+    tr_pr = table.rows[0]._tr.get_or_add_trPr()
+    tbl_header = OxmlElement("w:tblHeader")
+    tbl_header.set(qn("w:val"), "true")
+    tr_pr.append(tbl_header)
     for i, row in enumerate(data):
         for j in range(cols):
             cell = table.cell(i, j)
@@ -218,11 +223,14 @@ def add_picture(doc, source_dir: Path, alt: str, rel_path: str):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run()
-    run.add_picture(str(image), width=Cm(15.8))
+    run.add_picture(str(image), width=Cm(13.2))
+    inline = doc.inline_shapes[-1]._inline
+    inline.docPr.set("descr", alt)
+    inline.docPr.set("title", alt)
     p.paragraph_format.keep_with_next = True
 
 
-def add_cover(doc):
+def add_cover(doc, edition="完整使用说明书"):
     for _ in range(5):
         doc.add_paragraph()
     p = doc.add_paragraph()
@@ -239,8 +247,13 @@ def add_cover(doc):
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = p.add_run("使 用 说 明 书")
     set_run_font(r, size=22, bold=True, color=DEEP_BLUE)
-    p.paragraph_format.space_after = Pt(90)
-    for text in ("版本：V1.0", "编制日期：2026年8月", "适用范围：业务端与系统管理端"):
+    p.paragraph_format.space_after = Pt(18)
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    set_run_font(p.add_run(edition), size=13, bold=True, color=GOLD)
+    p.paragraph_format.space_after = Pt(68)
+    scope = "快速上手 · 角色权限 · 议题 · 会议 · 纪要 · 督办" if edition == "第一批" else "业务端与系统管理端"
+    for text in ("版本：V1.0", "编制日期：2026年8月", f"适用范围：{scope}"):
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         set_run_font(p.add_run(text), size=11, color=MUTED)
@@ -348,8 +361,16 @@ def parse_markdown(doc, md_path: Path):
         elif line.startswith("*") and line.endswith("*"):
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.space_after = Pt(8)
-            set_run_font(p.add_run(line.strip("*")), size=9, color=MUTED)
+            caption = line.strip("*")
+            p.paragraph_format.space_before = Pt(5)
+            p.paragraph_format.space_after = Pt(5 if caption.startswith("表") else 8)
+            p.paragraph_format.keep_with_next = caption.startswith("表")
+            set_run_font(
+                p.add_run(caption),
+                size=10 if caption.startswith("表") else 9,
+                bold=caption.startswith("表"),
+                color=DEEP_BLUE if caption.startswith("表") else MUTED,
+            )
         else:
             p = doc.add_paragraph()
             add_inline(p, line)
@@ -379,7 +400,7 @@ def build(source: Path, output: Path):
     doc = Document()
     configure_styles(doc)
     configure_sections(doc)
-    add_cover(doc)
+    add_cover(doc, "第一批" if "第一批" in source.stem else "完整使用说明书")
     add_front_matter(doc)
     parse_markdown(doc, source)
     core = doc.core_properties

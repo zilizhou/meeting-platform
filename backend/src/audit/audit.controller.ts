@@ -11,6 +11,19 @@ import { RoleCode } from '../common/constants';
 export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
+  @Get('policy')
+  @Roles(
+    RoleCode.SCHOOL_ADMIN,
+    RoleCode.SCHOOL_VIEWER,
+    RoleCode.COLLEGE_ADMIN,
+    RoleCode.MEETING_SECRETARY,
+    RoleCode.SECRETARY,
+    RoleCode.DEAN,
+  )
+  policy() {
+    return this.audit.policy();
+  }
+
   @Get('logs')
   @Roles(
     RoleCode.SCHOOL_ADMIN,
@@ -26,7 +39,17 @@ export class AuditController {
     @Query('resourceId') resourceId?: string,
     @Query('action') action?: string,
     @Query('collegeId') collegeId?: string,
+    @Query('since') since?: string,
+    @Query('take') take?: string,
   ) {
-    return this.audit.list(user, { resource, resourceId, action, collegeId });
+    const n = take ? Number(take) : undefined;
+    return this.audit.list(user, {
+      resource,
+      resourceId,
+      action,
+      collegeId,
+      since,
+      take: Number.isFinite(n) ? n : undefined,
+    });
   }
 }

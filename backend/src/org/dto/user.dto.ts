@@ -41,12 +41,10 @@ export class CreateUserDto {
   roleCodes?: string[];
 
   @ApiPropertyOptional({
-    example: '123456',
-    description: '初始密码，默认 123456',
+    description: '初始密码；不传则按策略自动生成（演示环境可能默认为 123456）',
   })
   @IsOptional()
   @IsString()
-  @MinLength(6)
   password?: string;
 }
 
@@ -84,8 +82,7 @@ export class UpdateUserDto {
 }
 
 export class ResetPasswordDto {
-  @ApiProperty({ example: '123456' })
+  @ApiProperty({ description: '新密码（须符合口令策略）' })
   @IsString()
-  @MinLength(6)
   password!: string;
 }

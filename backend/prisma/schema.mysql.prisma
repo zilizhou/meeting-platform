@@ -36,16 +36,22 @@ model College {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  username      String   @unique
-  passwordHash  String
-  realName      String
-  title         String?
-  collegeId     String?
-  isSchoolAdmin Boolean  @default(false)
-  enabled       Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  username            String    @unique
+  passwordHash        String
+  realName            String
+  title               String?
+  collegeId           String?
+  isSchoolAdmin       Boolean   @default(false)
+  enabled             Boolean   @default(true)
+  /// 首次登录或管理员重置后须改密
+  mustChangePassword  Boolean   @default(false)
+  /// 改密/禁用/登出时递增，用于使旧 JWT 失效
+  tokenVersion        Int       @default(0)
+  failedLoginCount    Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   college              College?              @relation(fields: [collegeId], references: [id])
   // 校级查阅分管学院；空列表表示可看全校
@@ -379,10 +385,15 @@ model AuditLog {
   resourceId String?
   detail     String?
   ip         String?
+  /// 客户端 User-Agent（等保审计溯源）
+  userAgent  String?
   createdAt  DateTime @default(now())
 
-  college College? @relation(fields: [collegeId], references: [id])
-  user    User?    @relation(fields: [userId], references: [id])
+  college College? @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([action, createdAt])
 }
 
 model Notification {

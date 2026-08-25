@@ -602,6 +602,17 @@ export class TopicsService {
     const abs = this.files.absolutePath(material.filePath);
     if (!existsSync(abs)) throw new NotFoundException('文件不存在或已被删除');
 
+    await this.audit.log({
+      user,
+      action: 'DOWNLOAD',
+      resource: 'Material',
+      resourceId: materialId,
+      detail: {
+        topicId: material.topicId,
+        name: material.originalName || material.name,
+      },
+    });
+
     const stream = createReadStream(abs);
     const filename = encodeURIComponent(
       material.originalName || material.name || 'file',

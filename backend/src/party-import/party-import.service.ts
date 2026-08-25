@@ -6,7 +6,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import {
+  allowWeakPassword,
+  hashPassword,
+  resolveInitialPassword,
+} from '../common/password-policy';
+
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { FilesService } from '../files/files.service';
@@ -371,7 +376,11 @@ export class PartyImportService {
       throw new BadRequestException(`系统缺少角色 ${memberRoleCode}，请先初始化`);
     }
 
-    const passwordHash = await bcrypt.hash('123456', 8);
+    const resolvedPw = resolveInitialPassword(undefined);
+    const mustChangePassword = allowWeakPassword()
+      ? false
+      : resolvedPw.mustChangePassword;
+    const passwordHash = await hashPassword(resolvedPw.password);
     const createdUsers: Array<{ id: string; username: string; realName: string }> =
       [];
 
@@ -411,6 +420,7 @@ export class PartyImportService {
                       : '党委委员（导入）',
                 collegeId,
                 enabled: true,
+                mustChangePassword,
                 roles: { create: [{ roleId: role.id }] },
               },
             });
@@ -444,6 +454,7 @@ export class PartyImportService {
                 title: '会议记录人（导入）',
                 collegeId,
                 enabled: true,
+                mustChangePassword,
                 roles: { create: [{ roleId: role.id }] },
               },
             });

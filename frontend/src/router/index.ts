@@ -11,6 +11,18 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/register',
+      name: 'register',
+      component: () => import('@/views/RegisterView.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/change-password',
+      name: 'change-password',
+      component: () => import('@/views/ChangePasswordView.vue'),
+      meta: { allowWhenMustChange: true },
+    },
+    {
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
       children: [
@@ -153,8 +165,12 @@ router.beforeEach((to) => {
   if (!to.meta.public && !auth.isLogin) {
     return '/login'
   }
-  if (to.path === '/login' && auth.isLogin) {
+  if ((to.path === '/login' || to.path === '/register') && auth.isLogin) {
+    if (auth.mustChangePassword) return '/change-password'
     return isSchoolViewerOnly(auth) ? '/admin' : '/todo'
+  }
+  if (auth.isLogin && auth.mustChangePassword && to.name !== 'change-password') {
+    return '/change-password'
   }
   if (auth.isLogin && isSchoolViewerOnly(auth)) {
     if (to.path === '/' || to.path === '') return '/admin'

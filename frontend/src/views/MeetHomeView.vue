@@ -51,11 +51,7 @@
       </button>
     </div>
 
-    <div class="ui-sec">
-      <h3>
-        <i :class="{ party: activeTab === 'party' }"></i>
-        {{ sectionTitle }}
-      </h3>
+    <div class="ui-sec ui-sec--actions-only">
       <div class="ui-sec-actions">
         <button
           v-if="statusFilter === 'active' && activeTab === 'party' && roles.canCreateMeeting.value"
@@ -171,14 +167,13 @@
                 期次：{{ m.periodNo || '—' }} · 时间：{{ formatTime(m.scheduledAt) }} · 已归档
               </template>
               <template v-else>
-                期次：{{ m.periodNo || '—' }} · 时间：{{ formatTime(m.scheduledAt) }} · 议题
-                {{ m.topics?.length || 0 }} · 到会 {{ m.actualAttend ?? 0 }}/{{
-                  m.shouldAttend ?? 0
-                }}
+                期次：{{ m.periodNo || '—' }} · 时间：{{ formatTime(m.scheduledAt) }} ·
+                {{ flowResumeText(m) }} · 议题 {{ m.topics?.length || 0 }} · 到会
+                {{ m.actualAttend ?? 0 }}/{{ m.shouldAttend ?? 0 }}
               </template>
             </div>
             <div class="foot">
-              <span class="ui-link">进入详情</span>
+              <span class="ui-link">{{ flowResumeLink(m) }}</span>
               <span>›</span>
             </div>
           </button>
@@ -305,6 +300,7 @@ import { ElMessage } from 'element-plus'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 import { groupMeetingsByMonth } from '@/utils/meetingMonthGroups'
+import { deriveMeetingFlowStep, meetingFlowResumeText } from '@/utils/meetingFlow'
 
 type MeetTab = 'party' | 'joint'
 type StatusFilter = 'active' | 'archived'
@@ -377,11 +373,6 @@ const currentArchivedCount = computed(() =>
     ? partyArchivedList.value.length
     : jointArchivedList.value.length,
 )
-
-const sectionTitle = computed(() => {
-  const track = activeTab.value === 'party' ? '党组织会议' : '党政联席会议'
-  return statusFilter.value === 'archived' ? `${track} · 已归档` : track
-})
 
 const emptyText = computed(() => {
   if (statusFilter.value === 'archived') {
@@ -476,11 +467,25 @@ function setStatus(status: StatusFilter) {
 
 function open(m: MeetingItem) {
   const from = m.meetingType === 'PARTY_COMMITTEE' ? 'party' : undefined
+  const flow = deriveMeetingFlowStep(m as any)
+  const query: Record<string, string> = {}
+  if (from) query.from = from
+  if (!flow.allDone) query.step = String(flow.index + 1)
   router.push({
     name: 'meeting-detail',
     params: { id: m.id },
-    query: from ? { from } : {},
+    query,
   })
+}
+
+function flowResumeText(m: MeetingItem) {
+  return meetingFlowResumeText(m as any)
+}
+
+function flowResumeLink(m: MeetingItem) {
+  const flow = deriveMeetingFlowStep(m as any)
+  if (flow.allDone) return '查看详情'
+  return `续办 · ${flow.label}`
 }
 
 async function load() {

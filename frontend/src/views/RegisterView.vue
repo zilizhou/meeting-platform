@@ -11,7 +11,6 @@
             height="128"
             alt="曲阜师范大学校徽"
           />
-
           <div class="brand-hero">
             <p class="product" lang="zh-CN">明德同枢</p>
             <h1>曲阜师范大学二级学院双会<span class="keep">管理系统</span></h1>
@@ -22,53 +21,69 @@
       </div>
 
       <div class="login-card">
-        <h2>登录</h2>
-        <p class="hint">书记 / 院长视图 · 演示密码均为 123456</p>
+        <h2>注册</h2>
+        <p class="hint">注册后为列席人员权限，书记 / 院长等角色请联系学院管理员分配</p>
         <form @submit.prevent="onSubmit">
           <label>
+            <span>姓名</span>
+            <input
+              v-model="form.realName"
+              autocomplete="name"
+              placeholder="请输入真实姓名"
+            />
+          </label>
+          <label>
             <span>账号</span>
-            <input v-model="form.username" autocomplete="username" placeholder="如 dean / secretary" />
+            <input
+              v-model="form.username"
+              autocomplete="username"
+              placeholder="字母开头，可含数字和下划线"
+            />
+          </label>
+          <label>
+            <span>所属学院</span>
+            <select v-model="form.collegeId">
+              <option value="" disabled>请选择学院</option>
+              <option v-for="c in colleges" :key="c.id" :value="c.id">
+                {{ c.name }}
+              </option>
+            </select>
+          </label>
+          <label>
+            <span>职务（选填）</span>
+            <input
+              v-model="form.title"
+              autocomplete="organization-title"
+              placeholder="如教研室主任"
+            />
           </label>
           <label>
             <span>密码</span>
             <input
               v-model="form.password"
               type="password"
-              autocomplete="current-password"
-              placeholder="请输入密码"
+              autocomplete="new-password"
+              placeholder="请设置登录密码"
+            />
+          </label>
+          <label>
+            <span>确认密码</span>
+            <input
+              v-model="form.confirmPassword"
+              type="password"
+              autocomplete="new-password"
+              placeholder="再次输入密码"
             />
           </label>
           <p v-if="error" class="err">{{ error }}</p>
           <button class="submit" type="submit" :disabled="loading">
-            {{ loading ? '登录中…' : '进入系统' }}
+            {{ loading ? '提交中…' : '注册并进入' }}
           </button>
         </form>
         <p class="switch">
-          还没有账号？
-          <router-link to="/register">申请注册</router-link>
+          已有账号？
+          <router-link to="/login">返回登录</router-link>
         </p>
-
-        <div class="quick">
-          <div class="lab">快捷演示账号</div>
-          <div class="group">
-            <div class="group-lab">学院级</div>
-            <div class="chips">
-              <button type="button" class="party" @click="fill('secretary')">书记 secretary</button>
-              <button type="button" class="party" @click="fill('vsecretary')">副书记 vsecretary</button>
-              <button type="button" @click="fill('dean')">院长 dean</button>
-              <button type="button" @click="fill('office')">学院办公室 office</button>
-              <button type="button" @click="fill('dept')">部门负责人 dept</button>
-            </div>
-          </div>
-          <div class="group">
-            <div class="group-lab">校级</div>
-            <div class="chips">
-              <button type="button" @click="fill('admin')">校级管理 admin</button>
-              <button type="button" @click="fill('viewer')">校级查阅 viewer</button>
-              <button type="button" @click="fill('viewer_vp')">校级分管查阅 viewer_vp</button>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="login-foot">
@@ -80,38 +95,81 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import http from '@/api/http'
+
+interface CollegeOption {
+  id: string
+  name: string
+  code: string
+}
 
 const auth = useAuthStore()
 const router = useRouter()
 const loading = ref(false)
 const error = ref('')
-const form = reactive({ username: 'dean', password: '123456' })
+const colleges = ref<CollegeOption[]>([])
+const form = reactive({
+  realName: '',
+  username: '',
+  collegeId: '',
+  title: '',
+  password: '',
+  confirmPassword: '',
+})
 
-function fill(username: string) {
-  form.username = username
-  form.password = '123456'
-  error.value = ''
+onMounted(async () => {
+  try {
+    colleges.value = await http.get('/auth/colleges')
+  } catch (e: any) {
+    error.value = String(e?.message || e || '学院列表加载失败')
+  }
+})
+
+function goAfterAuth() {
+  if (auth.mustChangePassword) {
+    router.push('/change-password')
+    return
+  }
+  const roles = auth.user?.roles || []
+  const isAdmin = auth.user?.isSchoolAdmin || roles.includes('SCHOOL_ADMIN')
+  const isViewerOnly = !isAdmin && roles.includes('SCHOOL_VIEWER')
+  router.push(isViewerOnly ? '/admin' : '/todo')
 }
 
 async function onSubmit() {
-  loading.value = true
   error.value = ''
+  if (!form.realName.trim() || !form.username.trim()) {
+    error.value = '请填写姓名和账号'
+    return
+  }
+  if (!form.collegeId) {
+    error.value = '请选择所属学院'
+    return
+  }
+  if (!form.password) {
+    error.value = '请设置密码'
+    return
+  }
+  if (form.password !== form.confirmPassword) {
+    error.value = '两次输入的密码不一致'
+    return
+  }
+  loading.value = true
   try {
-    await auth.login(form.username.trim(), form.password)
-    if (auth.mustChangePassword) {
-      router.push('/change-password')
-      return
-    }
-    const roles = auth.user?.roles || []
-    const isAdmin =
-      auth.user?.isSchoolAdmin || roles.includes('SCHOOL_ADMIN')
-    const isViewerOnly = !isAdmin && roles.includes('SCHOOL_VIEWER')
-    router.push(isViewerOnly ? '/admin' : '/todo')
+    await auth.register({
+      username: form.username.trim(),
+      password: form.password,
+      confirmPassword: form.confirmPassword,
+      realName: form.realName.trim(),
+      collegeId: form.collegeId,
+      title: form.title.trim() || undefined,
+    })
+    goAfterAuth()
   } catch (e: any) {
-    error.value = String(e?.message || e || '登录失败')
+    error.value = String(e?.message || e || '注册失败')
   } finally {
     loading.value = false
   }
@@ -218,6 +276,7 @@ async function onSubmit() {
   margin: 0 0 16px;
   font-size: 12px;
   color: var(--muted);
+  line-height: 1.5;
 }
 
 label {
@@ -233,7 +292,8 @@ label span {
   font-weight: 600;
 }
 
-label input {
+label input,
+label select {
   width: 100%;
   height: 42px;
   border: 0;
@@ -242,9 +302,20 @@ label input {
   background: #eef2f7;
   font: inherit;
   outline: none;
+  color: inherit;
 }
 
-label input:focus {
+label select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #64748b 50%),
+    linear-gradient(135deg, #64748b 50%, transparent 50%);
+  background-position: calc(100% - 16px) 18px, calc(100% - 11px) 18px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+label input:focus,
+label select:focus {
   box-shadow: 0 0 0 2px rgba(26, 79, 139, 0.25);
 }
 
@@ -289,52 +360,6 @@ label input:focus {
   text-decoration: underline;
 }
 
-.quick {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-
-.lab {
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 8px;
-}
-
-.group + .group {
-  margin-top: 10px;
-}
-
-.group-lab {
-  font-size: 11px;
-  color: #94a3b8;
-  margin-bottom: 6px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chips button {
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 0;
-  background: var(--joint-soft);
-  color: var(--joint);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.chips button.party {
-  background: var(--party-soft);
-  color: var(--party);
-}
-
 .login-foot {
   margin-top: 20px;
   text-align: center;
@@ -353,7 +378,7 @@ label input:focus {
     border-radius: 18px;
     overflow: hidden;
     box-shadow: 0 28px 70px rgba(15, 53, 95, 0.18);
-    min-height: min(580px, calc(100dvh - 48px));
+    min-height: min(640px, calc(100dvh - 48px));
   }
 
   .login-brand {
@@ -425,7 +450,7 @@ label input:focus {
   }
 
   .login-card {
-    margin: auto 36px;
+    margin: 28px 36px;
     width: min(400px, 100%);
     align-self: center;
   }

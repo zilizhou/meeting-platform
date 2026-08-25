@@ -11,6 +11,12 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/change-password',
+      name: 'change-password',
+      component: () => import('@/views/ChangePasswordView.vue'),
+      meta: { allowWhenMustChange: true },
+    },
+    {
       path: '/',
       component: () => import('@/layouts/SystemLayout.vue'),
       children: [
@@ -54,9 +60,13 @@ router.beforeEach((to) => {
       auth.logout()
       return '/login'
     }
+    if (auth.mustChangePassword) return '/change-password'
     return '/colleges'
   }
-  if (!to.meta.public) {
+  if (auth.isLogin && auth.mustChangePassword && to.name !== 'change-password') {
+    return '/change-password'
+  }
+  if (!to.meta.public && to.name !== 'change-password') {
     const ok =
       auth.user?.isSchoolAdmin || auth.user?.roles?.includes('SCHOOL_ADMIN')
     if (!ok) {

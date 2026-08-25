@@ -192,7 +192,15 @@ export class MeetingsService {
         ...(status ? { status } : {}),
       },
       include: {
-        topics: { select: { id: true, title: true, status: true } },
+        topics: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            resolution: { select: { id: true } },
+          },
+        },
+        minutes: { select: { id: true, effectiveAt: true } },
         _count: { select: { attendances: true } },
       },
       orderBy: { createdAt: 'desc' },

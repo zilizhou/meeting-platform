@@ -4,11 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types';
 import { MeetingType, RoleCode } from '../common/constants';
 import { AuditService } from '../audit/audit.service';
+import {
+  hashPassword,
+  resolveInitialPassword,
+} from '../common/password-policy';
 import {
   CreateCategoryDto,
   CreateCollegeDto,
@@ -300,8 +303,8 @@ export class SystemService {
       });
       if (!role) throw new BadRequestException('SCHOOL_ADMIN 角色未初始化');
 
-      const password = dto.password || '123456';
-      const passwordHash = await bcrypt.hash(password, 8);
+      const resolved = resolveInitialPassword(dto.password);
+      const passwordHash = await hashPassword(resolved.password);
       const created = await this.prisma.user.create({
         data: {
           username: dto.username.trim(),
@@ -311,6 +314,7 @@ export class SystemService {
           collegeId: null,
           isSchoolAdmin: true,
           enabled: true,
+          mustChangePassword: resolved.mustChangePassword,
           roles: { create: [{ roleId: role.id }] },
         },
         include: {
@@ -370,8 +374,8 @@ export class SystemService {
         }
       }
 
-      const password = dto.password || '123456';
-      const passwordHash = await bcrypt.hash(password, 8);
+      const resolved = resolveInitialPassword(dto.password);
+      const passwordHash = await hashPassword(resolved.password);
       const created = await this.prisma.user.create({
         data: {
           username: dto.username.trim(),
@@ -381,6 +385,7 @@ export class SystemService {
           collegeId: null,
           isSchoolAdmin: false,
           enabled: true,
+          mustChangePassword: resolved.mustChangePassword,
           roles: { create: [{ roleId: role.id }] },
           collegeScopes: scopeIds.length
             ? { create: scopeIds.map((collegeId) => ({ collegeId })) }
@@ -465,8 +470,8 @@ export class SystemService {
     });
     if (exists) throw new BadRequestException('用户名已存在');
 
-    const password = dto.password || '123456';
-    const passwordHash = await bcrypt.hash(password, 8);
+    const resolved = resolveInitialPassword(dto.password);
+    const passwordHash = await hashPassword(resolved.password);
     const created = await this.prisma.user.create({
       data: {
         username: dto.username.trim(),
@@ -476,6 +481,7 @@ export class SystemService {
         collegeId: dto.collegeId,
         isSchoolAdmin: false,
         enabled: true,
+        mustChangePassword: resolved.mustChangePassword,
         roles: { create: roles.map((r) => ({ roleId: r.id })) },
       },
       include: {

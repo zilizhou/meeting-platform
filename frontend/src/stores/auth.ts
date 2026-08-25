@@ -13,6 +13,14 @@ export interface AuthUserInfo {
   roles: string[]
   /** 校级查阅分管学院；空数组表示全校 */
   collegeScopeIds?: string[]
+  mustChangePassword?: boolean
+}
+
+function persist(token: string, user: AuthUserInfo | null) {
+  if (token) localStorage.setItem('token', token)
+  else localStorage.removeItem('token')
+  if (user) localStorage.setItem('user', JSON.stringify(user))
+  else localStorage.removeItem('user')
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -22,20 +30,58 @@ export const useAuthStore = defineStore('auth', () => {
   )
 
   const isLogin = computed(() => Boolean(token.value))
+  const mustChangePassword = computed(() => !!user.value?.mustChangePassword)
 
   async function login(username: string, password: string) {
     const data: any = await http.post('/auth/login', { username, password })
     token.value = data.accessToken
     user.value = data.user
-    localStorage.setItem('token', data.accessToken)
-    localStorage.setItem('user', JSON.stringify(data.user))
+    persist(data.accessToken, data.user)
   }
 
-  function logout() {
+  async function register(payload: {
+    username: string
+    password: string
+    confirmPassword: string
+    realName: string
+    collegeId: string
+    title?: string
+  }) {
+    const data: any = await http.post('/auth/register', payload)
+    token.value = data.accessToken
+    user.value = data.user
+    persist(data.accessToken, data.user)
+  }
+
+  async function changePassword(oldPassword: string, newPassword: string) {
+    const data: any = await http.post('/auth/change-password', {
+      oldPassword,
+      newPassword,
+    })
+    token.value = data.accessToken
+    user.value = data.user
+    persist(data.accessToken, data.user)
+  }
+
+  function clearSession() {
     token.value = ''
     user.value = null
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    persist('', null)
+  }
+
+  async function logout() {
+    const t = token.value
+    clearSession()
+    if (!t) return
+    try {
+      await http.post(
+        '/auth/logout',
+        {},
+        { headers: { Authorization: `Bearer ${t}` } },
+      )
+    } catch {
+      /* 忽略 */
+    }
   }
 
   async function fetchMe() {
@@ -44,5 +90,16 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('user', JSON.stringify(data))
   }
 
-  return { token, user, isLogin, login, logout, fetchMe }
+  return {
+    token,
+    user,
+    isLogin,
+    mustChangePassword,
+    login,
+    register,
+    changePassword,
+    logout,
+    clearSession,
+    fetchMe,
+  }
 })

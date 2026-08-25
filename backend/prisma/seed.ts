@@ -73,6 +73,7 @@ async function seedCollege(
   roleMap: Record<string, string>,
   passwordHash: string,
   spec: CollegeSeedSpec,
+  mustChangePassword = false,
 ) {
   const college = await prisma.college.create({
     data: { code: spec.code, name: spec.name },
@@ -82,6 +83,7 @@ async function seedCollege(
     data: {
       username: spec.people.secretary.username,
       passwordHash,
+      mustChangePassword,
       realName: spec.people.secretary.realName,
       title: '党委书记',
       collegeId: college.id,
@@ -98,6 +100,7 @@ async function seedCollege(
     data: {
       username: spec.people.viceSecretary.username,
       passwordHash,
+      mustChangePassword,
       realName: spec.people.viceSecretary.realName,
       title: '党委副书记',
       collegeId: college.id,
@@ -114,6 +117,7 @@ async function seedCollege(
     data: {
       username: spec.people.dean.username,
       passwordHash,
+      mustChangePassword,
       realName: spec.people.dean.realName,
       title: '院长',
       collegeId: college.id,
@@ -125,6 +129,7 @@ async function seedCollege(
     data: {
       username: spec.people.viceDean.username,
       passwordHash,
+      mustChangePassword,
       realName: spec.people.viceDean.realName,
       title: '副院长',
       collegeId: college.id,
@@ -136,6 +141,7 @@ async function seedCollege(
     data: {
       username: spec.people.office.username,
       passwordHash,
+      mustChangePassword,
       realName: spec.people.office.realName,
       title: '行政办主任',
       collegeId: college.id,
@@ -152,6 +158,7 @@ async function seedCollege(
     data: {
       username: spec.people.deptHead.username,
       passwordHash,
+      mustChangePassword,
       realName: spec.people.deptHead.realName,
       title: '部门负责人',
       collegeId: college.id,
@@ -803,6 +810,19 @@ async function seedMockBusiness(seeded: Awaited<ReturnType<typeof seedCollege>>[
 async function main() {
   console.log('Seeding...');
 
+  // 演示环境清库：临时放开审计只追加（含 SQLite 触发器）
+  process.env.ALLOW_AUDIT_WIPE = '1';
+  try {
+    await prisma.$executeRawUnsafe(
+      'DROP TRIGGER IF EXISTS audit_log_no_update',
+    );
+    await prisma.$executeRawUnsafe(
+      'DROP TRIGGER IF EXISTS audit_log_no_delete',
+    );
+  } catch {
+    /* 迁移前无触发器时忽略 */
+  }
+
   await prisma.complianceLog.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.notification.deleteMany();
@@ -845,6 +865,8 @@ async function main() {
   );
   const roleMap = Object.fromEntries(roles.map((r) => [r.code, r.id]));
   const passwordHash = await bcrypt.hash('123456', 10);
+  // 演示种子：默认不强制改密，便于验收；生产请关闭 ALLOW_WEAK_PASSWORD 并重新 seed
+  const seedMustChange = process.env.SEED_FORCE_PASSWORD_CHANGE === '1';
 
   const schoolAdmin = await prisma.user.create({
     data: {
@@ -853,6 +875,7 @@ async function main() {
       realName: '校级管理员',
       title: '组织部',
       isSchoolAdmin: true,
+      mustChangePassword: seedMustChange,
       roles: { create: [{ roleId: roleMap.SCHOOL_ADMIN }] },
     },
   });
@@ -864,6 +887,7 @@ async function main() {
       realName: '校级查阅',
       title: '组织部',
       isSchoolAdmin: false,
+      mustChangePassword: seedMustChange,
       roles: { create: [{ roleId: roleMap.SCHOOL_VIEWER }] },
     },
   });
@@ -914,7 +938,7 @@ async function main() {
 
   const seeded = [];
   for (const spec of colleges) {
-    seeded.push(await seedCollege(roleMap, passwordHash, spec));
+    seeded.push(await seedCollege(roleMap, passwordHash, spec, seedMustChange));
   }
 
   // 业务 mock 全部归属网络空间安全学院
@@ -928,6 +952,7 @@ async function main() {
       data: {
         username: 'viewer_vp',
         passwordHash,
+        mustChangePassword: seedMustChange,
         realName: '分管副校长',
         title: '副校长',
         isSchoolAdmin: false,
@@ -959,6 +984,27 @@ async function main() {
   console.log(
     '提示: mock 在网安学院；用 dean / secretary / vsecretary / dept 登录即可看到。',
   );
+
+  // 清库结束后恢复审计只追加触发器
+  try {
+    await prisma.$executeRawUnsafe(`
+CREATE TRIGGER IF NOT EXISTS audit_log_no_update
+BEFORE UPDATE ON "AuditLog"
+BEGIN
+  SELECT RAISE(ABORT, 'AuditLog is append-only: UPDATE forbidden');
+END;
+`);
+    await prisma.$executeRawUnsafe(`
+CREATE TRIGGER IF NOT EXISTS audit_log_no_delete
+BEFORE DELETE ON "AuditLog"
+BEGIN
+  SELECT RAISE(ABORT, 'AuditLog is append-only: DELETE forbidden');
+END;
+`);
+  } catch (e) {
+    console.warn('恢复 AuditLog 触发器失败（非 SQLite 可忽略）:', e);
+  }
+  delete process.env.ALLOW_AUDIT_WIPE;
 }
 
 main()

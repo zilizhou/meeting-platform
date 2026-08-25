@@ -93,11 +93,14 @@
 
     <div class="panel steps-panel">
       <div class="meeting-flow" :class="{ party: isParty, joint: !isParty }">
-        <div
+        <button
           v-for="(step, i) in flowSteps"
           :key="step.key"
+          type="button"
           class="flow-item"
-          :class="flowStepState(i)"
+          :class="[flowStepState(i), { clickable: flowStepState(i) !== 'pending' }]"
+          :disabled="flowStepState(i) === 'pending'"
+          @click="focusStep(i)"
         >
           <div class="flow-rail">
             <span class="flow-node">
@@ -111,11 +114,31 @@
             <span class="flow-title flow-title--full">{{ step.full }}</span>
             <span v-if="flowStepState(i) === 'current'" class="flow-badge">进行中</span>
           </div>
-        </div>
+        </button>
       </div>
     </div>
 
-    <div class="panel">
+    <div
+      v-if="flowGuide"
+      class="flow-guide"
+      :class="{ party: isParty }"
+    >
+      <div class="flow-guide-text">
+        <strong>{{ flowGuide.title }}</strong>
+        <span>{{ flowGuide.desc }}</span>
+      </div>
+      <button
+        v-if="flowGuide.actionLabel"
+        class="ui-btn"
+        :class="{ party: isParty }"
+        type="button"
+        @click="onFlowGuideAction"
+      >
+        {{ flowGuide.actionLabel }}
+      </button>
+    </div>
+
+    <div id="meeting-flow-checkin" class="panel flow-panel">
       <div class="ui-sec">
         <h3><i :class="{ party: isParty }"></i>参会签到</h3>
         <span class="n">正式 {{ formalChecked }}/{{ formalTotal }} · 列席 {{ attendeeChecked }}/{{ attendeeTotal }}</span>
@@ -153,7 +176,7 @@
       </el-table>
     </div>
 
-    <div class="panel">
+    <div id="meeting-flow-agenda" class="panel flow-panel">
       <div class="ui-sec">
         <h3><i :class="{ party: isParty }"></i>议程与表决</h3>
         <span class="n">{{ meeting.topics?.length || 0 }} 项 · 赞成门槛 {{ voteThresholdText }}</span>
@@ -231,7 +254,7 @@
       </template>
     </div>
 
-    <div class="panel minutes-panel">
+    <div id="meeting-flow-minutes" class="panel minutes-panel flow-panel">
       <div class="minutes-head">
         <h3>
           <i :class="{ party: isParty }"></i>
@@ -503,11 +526,19 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 import { exportMeetingMinutesDoc } from '@/utils/exportMinutesDoc'
+import {
+  MEETING_FLOW_STEPS,
+  deriveMeetingFlowStep,
+  meetingFlowPanelId,
+  meetingFlowState,
+  type MeetingFlowStep,
+} from '@/utils/meetingFlow'
 
 const route = useRoute()
 const router = useRouter()
 const roles = useRoles()
 const meeting = ref<any>(null)
+const didInitialFocus = ref(false)
 const minutesContent = ref('')
 const minutesDraft = ref<any>(null)
 const minutesDraftText = ref('')
@@ -662,32 +693,72 @@ const attendeeChecked = computed(
       .length,
 )
 
-const stepActive = computed(() => {
-  const m = meeting.value
-  if (!m) return 0
-  if (m.minutes?.effectiveAt) return 4
-  if (m.minutes || m.status === 'ENDED') return 3
-  if ((m.topics || []).some((t: any) => t.resolution)) return 3
-  if (m.actualAttend > 0) return 2
-  return 1
-})
+const flow = computed(() => deriveMeetingFlowStep(meeting.value))
 
-const flowSteps = computed(() => [
-  { key: 'checkin', short: '签到', full: '签到' },
-  { key: 'discuss', short: '讨论', full: '讨论表决' },
-  { key: 'resolve', short: '决议', full: '形成决议' },
-  {
-    key: 'minutes',
-    short: '签纪要',
-    full: isParty.value ? '书记/副书记签纪要' : '双签纪要',
-  },
-])
+const flowSteps = computed(() =>
+  MEETING_FLOW_STEPS.map((s) => ({
+    ...s,
+    full:
+      s.key === 'minutes'
+        ? isParty.value
+          ? '书记/副书记签纪要'
+          : '双签纪要'
+        : s.full,
+  })),
+)
 
 function flowStepState(index: number) {
-  const active = stepActive.value
-  if (index < active) return 'done'
-  if (index === active) return 'current'
-  return 'pending'
+  return meetingFlowState(index, flow.value)
+}
+
+const flowGuide = computed(() => {
+  const f = flow.value
+  if (!meeting.value || f.allDone) return null
+  return {
+    title: `当前步骤：${f.label}`,
+    desc: f.nextLabel ? `完成后进入「${f.nextLabel}」` : '请完成本步后继续',
+    actionLabel: '前往当前步骤',
+    targetIndex: f.index,
+  }
+})
+
+function onFlowGuideAction() {
+  if (flowGuide.value) focusStep(flowGuide.value.targetIndex)
+}
+
+function focusStep(index: number, opts?: { smooth?: boolean }) {
+  const state = flowStepState(index)
+  if (state === 'pending' && !flow.value.allDone) return
+  scrollToFlowPanel(index, opts)
+  const step = String(index + 1)
+  if (String(route.query.step || '') !== step) {
+    router.replace({
+      query: { ...route.query, step },
+    })
+  }
+}
+
+async function focusCurrentStep(opts?: { smooth?: boolean }) {
+  await nextTick()
+  const f = flow.value
+  focusStep(f.allDone ? 3 : f.index, opts)
+}
+
+/** 步骤推进后提示并跳到新当前步 */
+async function afterFlowAdvance(prev: MeetingFlowStep, successMsg: string) {
+  await load({ skipAutoFocus: true })
+  const next = flow.value
+  if (next.allDone) {
+    ElMessage.success(successMsg)
+    await focusCurrentStep()
+    return
+  }
+  if (next.index > prev.index || next.key !== prev.key) {
+    ElMessage.success(`${successMsg}。下一步：${next.label}`)
+    await focusCurrentStep()
+    return
+  }
+  ElMessage.success(successMsg)
 }
 
 const hasHeroActions = computed(() => {
@@ -770,7 +841,7 @@ function goBack() {
   })
 }
 
-async function load() {
+async function load(opts?: { skipAutoFocus?: boolean }) {
   meeting.value = await http.get(`/meetings/${route.params.id}`)
   const topics = meeting.value?.topics || []
   if (!topics.some((t: any) => t.id === activeTopicId.value)) {
@@ -791,9 +862,48 @@ async function load() {
     minutesDraft.value = null
     minutesDraftText.value = ''
   }
-  if (meeting.value.meetingType === 'PARTY_COMMITTEE' && route.query.from !== 'party') {
-    router.replace({ query: { ...route.query, from: 'party' } })
+
+  const nextQuery: Record<string, any> = { ...route.query }
+  if (meeting.value.meetingType === 'PARTY_COMMITTEE') {
+    nextQuery.from = 'party'
   }
+
+  if (!opts?.skipAutoFocus && !didInitialFocus.value) {
+    didInitialFocus.value = true
+    await nextTick()
+    const f = flow.value
+    let targetIndex = f.allDone ? 3 : f.index
+    const qStep = Number(route.query.step)
+    if (!f.allDone && Number.isFinite(qStep) && qStep >= 1 && qStep <= 4) {
+      const idx = qStep - 1
+      if (meetingFlowState(idx, f) !== 'pending') targetIndex = idx
+    }
+    nextQuery.step = String(targetIndex + 1)
+    scrollToFlowPanel(targetIndex, { smooth: false })
+  } else if (didInitialFocus.value && !nextQuery.step) {
+    nextQuery.step = String((flow.value.allDone ? 3 : flow.value.index) + 1)
+  }
+
+  const sameQuery =
+    String(route.query.from || '') === String(nextQuery.from || '') &&
+    String(route.query.step || '') === String(nextQuery.step || '')
+  if (!sameQuery) {
+    router.replace({ query: nextQuery })
+  }
+}
+
+function scrollToFlowPanel(index: number, opts?: { smooth?: boolean }) {
+  const id = meetingFlowPanelId(index)
+  const el = document.getElementById(id)
+  if (!el) return
+  el.scrollIntoView({
+    behavior: opts?.smooth === false ? 'auto' : 'smooth',
+    block: 'start',
+  })
+  el.classList.remove('flow-panel--flash')
+  void el.offsetWidth
+  el.classList.add('flow-panel--flash')
+  window.setTimeout(() => el.classList.remove('flow-panel--flash'), 1600)
 }
 
 function resolutionLabel(resultType?: string) {
@@ -898,9 +1008,9 @@ async function generateMinutesDraft() {
 
 async function start() {
   try {
+    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/start`)
-    ElMessage.success('会议已开始')
-    await load()
+    await afterFlowAdvance(prev, '会议已开始')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -917,9 +1027,9 @@ async function endMeeting() {
     return
   }
   try {
+    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/end`)
-    ElMessage.success('会议已结束，请起草并签署纪要')
-    await load()
+    await afterFlowAdvance(prev, '会议已结束，请起草并签署纪要')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -927,9 +1037,9 @@ async function endMeeting() {
 
 async function checkIn() {
   try {
+    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/checkin`, {})
-    ElMessage.success('签到成功')
-    await load()
+    await afterFlowAdvance(prev, '签到成功')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -969,13 +1079,13 @@ async function archive() {
 
 async function checkInAll() {
   try {
+    const prev = flow.value
     for (const a of meeting.value.attendances || []) {
       if (!a.checkedIn) {
         await http.post(`/meetings/${route.params.id}/checkin`, { userId: a.userId })
       }
     }
-    ElMessage.success('全员已签到')
-    await load()
+    await afterFlowAdvance(prev, '全员已签到')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -1052,13 +1162,16 @@ async function voteAll(topicId: string) {
 
 async function resolve(topicId: string, transferToJoint: boolean) {
   try {
+    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/topics/${topicId}/resolve`, {
       resultType: 'APPROVED',
       content: transferToJoint ? '会议研究通过，转联席会落实' : '会议研究通过',
       transferToJoint,
     })
-    ElMessage.success(transferToJoint ? '决议已形成并转联席会' : '决议已形成，督办已生成')
-    await load()
+    await afterFlowAdvance(
+      prev,
+      transferToJoint ? '决议已形成并转联席会' : '决议已形成，督办已生成',
+    )
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -1066,9 +1179,9 @@ async function resolve(topicId: string, transferToJoint: boolean) {
 
 async function saveMinutes() {
   try {
+    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/minutes`, { content: minutesContent.value })
-    ElMessage.success('纪要已保存，已通知签署人')
-    await load()
+    await afterFlowAdvance(prev, '纪要已保存，已通知签署人')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
@@ -1076,15 +1189,25 @@ async function saveMinutes() {
 
 async function signMinutes() {
   try {
+    const prev = flow.value
     await http.post(`/meetings/${route.params.id}/minutes/sign`)
-    ElMessage.success('签署成功')
-    await load()
+    await afterFlowAdvance(prev, '签署成功')
   } catch (e: any) {
     ElMessage.error(String(e))
   }
 }
 
 onMounted(load)
+
+watch(
+  () => route.params.id,
+  (id, prev) => {
+    if (id && id !== prev) {
+      didInitialFocus.value = false
+      load()
+    }
+  },
+)
 </script>
 
 <style scoped>
@@ -1162,6 +1285,69 @@ onMounted(load)
   display: flex;
   gap: 12px;
   align-items: stretch;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.flow-item.clickable {
+  cursor: pointer;
+}
+.flow-item.clickable:hover .flow-title {
+  color: var(--joint);
+}
+.detail.party .flow-item.clickable:hover .flow-title {
+  color: var(--party);
+}
+.flow-item:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.flow-guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -4px 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #d6e4f5;
+  background: linear-gradient(180deg, #f5f9ff 0%, #eef5fc 100%);
+}
+.flow-guide.party {
+  border-color: #ecd6d6;
+  background: linear-gradient(180deg, #fff8f8 0%, #faf0f0 100%);
+}
+.flow-guide-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.flow-guide-text strong {
+  font-size: 14px;
+  font-family: var(--font-serif);
+  color: var(--text);
+}
+.flow-guide-text span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.flow-panel {
+  scroll-margin-top: 12px;
+  transition: box-shadow 0.35s ease, border-color 0.35s ease;
+}
+.flow-panel--flash {
+  border-color: var(--joint) !important;
+  box-shadow: 0 0 0 3px rgba(61, 127, 212, 0.18);
+}
+.detail.party .flow-panel--flash {
+  border-color: var(--party) !important;
+  box-shadow: 0 0 0 3px rgba(196, 90, 90, 0.18);
 }
 .flow-rail {
   display: flex;

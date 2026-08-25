@@ -1,16 +1,21 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser, JwtPayload } from '../common/types';
+import { jwtSecretOrThrow } from '../common/password-policy';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    _config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'dev-secret',
+      secretOrKey: jwtSecretOrThrow(),
     });
   }
 
@@ -28,6 +33,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user.enabled) {
       throw new UnauthorizedException('账号已禁用');
     }
+    const tv = payload.tv ?? 0;
+    if (tv !== user.tokenVersion) {
+      throw new UnauthorizedException('登录已失效，请重新登录');
+    }
     return {
       sub: user.id,
       username: user.username,
@@ -36,6 +45,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       isSchoolAdmin: user.isSchoolAdmin,
       roles: user.roles.map((r) => r.role.code),
       collegeScopeIds: user.collegeScopes.map((s) => s.collegeId),
+      mustChangePassword: user.mustChangePassword,
+      tv: user.tokenVersion,
     };
   }
 }

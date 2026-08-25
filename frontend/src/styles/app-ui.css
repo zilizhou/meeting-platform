@@ -520,6 +520,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin: 4px 0 10px;
 }
 
@@ -531,6 +532,8 @@ body,
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .ui-sec h3 i {
@@ -539,6 +542,7 @@ body,
   border-radius: 3px;
   background: var(--joint);
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .ui-sec .n {
@@ -549,8 +553,21 @@ body,
 .ui-sec-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
+  gap: 10px;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* 会议页操作条：状态已由顶栏数字表达，只保留操作 */
+.ui-sec.ui-sec--actions-only {
+  justify-content: flex-start;
+}
+
+.ui-sec.ui-sec--actions-only .ui-sec-actions {
+  justify-content: flex-start;
+  width: 100%;
 }
 
 .ui-sec-actions .n {
@@ -1021,11 +1038,6 @@ body,
 
   .ui-sec .n {
     font-size: 13px;
-  }
-
-  .ui-sec {
-    flex-wrap: wrap;
-    gap: 8px;
   }
 
   .ui-sec-actions {

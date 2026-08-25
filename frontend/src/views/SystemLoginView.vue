@@ -57,6 +57,10 @@ async function onSubmit() {
       return
     }
     ElMessage.success('登录成功')
+    if (auth.mustChangePassword) {
+      router.push('/change-password')
+      return
+    }
     router.push('/colleges')
   } catch (e: any) {
     ElMessage.error(String(e))

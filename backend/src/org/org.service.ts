@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types';
 import { MeetingType, RoleCode } from '../common/constants';
@@ -15,6 +14,11 @@ import {
   UpdateUserDto,
 } from './dto/user.dto';
 import { AuditService } from '../audit/audit.service';
+import {
+  assertPasswordPolicy,
+  hashPassword,
+  resolveInitialPassword,
+} from '../common/password-policy';
 
 /** 学院可分配的角色（不含校级管理员） */
 const COLLEGE_ASSIGNABLE_ROLES = new Set([
@@ -356,8 +360,8 @@ export class OrgService {
       ? dto.roleCodes
       : [RoleCode.ATTENDEE];
     const roles = await this.resolveRoleIds(roleCodes);
-    const password = dto.password || '123456';
-    const passwordHash = await bcrypt.hash(password, 8);
+    const resolved = resolveInitialPassword(dto.password);
+    const passwordHash = await hashPassword(resolved.password);
 
     const created = await this.prisma.user.create({
       data: {
@@ -368,6 +372,7 @@ export class OrgService {
         collegeId,
         isSchoolAdmin: false,
         enabled: true,
+        mustChangePassword: resolved.mustChangePassword,
         roles: {
           create: roles.map((r) => ({ roleId: r.id })),
         },
@@ -386,7 +391,11 @@ export class OrgService {
       detail: { username: created.username, roleCodes, collegeId },
     });
 
-    return this.toUserView(created);
+    return {
+      ...this.toUserView(created),
+      /** 仅当系统自动生成初始口令时返回，便于管理员告知用户 */
+      tempPassword: dto.password?.trim() ? undefined : resolved.password,
+    };
   }
 
   /** 校级可管全校（含校级账号）；学院侧仅本院非校级账号 */
@@ -469,6 +478,7 @@ export class OrgService {
           ? { title: dto.title?.trim() || null }
           : {}),
         ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
+        ...(dto.enabled === false ? { tokenVersion: { increment: 1 } } : {}),
       },
       include: {
         college: { select: { id: true, name: true, code: true } },
@@ -482,9 +492,15 @@ export class OrgService {
       },
     });
 
+    const action =
+      dto.enabled === false
+        ? 'DISABLE_USER'
+        : dto.enabled === true
+          ? 'ENABLE_USER'
+          : 'UPDATE';
     await this.audit.log({
       user,
-      action: 'UPDATE',
+      action,
       resource: 'User',
       resourceId: id,
       detail: dto,
@@ -499,10 +515,17 @@ export class OrgService {
     if (!target) throw new NotFoundException('用户不存在');
     this.assertCanManageTarget(user, target);
 
-    const passwordHash = await bcrypt.hash(dto.password, 8);
+    assertPasswordPolicy(dto.password);
+    const passwordHash = await hashPassword(dto.password);
     await this.prisma.user.update({
       where: { id },
-      data: { passwordHash },
+      data: {
+        passwordHash,
+        mustChangePassword: true,
+        tokenVersion: { increment: 1 },
+        failedLoginCount: 0,
+        lockedUntil: null,
+      },
     });
 
     await this.audit.log({
@@ -563,13 +586,15 @@ export class OrgService {
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.auditLog.updateMany({
-        where: { userId: id },
-        data: { userId: null },
-      });
-      await tx.user.delete({ where: { id } });
-    });
+    const auditCount = await this.prisma.auditLog.count({ where: { userId: id } });
+    if (auditCount > 0) {
+      throw new BadRequestException(
+        '该用户已有审计记录，请改用「禁用」，不可删除（审计只追加）',
+      );
+    }
+
+    // 审计只追加：不改写 AuditLog；无引用时可物理删除账号
+    await this.prisma.user.delete({ where: { id } });
 
     await this.audit.log({
       user,
