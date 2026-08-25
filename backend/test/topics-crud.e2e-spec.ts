@@ -138,4 +138,51 @@ describe('议题库修改/删除权限（E2E）', () => {
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
       .expect(200);
   });
+
+  it('校级管理员未指定学院时创建议题返回明确错误，指定学院后可创建', async () => {
+    const role = await ctx.prisma.role.findUnique({
+      where: { code: 'SCHOOL_ADMIN' },
+    });
+    if (!role) throw new Error('missing SCHOOL_ADMIN role');
+    const bcrypt = await import('bcryptjs');
+    const admin = await ctx.prisma.user.create({
+      data: {
+        username: 'school_admin_topic',
+        passwordHash: await bcrypt.hash('123456', 8),
+        realName: '校级管理员',
+        title: '组织部',
+        isSchoolAdmin: true,
+        roles: { create: [{ roleId: role.id }] },
+      },
+    });
+    const login = await request(ctx.app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ username: admin.username, password: '123456' })
+      .expect(201);
+    const token = login.body.accessToken as string;
+
+    const missing = await request(ctx.app.getHttpServer())
+      .post('/api/topics')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: '关于人才引进测试',
+        content: '校级账号未选学院',
+        meetingType: 'PARTY_COMMITTEE',
+      })
+      .expect(400);
+    expect(String(missing.body.message)).toMatch(/学院/);
+
+    const created = await request(ctx.app.getHttpServer())
+      .post('/api/topics')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: '关于人才引进测试',
+        content: '指定学院后提交',
+        meetingType: 'PARTY_COMMITTEE',
+        collegeId: ctx.collegeId,
+      })
+      .expect(201);
+    expect(created.body.collegeId).toBe(ctx.collegeId);
+    expect(created.body.title).toBe('关于人才引进测试');
+  });
 });

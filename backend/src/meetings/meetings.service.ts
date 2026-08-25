@@ -997,6 +997,51 @@ export class MeetingsService {
     };
   }
 
+  async deleteMinutesFile(user: AuthUser, meetingId: string) {
+    const meeting = await this.detail(user, meetingId);
+    if (meeting.status === MeetingStatus.ARCHIVED) {
+      throw new BadRequestException('会议已归档，不能删除纪要附件');
+    }
+    const minutes = meeting.minutes;
+    if (!minutes || (!minutes.filePath && !minutes.originalName)) {
+      throw new NotFoundException('尚未上传线下纪要文件');
+    }
+
+    if (minutes.filePath) {
+      try {
+        const abs = this.files.absolutePath(minutes.filePath);
+        if (existsSync(abs)) unlinkSync(abs);
+      } catch {
+        // ignore missing file
+      }
+    }
+
+    const placeholderPrefix = '线下纪要附件：';
+    const content = minutes.content?.trim() || '';
+    const nextContent = content.startsWith(placeholderPrefix) ? '' : minutes.content;
+
+    await this.prisma.minutes.update({
+      where: { id: minutes.id },
+      data: {
+        filePath: null,
+        originalName: null,
+        mimeType: null,
+        fileSize: null,
+        content: nextContent,
+        version: { increment: 1 },
+      },
+    });
+
+    await this.audit.log({
+      user,
+      action: 'DELETE',
+      resource: 'Minutes',
+      resourceId: minutes.id,
+      detail: { originalName: minutes.originalName, meetingId },
+    });
+    return this.detail(user, meetingId);
+  }
+
   private hasMinutesBody(minutes?: {
     content?: string | null;
     filePath?: string | null;

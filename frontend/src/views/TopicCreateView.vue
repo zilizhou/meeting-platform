@@ -6,15 +6,36 @@
       <p>
         {{
           isParty
-            ? '党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。先描述事项，AI 辅助生成后请人工核对。'
-            : '先用自然语言描述事项，AI 辅助生成标题、内容与分类；人工核对后提交进入议题库。'
+            ? '党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。可先勾选下方第一议题，再描述事项；AI 辅助可选。'
+            : '先用自然语言描述事项，也可直接填写标题与内容；核对后提交进入议题库。'
         }}
       </p>
     </div>
 
     <div v-if="isParty" class="rule-banner party">
       <strong>第一议题硬规则</strong>
-      党组织会议必须有一项「第一议题」。征集时请勾选下方复选框；创建会议时必须选定该项。
+      党组织会议必须有一项「第一议题」。请在本页勾选；创建会议时还须再次选定该项入议程。
+      <label class="check first-topic-banner">
+        <input v-model="isFirstTopic" type="checkbox" />
+        本议题为第一议题（政治理论学习）
+      </label>
+      <p v-if="isFirstTopic" class="hint ok" style="margin: 8px 0 0">
+        已标记为第一议题，提交后会写入议题库对应分类。
+      </p>
+    </div>
+
+    <div v-if="needCollegePick" class="panel">
+      <div class="step-label">写入学院</div>
+      <p class="hint">当前账号未绑定学院（如校级管理员）。提交议题前请选择学院，否则无法写入议题库。</p>
+      <label>
+        <span>学院</span>
+        <select v-model="selectedCollegeId">
+          <option value="">请选择学院</option>
+          <option v-for="c in colleges" :key="c.id" :value="c.id">
+            {{ c.name }}
+          </option>
+        </select>
+      </label>
     </div>
 
     <!-- 步骤 1：描述 -->
@@ -38,10 +59,13 @@
       >
         {{ assistLoading ? '生成中…' : 'AI 辅助生成标题 / 内容 / 分类' }}
       </button>
+      <button class="ui-btn light" type="button" style="width: 100%; height: 42px; margin-top: 8px" @click="skipAssist">
+        跳过 AI，直接填写
+      </button>
     </div>
 
     <!-- 步骤 2：人工核对 -->
-    <div v-if="draftReady" class="panel">
+    <div class="panel">
       <div class="step-label">2 · 人工核对与修改</div>
       <p class="hint">请仔细阅读并修改下方内容，确认无误后再提交到议题库。AI 不自动创建、不替代审签。</p>
 
@@ -112,9 +136,11 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const meetingType = computed(() =>
   String(route.query.meetingType || 'JOINT_CONFERENCE') === 'PARTY_COMMITTEE'
@@ -142,11 +168,13 @@ const isFirstTopic = computed({
 })
 
 const categories = ref<any[]>([])
+const colleges = ref<Array<{ id: string; name: string }>>([])
+const selectedCollegeId = ref('')
+const needCollegePick = computed(() => !auth.user?.collegeId)
 const partyResolved = ref<Array<{ title: string; resolutionId: string }>>([])
 const assistLoading = ref(false)
 const saving = ref(false)
 const assist = ref<any>(null)
-const draftReady = ref(false)
 const description = ref('')
 
 const form = reactive({
@@ -177,6 +205,12 @@ async function loadMeta() {
   categories.value = await http.get('/org/categories', {
     params: { meetingType: meetingType.value },
   })
+  if (needCollegePick.value) {
+    colleges.value = await http.get('/org/colleges')
+    if (!selectedCollegeId.value && colleges.value.length === 1) {
+      selectedCollegeId.value = colleges.value[0].id
+    }
+  }
   if (!isParty.value) {
     const partyTopics: any[] = await http.get('/topics', {
       params: { meetingType: 'PARTY_COMMITTEE' },
@@ -215,7 +249,6 @@ async function runAssist() {
     if (res.suggestions?.isTempMotion) form.isTempMotion = true
     if (res.suggestions?.isEmergency) form.isEmergency = true
     if (res.suggestions?.needPartyPrecheck) form.needPartyPrecheck = true
-    draftReady.value = true
     ElMessage.success('已生成建议稿，请人工核对后提交')
   } catch (e: any) {
     ElMessage.error(String(e))
@@ -224,7 +257,23 @@ async function runAssist() {
   }
 }
 
+function skipAssist() {
+  const text = description.value.trim()
+  if (text) {
+    if (!form.title.trim()) {
+      form.title = text.split('\n')[0].slice(0, 40)
+    }
+    if (!form.content.trim()) {
+      form.content = text
+    }
+  }
+}
+
 async function submitToLibrary() {
+  if (needCollegePick.value && !selectedCollegeId.value) {
+    ElMessage.warning('请先选择要写入的学院')
+    return
+  }
   if (!form.title.trim() || form.title.trim().length < 2) {
     ElMessage.warning('请确认议题标题（至少 2 字）')
     return
@@ -257,6 +306,9 @@ async function submitToLibrary() {
       needPartyPrecheck: form.needPartyPrecheck,
       meetingType: meetingType.value,
     }
+    if (needCollegePick.value) {
+      payload.collegeId = selectedCollegeId.value
+    }
     if (!isParty.value && form.needPartyPrecheck) {
       payload.relatedPartyResolutionId = form.relatedPartyResolutionId
     }
@@ -274,7 +326,6 @@ async function submitToLibrary() {
 
 watch(meetingType, () => {
   assist.value = null
-  draftReady.value = false
   description.value = ''
   form.title = ''
   form.content = ''
@@ -299,6 +350,10 @@ onMounted(loadMeta)
 .rule-banner strong {
   display: block;
   margin-bottom: 2px;
+}
+.first-topic-banner {
+  margin-top: 10px;
+  font-weight: 600;
 }
 .hint.ok {
   color: #166534;

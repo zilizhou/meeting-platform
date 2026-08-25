@@ -54,11 +54,28 @@ export class TopicsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  private requireCollege(user: AuthUser) {
-    if (!user.collegeId && !user.isSchoolAdmin) {
-      throw new ForbiddenException('当前账号未绑定学院');
+  private requireCollege(user: AuthUser, requestedCollegeId?: string) {
+    if (user.collegeId) {
+      if (
+        requestedCollegeId &&
+        requestedCollegeId !== user.collegeId &&
+        !user.isSchoolAdmin
+      ) {
+        throw new ForbiddenException('不能为其他学院创建议题');
+      }
+      return user.collegeId;
     }
-    return user.collegeId!;
+    if (user.isSchoolAdmin) {
+      if (!requestedCollegeId) {
+        throw new BadRequestException(
+          '校级账号未绑定学院，请选择要写入的学院后再提交',
+        );
+      }
+      return requestedCollegeId;
+    }
+    throw new BadRequestException(
+      '当前账号未绑定学院，无法提交议题。请联系管理员绑定所属学院',
+    );
   }
 
   /** 校验关联的党组织会议决议：存在、本院、党组织会议、同意类结果 */
@@ -89,7 +106,14 @@ export class TopicsService {
   }
 
   async create(user: AuthUser, dto: CreateTopicDto) {
-    const collegeId = this.requireCollege(user);
+    const collegeId = this.requireCollege(user, dto.collegeId);
+    const college = await this.prisma.college.findUnique({
+      where: { id: collegeId },
+    });
+    if (!college) throw new BadRequestException('学院不存在');
+    if (!isCollegeVisible(user, collegeId)) {
+      throw new ForbiddenException('不能为其他学院创建议题');
+    }
     const meetingType = dto.meetingType || MeetingType.JOINT_CONFERENCE;
     const isTempMotion = dto.isTempMotion ?? false;
     const isEmergency = dto.isEmergency ?? false;

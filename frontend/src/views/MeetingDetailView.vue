@@ -136,6 +136,15 @@
       <p v-if="meeting.minutes?.originalName" class="minutes-file">
         已上传：{{ meeting.minutes.originalName }}
         <button class="ui-link" type="button" @click="downloadMinutesFile">下载附件</button>
+        <button
+          v-if="roles.canSaveMinutes.value && meeting.status !== 'ARCHIVED'"
+          class="ui-link danger"
+          type="button"
+          :disabled="minutesDeleting"
+          @click="deleteMinutesFile"
+        >
+          {{ minutesDeleting ? '删除中…' : '删除附件' }}
+        </button>
       </p>
 
       <el-input
@@ -270,6 +279,7 @@ const minutesDraft = ref<any>(null)
 const minutesDraftText = ref('')
 const minutesAiLoading = ref(false)
 const minutesUploading = ref(false)
+const minutesDeleting = ref(false)
 const activeTopicId = ref('')
 const topicDialogVisible = ref(false)
 const topicDetailLoading = ref(false)
@@ -617,6 +627,27 @@ async function downloadMinutesFile() {
   }
 }
 
+async function deleteMinutesFile() {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除已上传的线下纪要「${meeting.value?.minutes?.originalName || '附件'}」？删除后可重新上传。`,
+      '删除附件',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  minutesDeleting.value = true
+  try {
+    await http.delete(`/meetings/${route.params.id}/minutes/file`)
+    await reloadWithMessage('线下纪要附件已删除')
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  } finally {
+    minutesDeleting.value = false
+  }
+}
+
 async function saveMinutes() {
   try {
     await http.post(`/meetings/${route.params.id}/minutes`, { content: minutesContent.value })
@@ -748,6 +779,12 @@ watch(
   margin: 0 0 10px;
   font-size: 13px;
   color: var(--text);
+}
+.minutes-file .ui-link {
+  margin-left: 10px;
+}
+.minutes-file .ui-link.danger {
+  color: var(--party);
 }
 .minutes-hint {
   margin: 0 0 12px;

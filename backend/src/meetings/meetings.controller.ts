@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Res, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Res, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
@@ -220,6 +220,17 @@ export class MeetingsController {
       'Content-Disposition': `attachment; filename*=UTF-8''${filename}`,
     });
     return file;
+  }
+
+  @Delete(':id/minutes/file')
+  @Roles(
+    RoleCode.MEETING_SECRETARY,
+    RoleCode.COLLEGE_ADMIN,
+    RoleCode.SECRETARY,
+    RoleCode.VICE_SECRETARY,
+  )
+  deleteMinutesFile(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.meetings.deleteMinutesFile(user, id);
   }
 
 }

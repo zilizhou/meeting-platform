@@ -19,6 +19,11 @@ export class CreateTopicDto {
   @IsString()
   content?: string;
 
+  @ApiPropertyOptional({ description: '校级账号创建议题时指定学院' })
+  @IsOptional()
+  @IsString()
+  collegeId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
