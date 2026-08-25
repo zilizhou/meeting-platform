@@ -12,7 +12,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { RegisterDto } from './dto/register.dto';
 import { AuthUser, JwtPayload } from '../common/types';
-import { RoleCode } from '../common/constants';
+import { REGISTERABLE_ROLE_CODES, RoleCode } from '../common/constants';
 import {
   assertPasswordPolicy,
   hashPassword,
@@ -122,6 +122,19 @@ export class AuthService {
     });
   }
 
+  async listRegisterRoles() {
+    const roles = await this.prisma.role.findMany({
+      where: { code: { in: [...REGISTERABLE_ROLE_CODES] } },
+      select: { code: true, name: true },
+    });
+    const order = new Map(
+      REGISTERABLE_ROLE_CODES.map((code, i) => [code, i]),
+    );
+    return [...roles].sort(
+      (a, b) => (order.get(a.code as any) ?? 99) - (order.get(b.code as any) ?? 99),
+    );
+  }
+
   async register(
     dto: RegisterDto,
     meta: { ip?: string; userAgent?: string } = {},
@@ -139,12 +152,18 @@ export class AuthService {
     const exists = await this.prisma.user.findUnique({
       where: { username: dto.username },
     });
-    if (exists) throw new BadRequestException('用户名已存在');
+    if (exists) throw new BadRequestException('该工号已注册');
 
-    const attendee = await this.prisma.role.findUnique({
-      where: { code: RoleCode.ATTENDEE },
+    const roleCode = dto.roleCode || RoleCode.ATTENDEE;
+    if (
+      !(REGISTERABLE_ROLE_CODES as readonly string[]).includes(roleCode)
+    ) {
+      throw new BadRequestException('该角色不可自助注册，请联系学院管理员');
+    }
+    const role = await this.prisma.role.findUnique({
+      where: { code: roleCode },
     });
-    if (!attendee) {
+    if (!role) {
       throw new BadRequestException('系统角色未初始化，请联系管理员');
     }
 
@@ -156,12 +175,12 @@ export class AuthService {
           username: dto.username,
           passwordHash,
           realName: dto.realName,
-          title: dto.title || null,
+          title: role.name,
           collegeId: college.id,
           isSchoolAdmin: false,
           enabled: true,
           mustChangePassword: false,
-          roles: { create: [{ roleId: attendee.id }] },
+          roles: { create: [{ roleId: role.id }] },
         },
         include: {
           roles: { include: { role: true } },
@@ -174,7 +193,7 @@ export class AuthService {
         e instanceof Prisma.PrismaClientKnownRequestError &&
         e.code === 'P2002'
       ) {
-        throw new BadRequestException('用户名已存在');
+        throw new BadRequestException('该工号已注册');
       }
       throw e;
     }

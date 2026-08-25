@@ -45,7 +45,7 @@ export const useAuthStore = defineStore('auth', () => {
     confirmPassword: string
     realName: string
     collegeId: string
-    title?: string
+    roleCode?: string
   }) {
     const data: any = await http.post('/auth/register', payload)
     token.value = data.accessToken

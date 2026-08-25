@@ -46,6 +46,12 @@ export class AuthController {
   }
 
   @Public()
+  @Get('roles')
+  roles() {
+    return this.auth.listRegisterRoles();
+  }
+
+  @Public()
   @Throttle({
     default: {
       limit: envInt('THROTTLE_LOGIN_LIMIT', 20),

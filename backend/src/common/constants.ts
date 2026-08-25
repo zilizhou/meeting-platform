@@ -80,3 +80,16 @@ export const RoleCode = {
   DEPT_HEAD: 'DEPT_HEAD',
   ATTENDEE: 'ATTENDEE',
 } as const;
+
+/** 自助注册可选角色（不含校级管理员 / 校级查阅） */
+export const REGISTERABLE_ROLE_CODES = [
+  RoleCode.SECRETARY,
+  RoleCode.VICE_SECRETARY,
+  RoleCode.DEAN,
+  RoleCode.VICE_DEAN,
+  RoleCode.PARTY_MEMBER,
+  RoleCode.MEETING_SECRETARY,
+  RoleCode.COLLEGE_ADMIN,
+  RoleCode.DEPT_HEAD,
+  RoleCode.ATTENDEE,
+] as const;

@@ -12,24 +12,32 @@ describe('自助注册（E2E）', () => {
     await ctx.app.close();
   });
 
-  it('公开列出学院，无需登录', async () => {
-    const res = await request(ctx.app.getHttpServer())
+  it('公开列出学院与可注册角色，无需登录', async () => {
+    const colleges = await request(ctx.app.getHttpServer())
       .get('/api/auth/colleges')
       .expect(200);
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body.some((c: { id: string }) => c.id === ctx.collegeId)).toBe(
-      true,
-    );
+    expect(Array.isArray(colleges.body)).toBe(true);
+    expect(
+      colleges.body.some((c: { id: string }) => c.id === ctx.collegeId),
+    ).toBe(true);
+
+    const roles = await request(ctx.app.getHttpServer())
+      .get('/api/auth/roles')
+      .expect(200);
+    const codes = roles.body.map((r: { code: string }) => r.code);
+    expect(codes).toContain('ATTENDEE');
+    expect(codes).toContain('DEAN');
+    expect(codes).not.toContain('SCHOOL_ADMIN');
   });
 
-  it('注册成功后颁发令牌，角色为列席人员', async () => {
-    const username = `reg_${Date.now()}`;
+  it('可用学工号注册，并按所选角色入职', async () => {
+    const username = `2021${Date.now().toString().slice(-6)}`;
     const res = await request(ctx.app.getHttpServer())
       .post('/api/auth/register')
       .send({
         username,
         realName: '注册测试',
-        title: '教研室主任',
+        roleCode: 'DEPT_HEAD',
         collegeId: ctx.collegeId,
         password: 'RegTest_123!',
         confirmPassword: 'RegTest_123!',
@@ -40,7 +48,7 @@ describe('自助注册（E2E）', () => {
     expect(res.body.user.username).toBe(username);
     expect(res.body.user.realName).toBe('注册测试');
     expect(res.body.user.collegeId).toBe(ctx.collegeId);
-    expect(res.body.user.roles).toEqual(['ATTENDEE']);
+    expect(res.body.user.roles).toEqual(['DEPT_HEAD']);
     expect(res.body.user.mustChangePassword).toBe(false);
 
     await request(ctx.app.getHttpServer())
@@ -49,8 +57,8 @@ describe('自助注册（E2E）', () => {
       .expect(200);
   });
 
-  it('拒绝重复账号、错误学院、角色注入与密码不一致', async () => {
-    const username = `dup_${Date.now()}`;
+  it('拒绝重复工号、错误学院、校级角色注入与密码不一致', async () => {
+    const username = `2022${Date.now().toString().slice(-6)}`;
     const payload = {
       username,
       realName: '重复测试',
@@ -67,18 +75,18 @@ describe('自助注册（E2E）', () => {
       .post('/api/auth/register')
       .send(payload)
       .expect(400);
-    expect(String(dup.body.message)).toContain('用户名已存在');
+    expect(String(dup.body.message)).toContain('该工号已注册');
 
     await request(ctx.app.getHttpServer())
       .post('/api/auth/register')
-      .send({ ...payload, username: `x_${Date.now()}`, collegeId: 'no-such' })
+      .send({ ...payload, username: `2023${Date.now().toString().slice(-6)}`, collegeId: 'no-such' })
       .expect(400);
 
     await request(ctx.app.getHttpServer())
       .post('/api/auth/register')
       .send({
         ...payload,
-        username: `y_${Date.now()}`,
+        username: `2024${Date.now().toString().slice(-6)}`,
         confirmPassword: 'Other_123!',
       })
       .expect(400);
@@ -87,8 +95,8 @@ describe('自助注册（E2E）', () => {
       .post('/api/auth/register')
       .send({
         ...payload,
-        username: `z_${Date.now()}`,
-        roleCodes: ['SCHOOL_ADMIN'],
+        username: `2025${Date.now().toString().slice(-6)}`,
+        roleCode: 'SCHOOL_ADMIN',
       })
       .expect(400);
   });

@@ -22,7 +22,7 @@
 
       <div class="login-card">
         <h2>注册</h2>
-        <p class="hint">注册后为列席人员权限，书记 / 院长等角色请联系学院管理员分配</p>
+        <p class="hint">请填写学工号并选择本人角色；学院管理员可事后调整</p>
         <form @submit.prevent="onSubmit">
           <label>
             <span>姓名</span>
@@ -33,11 +33,11 @@
             />
           </label>
           <label>
-            <span>账号</span>
+            <span>工号</span>
             <input
               v-model="form.username"
               autocomplete="username"
-              placeholder="字母开头，可含数字和下划线"
+              placeholder="请输入学工号"
             />
           </label>
           <label>
@@ -50,12 +50,13 @@
             </select>
           </label>
           <label>
-            <span>职务（选填）</span>
-            <input
-              v-model="form.title"
-              autocomplete="organization-title"
-              placeholder="如教研室主任"
-            />
+            <span>角色</span>
+            <select v-model="form.roleCode">
+              <option value="" disabled>请选择角色</option>
+              <option v-for="r in roles" :key="r.code" :value="r.code">
+                {{ r.name }}
+              </option>
+            </select>
           </label>
           <label>
             <span>密码</span>
@@ -106,25 +107,36 @@ interface CollegeOption {
   code: string
 }
 
+interface RoleOption {
+  code: string
+  name: string
+}
+
 const auth = useAuthStore()
 const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const colleges = ref<CollegeOption[]>([])
+const roles = ref<RoleOption[]>([])
 const form = reactive({
   realName: '',
   username: '',
   collegeId: '',
-  title: '',
+  roleCode: 'ATTENDEE',
   password: '',
   confirmPassword: '',
 })
 
 onMounted(async () => {
   try {
-    colleges.value = await http.get('/auth/colleges')
+    const [collegeList, roleList] = await Promise.all([
+      http.get('/auth/colleges'),
+      http.get('/auth/roles'),
+    ])
+    colleges.value = collegeList
+    roles.value = roleList
   } catch (e: any) {
-    error.value = String(e?.message || e || '学院列表加载失败')
+    error.value = String(e?.message || e || '选项加载失败')
   }
 })
 
@@ -142,11 +154,15 @@ function goAfterAuth() {
 async function onSubmit() {
   error.value = ''
   if (!form.realName.trim() || !form.username.trim()) {
-    error.value = '请填写姓名和账号'
+    error.value = '请填写姓名和学工号'
     return
   }
   if (!form.collegeId) {
     error.value = '请选择所属学院'
+    return
+  }
+  if (!form.roleCode) {
+    error.value = '请选择角色'
     return
   }
   if (!form.password) {
@@ -165,7 +181,7 @@ async function onSubmit() {
       confirmPassword: form.confirmPassword,
       realName: form.realName.trim(),
       collegeId: form.collegeId,
-      title: form.title.trim() || undefined,
+      roleCode: form.roleCode,
     })
     goAfterAuth()
   } catch (e: any) {

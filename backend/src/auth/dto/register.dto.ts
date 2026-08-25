@@ -13,11 +13,11 @@ function trim(value: unknown): unknown {
 }
 
 export class RegisterDto {
-  @ApiProperty({ example: 'zhangsan', description: '登录账号' })
+  @ApiProperty({ example: '2021001001', description: '学工号，同时作为登录账号' })
   @Transform(({ value }) => trim(value))
   @IsString()
-  @Matches(/^[a-zA-Z][a-zA-Z0-9_]{1,31}$/, {
-    message: '账号须以字母开头，仅含字母、数字和下划线，长度 2～32 位',
+  @Matches(/^[a-zA-Z0-9][a-zA-Z0-9_-]{3,19}$/, {
+    message: '请填写学工号（4～20 位字母或数字）',
   })
   username!: string;
 
@@ -28,12 +28,14 @@ export class RegisterDto {
   @MaxLength(32, { message: '姓名过长' })
   realName!: string;
 
-  @ApiPropertyOptional({ example: '教研室主任' })
+  @ApiPropertyOptional({
+    example: 'DEPT_HEAD',
+    description: '角色编码；不传则默认为列席人员',
+  })
   @Transform(({ value }) => trim(value))
   @IsOptional()
   @IsString()
-  @MaxLength(32, { message: '职务过长' })
-  title?: string;
+  roleCode?: string;
 
   @ApiProperty({ description: '所属学院 ID' })
   @Transform(({ value }) => trim(value))
