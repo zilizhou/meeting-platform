@@ -73,7 +73,7 @@
         >
           <div class="topic-card-top">
             <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
-              议题{{ idx + 1 }}
+              议题{{ Number(idx) + 1 }}
             </span>
             <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
               {{ statusLabel(topic.status) }}
