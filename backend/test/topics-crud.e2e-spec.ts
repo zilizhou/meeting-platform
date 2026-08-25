@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { createTestApp, TestCtx } from './helpers';
+import { createApprovedPartyTopic, createTestApp, TestCtx } from './helpers';
 
 describe('议题库修改/删除权限（E2E）', () => {
   let ctx: TestCtx;
@@ -102,13 +102,14 @@ describe('议题库修改/删除权限（E2E）', () => {
       .send({ decision: 'APPROVED' })
       .expect(201);
 
+    const firstTopicId = await createApprovedPartyTopic(ctx, '锁定测试第一议题');
     await request(ctx.app.getHttpServer())
       .post('/api/meetings')
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
       .send({
         title: '党委会锁定测试',
         meetingType: 'PARTY_COMMITTEE',
-        topicIds: [topicId],
+        topicIds: [firstTopicId, topicId],
       })
       .expect(201);
 

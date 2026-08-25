@@ -11,8 +11,14 @@ import {
   assertCollegeVisible,
   assertSchoolWideAccess,
   getVisibleCollegeIds,
+  isSchoolAdminRole,
   prismaCollegeIdFilter,
 } from '../common/roles';
+import {
+  currentPeriodRange,
+  type FrequencyPeriod,
+} from '../common/academic-term';
+import { UpsertFrequencyRulesDto } from './dto/frequency-rule.dto';
 import { SupervisionsService } from '../supervisions/supervisions.service';
 import { LlmProvider } from '../ai/llm.provider';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -50,22 +56,7 @@ export class AdminService {
     return prismaCollegeIdFilter(user);
   }
 
-  /** 当月区间（按会议排期优先，其次创建时间） */
-  private currentMonthRange(now = new Date()) {
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const start = new Date(year, month, 1, 0, 0, 0, 0);
-    const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
-    return {
-      start,
-      end,
-      year,
-      month: month + 1,
-      label: `${year}年${month + 1}月`,
-    };
-  }
-
-  private monthMeetingWhere(
+  private periodMeetingWhere(
     collegeId: string | undefined,
     meetingType: string,
     start: Date,
@@ -84,82 +75,183 @@ export class AdminService {
     };
   }
 
-  /** 全校/分管范围本月两会召开情况（按规定应每月召开） */
-  private async computeMonthHolding(user: AuthUser) {
-    const { start, end, label, year, month } = this.currentMonthRange();
-    const collegeWhere = this.collegeEntityWhere(user);
-    const meetingScope = prismaCollegeIdFilter(user);
-    const [colleges, monthPartyMeetings, monthJointMeetings] = await Promise.all([
-      this.prisma.college.findMany({
-        where: collegeWhere,
-        select: { id: true, name: true, code: true },
-        orderBy: { code: 'asc' },
-      }),
-      this.prisma.meeting.findMany({
-        where: {
-          ...meetingScope,
-          ...this.monthMeetingWhere(
-            undefined,
-            MeetingType.PARTY_COMMITTEE,
-            start,
-            end,
-          ),
-        },
-        select: { collegeId: true },
-      }),
-      this.prisma.meeting.findMany({
-        where: {
-          ...meetingScope,
-          ...this.monthMeetingWhere(
-            undefined,
-            MeetingType.JOINT_CONFERENCE,
-            start,
-            end,
-          ),
-        },
-        select: { collegeId: true },
-      }),
-    ]);
+  private async loadFrequencyRules() {
+    return this.prisma.meetingFrequencyRule.findMany();
+  }
 
-    const partyHeld = new Set(monthPartyMeetings.map((m) => m.collegeId));
-    const jointHeld = new Set(monthJointMeetings.map((m) => m.collegeId));
-    const missingParty = colleges.filter((c) => !partyHeld.has(c.id));
-    const missingJoint = colleges.filter((c) => !jointHeld.has(c.id));
-    const bothOk = colleges.filter(
-      (c) => partyHeld.has(c.id) && jointHeld.has(c.id),
-    ).length;
+  private resolveFrequencyRule(
+    rows: Array<{
+      collegeId: string;
+      meetingType: string;
+      period: string;
+      requiredCount: number;
+    }>,
+    collegeId: string,
+    meetingType: string,
+  ) {
+    return (
+      rows.find(
+        (r) => r.collegeId === collegeId && r.meetingType === meetingType,
+      ) ||
+      rows.find((r) => r.collegeId === '' && r.meetingType === meetingType) || {
+        collegeId: '',
+        meetingType,
+        period: 'SEMESTER',
+        requiredCount: 1,
+      }
+    );
+  }
+
+  /** 全校/分管范围按学期或规定频次统计两会召开 */
+  private async computePeriodHolding(user: AuthUser) {
+    const rules = await this.loadFrequencyRules();
+    const defaultParty = this.resolveFrequencyRule(
+      rules,
+      '',
+      MeetingType.PARTY_COMMITTEE,
+    );
+    const defaultJoint = this.resolveFrequencyRule(
+      rules,
+      '',
+      MeetingType.JOINT_CONFERENCE,
+    );
+    const display = currentPeriodRange(defaultParty.period as FrequencyPeriod);
+    const collegeWhere = this.collegeEntityWhere(user);
+    const colleges = await this.prisma.college.findMany({
+      where: collegeWhere,
+      select: { id: true, name: true, code: true },
+      orderBy: { code: 'asc' },
+    });
+
+    const byCollege: Array<{
+      collegeId: string;
+      name: string;
+      code: string;
+      partyCount: number;
+      jointCount: number;
+      partyRequired: number;
+      jointRequired: number;
+      partyPeriod: string;
+      jointPeriod: string;
+      partyHeld: boolean;
+      jointHeld: boolean;
+      bothOk: boolean;
+    }> = [];
+    for (const c of colleges) {
+      const partyRule = this.resolveFrequencyRule(
+        rules,
+        c.id,
+        MeetingType.PARTY_COMMITTEE,
+      );
+      const jointRule = this.resolveFrequencyRule(
+        rules,
+        c.id,
+        MeetingType.JOINT_CONFERENCE,
+      );
+      const partyRange = currentPeriodRange(partyRule.period as FrequencyPeriod);
+      const jointRange = currentPeriodRange(jointRule.period as FrequencyPeriod);
+      const [partyCount, jointCount] = await Promise.all([
+        this.prisma.meeting.count({
+          where: this.periodMeetingWhere(
+            c.id,
+            MeetingType.PARTY_COMMITTEE,
+            partyRange.start,
+            partyRange.end,
+          ),
+        }),
+        this.prisma.meeting.count({
+          where: this.periodMeetingWhere(
+            c.id,
+            MeetingType.JOINT_CONFERENCE,
+            jointRange.start,
+            jointRange.end,
+          ),
+        }),
+      ]);
+      const partyHeld = partyCount >= partyRule.requiredCount;
+      const jointHeld = jointCount >= jointRule.requiredCount;
+      byCollege.push({
+        collegeId: c.id,
+        name: c.name,
+        code: c.code,
+        partyCount,
+        jointCount,
+        partyRequired: partyRule.requiredCount,
+        jointRequired: jointRule.requiredCount,
+        partyPeriod: partyRule.period,
+        jointPeriod: jointRule.period,
+        partyHeld,
+        jointHeld,
+        bothOk: partyHeld && jointHeld,
+      });
+    }
+
+    const missingParty = byCollege.filter((c) => !c.partyHeld);
+    const missingJoint = byCollege.filter((c) => !c.jointHeld);
 
     return {
-      year,
-      month,
-      label,
-      start: start.toISOString(),
-      end: end.toISOString(),
+      year: display.year,
+      month: display.month,
+      label: display.label,
+      start: display.start.toISOString(),
+      end: display.end.toISOString(),
+      period: defaultParty.period,
+      requiredParty: defaultParty.requiredCount,
+      requiredJoint: defaultJoint.requiredCount,
       collegeCount: colleges.length,
-      partyHeldCount: partyHeld.size,
-      jointHeldCount: jointHeld.size,
-      bothOkCount: bothOk,
+      partyHeldCount: byCollege.filter((c) => c.partyHeld).length,
+      jointHeldCount: byCollege.filter((c) => c.jointHeld).length,
+      bothOkCount: byCollege.filter((c) => c.bothOk).length,
       missingPartyCount: missingParty.length,
       missingJointCount: missingJoint.length,
       missingParty: missingParty.map((c) => ({
-        collegeId: c.id,
+        collegeId: c.collegeId,
         name: c.name,
         code: c.code,
       })),
       missingJoint: missingJoint.map((c) => ({
-        collegeId: c.id,
+        collegeId: c.collegeId,
         name: c.name,
         code: c.code,
       })),
-      byCollege: colleges.map((c) => ({
-        collegeId: c.id,
-        name: c.name,
-        code: c.code,
-        partyHeld: partyHeld.has(c.id),
-        jointHeld: jointHeld.has(c.id),
-        bothOk: partyHeld.has(c.id) && jointHeld.has(c.id),
-      })),
+      byCollege,
     };
+  }
+
+  async listFrequencyRules(user: AuthUser) {
+    this.assertSchoolAdmin(user);
+    return this.prisma.meetingFrequencyRule.findMany({
+      orderBy: [{ collegeId: 'asc' }, { meetingType: 'asc' }],
+    });
+  }
+
+  async upsertFrequencyRules(user: AuthUser, dto: UpsertFrequencyRulesDto) {
+    this.assertSchoolAdmin(user);
+    if (!isSchoolAdminRole(user)) {
+      throw new ForbiddenException('仅校级管理员可配置召开频次');
+    }
+    for (const rule of dto.rules) {
+      const collegeId = rule.collegeId || '';
+      await this.prisma.meetingFrequencyRule.upsert({
+        where: {
+          collegeId_meetingType: {
+            collegeId,
+            meetingType: rule.meetingType,
+          },
+        },
+        create: {
+          collegeId,
+          meetingType: rule.meetingType,
+          period: rule.period,
+          requiredCount: rule.requiredCount,
+        },
+        update: {
+          period: rule.period,
+          requiredCount: rule.requiredCount,
+        },
+      });
+    }
+    return this.listFrequencyRules(user);
   }
 
   async overview(user: AuthUser) {
@@ -229,7 +321,7 @@ export class AdminService {
           _count: { select: { topics: true } },
         },
       }),
-      this.computeMonthHolding(user),
+      this.computePeriodHolding(user),
     ]);
 
     return {
@@ -259,7 +351,7 @@ export class AdminService {
 
   async collegeStats(user: AuthUser) {
     this.assertSchoolAdmin(user);
-    const { start, end, label: monthLabel } = this.currentMonthRange();
+    const holding = await this.computePeriodHolding(user);
     const colleges = await this.prisma.college.findMany({
       where: this.collegeEntityWhere(user),
       orderBy: { code: 'asc' },
@@ -277,8 +369,6 @@ export class AdminService {
         failLogs,
         totalLogs,
         quorumFailMeetings,
-        monthPartyCount,
-        monthJointCount,
       ] = await Promise.all([
         this.prisma.meeting.count({ where: { collegeId: c.id } }),
         this.prisma.topic.count({
@@ -311,22 +401,6 @@ export class AdminService {
             actualAttend: { gt: 0 },
           },
         }),
-        this.prisma.meeting.count({
-          where: this.monthMeetingWhere(
-            c.id,
-            MeetingType.PARTY_COMMITTEE,
-            start,
-            end,
-          ),
-        }),
-        this.prisma.meeting.count({
-          where: this.monthMeetingWhere(
-            c.id,
-            MeetingType.JOINT_CONFERENCE,
-            start,
-            end,
-          ),
-        }),
       ]);
 
       // 双审完成率：联席会议题中已 APPROVED/ON_AGENDA/RESOLVED 等相对已提交审题的比例
@@ -345,6 +419,10 @@ export class AdminService {
         },
       });
       const dualTotal = pendingReview + dualPassed;
+
+      const hold = holding.byCollege.find((row) => row.collegeId === c.id);
+      const monthPartyCount = hold?.partyCount ?? 0;
+      const monthJointCount = hold?.jointCount ?? 0;
 
       rows.push({
         collegeId: c.id,
@@ -365,12 +443,12 @@ export class AdminService {
         dualReviewRate:
           dualTotal === 0 ? 1 : Number((dualPassed / dualTotal).toFixed(3)),
         quorumRiskCount: quorumFailMeetings,
-        monthLabel,
+        monthLabel: holding.label,
         monthPartyCount,
         monthJointCount,
-        monthPartyHeld: monthPartyCount > 0,
-        monthJointHeld: monthJointCount > 0,
-        monthBothOk: monthPartyCount > 0 && monthJointCount > 0,
+        monthPartyHeld: hold?.partyHeld ?? false,
+        monthJointHeld: hold?.jointHeld ?? false,
+        monthBothOk: hold?.bothOk ?? false,
       });
     }
     return rows;
@@ -530,21 +608,21 @@ export class AdminService {
       monthMissing: [] as Array<Record<string, unknown>>,
     };
 
-    const monthHolding = await this.computeMonthHolding(user);
+    const monthHolding = await this.computePeriodHolding(user);
     pack.monthMissing = [
       ...monthHolding.missingParty.map((c) => ({
-        type: 'MONTH_PARTY_MISSING',
+        type: 'PERIOD_PARTY_MISSING',
         level: 'high',
-        title: `${c.name} · 本月未开党组织会议`,
-        message: `${monthHolding.label}按规定应召开党组织会议，当前未见排期/召开记录`,
+        title: `${c.name} · ${monthHolding.label}未按规定召开党组织会议`,
+        message: `${monthHolding.label}应召开党组织会议 ${monthHolding.requiredParty} 次，当前未见足够排期/召开记录`,
         collegeId: c.collegeId,
         at: new Date().toISOString(),
       })),
       ...monthHolding.missingJoint.map((c) => ({
-        type: 'MONTH_JOINT_MISSING',
+        type: 'PERIOD_JOINT_MISSING',
         level: 'high',
-        title: `${c.name} · 本月未开联席会议`,
-        message: `${monthHolding.label}按规定应召开党政联席会议，当前未见排期/召开记录`,
+        title: `${c.name} · ${monthHolding.label}未按规定召开联席会议`,
+        message: `${monthHolding.label}应召开党政联席会议 ${monthHolding.requiredJoint} 次，当前未见足够排期/召开记录`,
         collegeId: c.collegeId,
         at: new Date().toISOString(),
       })),
@@ -1092,12 +1170,12 @@ export class AdminService {
       `${facts.rateLabel}督办办结率 ${pct(facts.supervisionDoneRate)}，合规通过率 ${pct(facts.compliancePassRate)}，逾期督办 ${facts.supervisionOverdue} 条。`,
       '',
       '二、重点问题',
-      `1. 本月未开党组织会议（${facts.missingPartyCount}）：${missParty}。`,
-      `2. 本月未开党政联席会议（${facts.missingJointCount}）：${missJoint}。`,
+      `1. ${facts.monthLabel}未按规定召开党组织会议（${facts.missingPartyCount}）：${missParty}。`,
+      `2. ${facts.monthLabel}未按规定召开党政联席会议（${facts.missingJointCount}）：${missJoint}。`,
       `3. 预警合计：缺开 ${facts.warningCounts.monthMissing}、合规失败 ${facts.warningCounts.complianceFails}、督办逾期 ${facts.warningCounts.overdueSupervisions}、纪要未双签 ${facts.warningCounts.unsignedMinutes}、前置把关缺失 ${facts.warningCounts.precheckMissing}。`,
       '',
       '三、工作建议',
-      '1. 请对照缺开清单，督促相关学院尽快完成当月排期与召开留痕。',
+      '1. 请对照缺开清单，督促相关学院按学期/规定频次完成排期与召开留痕。',
       '2. 对督办逾期、纪要未双签事项开展定向催办，提高闭环率。',
       '3. 继续坚持「制度硬校验、全流程留痕、AI 不替代审签」，保证程序合规与责任清晰。',
       '',

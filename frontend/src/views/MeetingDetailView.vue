@@ -18,6 +18,14 @@
       </div>
       <h2>{{ meeting.title }}</h2>
       <p>期次 {{ meeting.periodNo || '—' }} · 时间 {{ formatTime(meeting.scheduledAt) || '待定' }}</p>
+      <el-alert
+        v-if="missingFirstTopic"
+        type="error"
+        :closable="false"
+        show-icon
+        style="margin-top: 12px"
+        title="本场党组织会议未纳入第一议题（政治理论学习），不能开始会议或签到开会。"
+      />
       <div class="nums">
         <div><strong>{{ meeting.actualAttend }}/{{ meeting.shouldAttend }}</strong><span>到会</span></div>
         <div><strong>{{ meeting.topics?.length || 0 }}</strong><span>入会议题</span></div>
@@ -53,6 +61,7 @@
         class="ui-btn"
         :class="{ party: isParty }"
         type="button"
+        :disabled="missingFirstTopic"
         @click="start"
       >
         开始会议
@@ -664,6 +673,11 @@ watch(activeTopicId, () => {
 })
 
 const isParty = computed(() => meeting.value?.meetingType === 'PARTY_COMMITTEE')
+const missingFirstTopic = computed(() => {
+  if (!isParty.value) return false
+  const topics = meeting.value?.topics || []
+  return !topics.some((t: any) => t.category?.code === 'FIRST_TOPIC')
+})
 const voteThresholdText = computed(() =>
   meeting.value?.isMajor ? '超过应到 2/3' : '超过应到 1/2',
 )

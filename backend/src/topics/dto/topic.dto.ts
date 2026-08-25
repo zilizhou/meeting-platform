@@ -119,6 +119,29 @@ export class ReviewTopicDto {
   @IsOptional()
   @IsString()
   comment?: string;
+
+  @ApiPropertyOptional({ description: '学院管理员/会议秘书代审' })
+  @IsOptional()
+  @IsBoolean()
+  proxy?: boolean;
+
+  @ApiPropertyOptional({ enum: ['PHONE', 'IN_PERSON'] })
+  @IsOptional()
+  @IsIn(['PHONE', 'IN_PERSON'])
+  proxyMethod?: 'PHONE' | 'IN_PERSON';
+
+  @ApiPropertyOptional({ description: '代审确认的对方姓名' })
+  @IsOptional()
+  @IsString()
+  proxyCounterparty?: string;
+
+  @ApiPropertyOptional({
+    enum: ['SECRETARY', 'DEAN'],
+    description: '联席会议题代审时指定一侧',
+  })
+  @IsOptional()
+  @IsIn(['SECRETARY', 'DEAN'])
+  proxySide?: 'SECRETARY' | 'DEAN';
 }
 
 export class AddMaterialDto {

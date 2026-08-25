@@ -208,7 +208,12 @@ export class TopicsController {
   }
 
   @Post(':id/review')
-  @Roles(RoleCode.SECRETARY, RoleCode.DEAN)
+  @Roles(
+    RoleCode.SECRETARY,
+    RoleCode.DEAN,
+    RoleCode.MEETING_SECRETARY,
+    RoleCode.COLLEGE_ADMIN,
+  )
   review(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,

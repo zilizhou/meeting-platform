@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   Res,
   StreamableFile,
@@ -16,6 +17,7 @@ import { CurrentUser, Roles } from '../common/decorators';
 import { AuthUser } from '../common/types';
 import { RoleCode } from '../common/constants';
 import { GenerateBriefingDto } from './dto/generate-briefing.dto';
+import { UpsertFrequencyRulesDto } from './dto/frequency-rule.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth()
@@ -78,6 +80,19 @@ export class AdminController {
   @Get('warnings')
   warnings(@CurrentUser() user: AuthUser) {
     return this.admin.warnings(user);
+  }
+
+  @Get('frequency-rules')
+  listFrequencyRules(@CurrentUser() user: AuthUser) {
+    return this.admin.listFrequencyRules(user);
+  }
+
+  @Put('frequency-rules')
+  upsertFrequencyRules(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpsertFrequencyRulesDto,
+  ) {
+    return this.admin.upsertFrequencyRules(user, dto);
   }
 
   @Get('transfers')

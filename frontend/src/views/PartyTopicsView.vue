@@ -101,6 +101,14 @@
           >
             提交书记审
           </button>
+          <button
+            v-if="roles.canProxyReview.value && t.status === 'PENDING_REVIEW'"
+            class="ui-link"
+            type="button"
+            @click="$router.push(`/topics/${t.id}?from=party`)"
+          >
+            代审
+          </button>
           <button v-if="canEdit(t)" class="ui-link" type="button" @click="openEdit(t)">编辑</button>
         </div>
         <el-popconfirm

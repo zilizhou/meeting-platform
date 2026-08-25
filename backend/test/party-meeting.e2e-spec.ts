@@ -3,6 +3,7 @@ import { writeFileSync } from 'fs';
 import { join } from 'path';
 import {
   checkInUsers,
+  createApprovedPartyTopic,
   createTestApp,
   TestCtx,
 } from './helpers';
@@ -19,40 +20,7 @@ describe('党委会正式开会（E2E）', () => {
   });
 
   async function prepareApprovedPartyTopic(title: string) {
-    const createRes = await request(ctx.app.getHttpServer())
-      .post('/api/topics')
-      .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .send({
-        title,
-        content: '党委会开会测试',
-        meetingType: 'PARTY_COMMITTEE',
-        isMajor: false,
-      })
-      .expect(201);
-
-    const topicId = createRes.body.id as string;
-    for (const m of createRes.body.materials.filter((x: any) => x.isRequired)) {
-      const tmp = join(process.env.UPLOAD_DIR!, `${m.id}-pm.txt`);
-      writeFileSync(tmp, 'party-meeting-material');
-      await request(ctx.app.getHttpServer())
-        .post(`/api/topics/materials/${m.id}/upload`)
-        .set('Authorization', `Bearer ${ctx.users.office.token}`)
-        .attach('file', tmp)
-        .expect(201);
-    }
-
-    await request(ctx.app.getHttpServer())
-      .post(`/api/topics/${topicId}/submit-review`)
-      .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .expect(201);
-
-    await request(ctx.app.getHttpServer())
-      .post(`/api/topics/${topicId}/review`)
-      .set('Authorization', `Bearer ${ctx.users.secretary.token}`)
-      .send({ decision: 'APPROVED' })
-      .expect(201);
-
-    return topicId;
+    return createApprovedPartyTopic(ctx, title);
   }
 
   it('联席会议题不能入党委会会议程', async () => {
@@ -72,6 +40,26 @@ describe('党委会正式开会（E2E）', () => {
       })
       .expect(400);
     expect(String(res.body.message)).toMatch(/类型不匹配|不能入/);
+  });
+
+  it('党组织会议无第一议题不能创建会议', async () => {
+    const build = await ctx.prisma.categoryDict.findFirst({
+      where: { meetingType: 'PARTY_COMMITTEE', code: 'PARTY_BUILD' },
+    });
+    expect(build).toBeTruthy();
+    const topicId = await createApprovedPartyTopic(ctx, '党建专项无第一议题', {
+      categoryId: build!.id,
+    });
+    const res = await request(ctx.app.getHttpServer())
+      .post('/api/meetings')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({
+        title: '缺第一议题的党委会',
+        meetingType: 'PARTY_COMMITTEE',
+        topicIds: [topicId],
+      })
+      .expect(400);
+    expect(String(res.body.message)).toMatch(/第一议题/);
   });
 
   it('党委会开会：签到表决决议，书记单签纪要生效，可转联席会', async () => {

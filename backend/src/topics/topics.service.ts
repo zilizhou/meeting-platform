@@ -21,7 +21,13 @@ import {
   SupervisionStatus,
   TopicStatus,
 } from '../common/constants';
-import { isCollegeVisible, prismaCollegeIdFilter } from '../common/roles';
+import {
+  assertAnyRole,
+  canSeeFullTopicLibrary,
+  isCollegeVisible,
+  prismaCollegeIdFilter,
+  PROXY_REVIEW_ROLES,
+} from '../common/roles';
 import {
   materialsForCategory,
   withEmergencyMaterials,
@@ -319,11 +325,29 @@ export class TopicsService {
     return { id, deleted: true };
   }
 
+  private relatedTopicWhere(user: AuthUser) {
+    return {
+      OR: [
+        { proposerId: user.sub },
+        { meeting: { attendances: { some: { userId: user.sub } } } },
+        {
+          resolution: {
+            supervisionTasks: { some: { ownerId: user.sub } },
+          },
+        },
+      ],
+    };
+  }
+
   async list(user: AuthUser, meetingType?: string) {
+    const visibility = canSeeFullTopicLibrary(user)
+      ? {}
+      : this.relatedTopicWhere(user);
     return this.prisma.topic.findMany({
       where: {
         ...prismaCollegeIdFilter(user),
         ...(meetingType ? { meetingType } : {}),
+        ...visibility,
       },
       include: {
         proposer: { select: { id: true, realName: true } },
@@ -373,6 +397,15 @@ export class TopicsService {
     if (!topic) throw new NotFoundException('议题不存在');
     if (!isCollegeVisible(user, topic.collegeId)) {
       throw new ForbiddenException('无权查看');
+    }
+    if (!canSeeFullTopicLibrary(user)) {
+      const related = await this.prisma.topic.findFirst({
+        where: { id: topic.id, ...this.relatedTopicWhere(user) },
+        select: { id: true },
+      });
+      if (!related) {
+        throw new ForbiddenException('无权查看该议题');
+      }
     }
 
     const avoidIds: string[] = (() => {
@@ -756,52 +789,52 @@ export class TopicsService {
       throw new BadRequestException('议题不在待审状态');
     }
 
-    // 党组织会议：仅党委书记初审
-    if (topic.meetingType === MeetingType.PARTY_COMMITTEE) {
-      if (!user.roles.includes(RoleCode.SECRETARY)) {
-        throw new ForbiddenException('仅党委书记可审党组织会议议题');
-      }
-      await this.prisma.jointReview.upsert({
-        where: { topicId_side: { topicId, side: JointReviewSide.SECRETARY } },
-        create: {
-          topicId,
-          side: JointReviewSide.SECRETARY,
-          reviewerId: user.sub,
-          decision: dto.decision,
-          comment: dto.comment,
-          decidedAt: new Date(),
-        },
-        update: {
-          reviewerId: user.sub,
-          decision: dto.decision,
-          comment: dto.comment,
-          decidedAt: new Date(),
-        },
-      });
-      const nextStatus =
-        dto.decision === ReviewDecision.APPROVED
-          ? TopicStatus.APPROVED
-          : TopicStatus.DEFERRED;
-      await this.prisma.topic.update({
-        where: { id: topicId },
-        data: { status: nextStatus },
-      });
-      await this.audit.log({
+    const isProxy = !!dto.proxy;
+    if (isProxy) {
+      assertAnyRole(
         user,
-        action: 'PARTY_REVIEW',
-        resource: 'Topic',
-        resourceId: topicId,
-        detail: { decision: dto.decision, nextStatus },
-      });
-      return this.detail(user, topicId);
+        [...PROXY_REVIEW_ROLES],
+        '仅学院管理员/会议秘书可代审',
+      );
+      if (!dto.proxyMethod || !dto.proxyCounterparty?.trim()) {
+        throw new BadRequestException('代审须填写确认方式与对方姓名');
+      }
     }
 
-    const side = user.roles.includes(RoleCode.SECRETARY)
-      ? JointReviewSide.SECRETARY
-      : user.roles.includes(RoleCode.DEAN)
-        ? JointReviewSide.DEAN
-        : null;
-    if (!side) throw new ForbiddenException('仅党委书记或院长可联审');
+    const methodLabel =
+      dto.proxyMethod === 'PHONE'
+        ? '电话确认'
+        : dto.proxyMethod === 'IN_PERSON'
+          ? '当面确认'
+          : '';
+    const comment = isProxy
+      ? `[代审·${methodLabel}·${dto.proxyCounterparty!.trim()}]${
+          dto.comment ? ` ${dto.comment}` : ''
+        }`
+      : dto.comment;
+
+    let side: string;
+    if (topic.meetingType === MeetingType.PARTY_COMMITTEE) {
+      if (!isProxy && !user.roles.includes(RoleCode.SECRETARY)) {
+        throw new ForbiddenException('仅党委书记可审党组织会议议题');
+      }
+      side = JointReviewSide.SECRETARY;
+    } else if (isProxy) {
+      if (
+        dto.proxySide !== JointReviewSide.SECRETARY &&
+        dto.proxySide !== JointReviewSide.DEAN
+      ) {
+        throw new BadRequestException('联席会议题代审须指定书记或院长一侧');
+      }
+      side = dto.proxySide;
+    } else {
+      side = user.roles.includes(RoleCode.SECRETARY)
+        ? JointReviewSide.SECRETARY
+        : user.roles.includes(RoleCode.DEAN)
+          ? JointReviewSide.DEAN
+          : '';
+      if (!side) throw new ForbiddenException('仅党委书记或院长可联审');
+    }
 
     await this.prisma.jointReview.upsert({
       where: { topicId_side: { topicId, side } },
@@ -810,27 +843,37 @@ export class TopicsService {
         side,
         reviewerId: user.sub,
         decision: dto.decision,
-        comment: dto.comment,
+        comment,
         decidedAt: new Date(),
       },
       update: {
         reviewerId: user.sub,
         decision: dto.decision,
-        comment: dto.comment,
+        comment,
         decidedAt: new Date(),
       },
     });
 
-    const check = await this.compliance.checkDualReview(topicId);
-    let nextStatus: string = TopicStatus.PENDING_REVIEW;
-    if (dto.decision === ReviewDecision.REJECTED) {
-      nextStatus = TopicStatus.DEFERRED;
-    } else if (check.passed) {
-      nextStatus = TopicStatus.APPROVED;
+    let nextStatus: string;
+    if (topic.meetingType === MeetingType.PARTY_COMMITTEE) {
+      nextStatus =
+        dto.decision === ReviewDecision.APPROVED
+          ? TopicStatus.APPROVED
+          : TopicStatus.DEFERRED;
     } else {
-      const reviews = await this.prisma.jointReview.findMany({ where: { topicId } });
-      if (reviews.some((r) => r.decision === ReviewDecision.REJECTED)) {
+      const check = await this.compliance.checkDualReview(topicId);
+      nextStatus = TopicStatus.PENDING_REVIEW;
+      if (dto.decision === ReviewDecision.REJECTED) {
         nextStatus = TopicStatus.DEFERRED;
+      } else if (check.passed) {
+        nextStatus = TopicStatus.APPROVED;
+      } else {
+        const reviews = await this.prisma.jointReview.findMany({
+          where: { topicId },
+        });
+        if (reviews.some((r) => r.decision === ReviewDecision.REJECTED)) {
+          nextStatus = TopicStatus.DEFERRED;
+        }
       }
     }
 
@@ -841,10 +884,25 @@ export class TopicsService {
 
     await this.audit.log({
       user,
-      action: 'JOINT_REVIEW',
+      action: isProxy
+        ? 'PROXY_REVIEW'
+        : topic.meetingType === MeetingType.PARTY_COMMITTEE
+          ? 'PARTY_REVIEW'
+          : 'JOINT_REVIEW',
       resource: 'Topic',
       resourceId: topicId,
-      detail: { side, decision: dto.decision, nextStatus },
+      detail: {
+        side,
+        decision: dto.decision,
+        nextStatus,
+        ...(isProxy
+          ? {
+              proxy: true,
+              proxyMethod: dto.proxyMethod,
+              proxyCounterparty: dto.proxyCounterparty,
+            }
+          : {}),
+      },
     });
     return this.detail(user, topicId);
   }

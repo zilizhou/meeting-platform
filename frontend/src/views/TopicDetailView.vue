@@ -27,6 +27,22 @@
           暂缓
         </el-button>
         <el-button
+          v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
+          type="success"
+          plain
+          @click="openProxyReview('APPROVED')"
+        >
+          代审通过
+        </el-button>
+        <el-button
+          v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
+          type="danger"
+          plain
+          @click="openProxyReview('REJECTED')"
+        >
+          代审退回
+        </el-button>
+        <el-button
           v-if="roles.canPartyResolve.value"
           type="warning"
           :disabled="!canPartyResolve"
@@ -57,6 +73,22 @@
           @click="review('REJECTED')"
         >
           暂缓
+        </el-button>
+        <el-button
+          v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
+          type="success"
+          plain
+          @click="openProxyReview('APPROVED')"
+        >
+          代审通过
+        </el-button>
+        <el-button
+          v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
+          type="danger"
+          plain
+          @click="openProxyReview('REJECTED')"
+        >
+          代审退回
         </el-button>
       </template>
     </div>
@@ -460,6 +492,46 @@
         <el-button type="primary" @click="partyResolve">确认</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="proxyVisible" :title="proxyTitle" width="480px">
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+        title="代审须先电话或当面征得书记/院长同意，系统仅留痕，不替代本人审签。"
+      />
+      <el-form label-width="100px">
+        <el-form-item v-if="!isParty" label="代审一侧">
+          <el-select v-model="proxyForm.proxySide" style="width: 100%">
+            <el-option label="党委书记" value="SECRETARY" />
+            <el-option label="院长" value="DEAN" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="确认方式">
+          <el-select v-model="proxyForm.proxyMethod" style="width: 100%">
+            <el-option label="电话确认" value="PHONE" />
+            <el-option label="当面确认" value="IN_PERSON" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="对方姓名">
+          <el-input v-model="proxyForm.proxyCounterparty" placeholder="被确认的书记或院长姓名" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="proxyForm.comment" type="textarea" :rows="2" placeholder="可选" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="proxyVisible = false">取消</el-button>
+        <el-button
+          :type="proxyForm.decision === 'REJECTED' ? 'danger' : 'primary'"
+          :loading="proxySubmitting"
+          @click="submitProxyReview"
+        >
+          确认{{ proxyForm.decision === 'REJECTED' ? '退回' : '通过' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
   <el-empty v-else description="加载中…" />
 </template>
@@ -481,6 +553,15 @@ const logs = ref<any[]>([])
 const auditLogs = ref<any[]>([])
 const uploadingId = ref('')
 const resolveVisible = ref(false)
+const proxyVisible = ref(false)
+const proxySubmitting = ref(false)
+const proxyForm = reactive({
+  decision: 'APPROVED' as 'APPROVED' | 'REJECTED',
+  proxyMethod: 'PHONE' as 'PHONE' | 'IN_PERSON',
+  proxyCounterparty: '',
+  proxySide: 'SECRETARY' as 'SECRETARY' | 'DEAN',
+  comment: '',
+})
 const collegeUsers = ref<any[]>([])
 const avoidUserIds = ref<string[]>([])
 const aiSummary = ref<any>(null)
@@ -731,6 +812,44 @@ async function review(decision: 'APPROVED' | 'REJECTED') {
     await load()
   } catch (e: any) {
     ElMessage.error(String(e))
+  }
+}
+
+const proxyTitle = computed(() =>
+  proxyForm.decision === 'REJECTED' ? '代审退回' : '代审通过',
+)
+
+function openProxyReview(decision: 'APPROVED' | 'REJECTED') {
+  proxyForm.decision = decision
+  proxyForm.proxyMethod = 'PHONE'
+  proxyForm.proxyCounterparty = ''
+  proxyForm.proxySide = 'SECRETARY'
+  proxyForm.comment = ''
+  proxyVisible.value = true
+}
+
+async function submitProxyReview() {
+  if (!proxyForm.proxyCounterparty.trim()) {
+    ElMessage.warning('请填写对方姓名')
+    return
+  }
+  proxySubmitting.value = true
+  try {
+    await http.post(`/topics/${topic.value.id}/review`, {
+      decision: proxyForm.decision,
+      comment: proxyForm.comment || undefined,
+      proxy: true,
+      proxyMethod: proxyForm.proxyMethod,
+      proxyCounterparty: proxyForm.proxyCounterparty.trim(),
+      ...(isParty.value ? {} : { proxySide: proxyForm.proxySide }),
+    })
+    ElMessage.success(proxyForm.decision === 'APPROVED' ? '已代审通过' : '已代审退回')
+    proxyVisible.value = false
+    await load()
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  } finally {
+    proxySubmitting.value = false
   }
 }
 

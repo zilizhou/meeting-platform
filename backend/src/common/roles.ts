@@ -117,3 +117,26 @@ export const MINUTES_SIGN_ROLES = [
   RoleCode.SECRETARY,
   RoleCode.DEAN,
 ] as const;
+
+/** 议题库全量可见：书记/副书记/院长/副院长/学院管理员/会议秘书/校级 */
+export const FULL_TOPIC_LIBRARY_ROLES = [
+  RoleCode.SECRETARY,
+  RoleCode.VICE_SECRETARY,
+  RoleCode.DEAN,
+  RoleCode.VICE_DEAN,
+  RoleCode.COLLEGE_ADMIN,
+  RoleCode.MEETING_SECRETARY,
+  RoleCode.SCHOOL_ADMIN,
+  RoleCode.SCHOOL_VIEWER,
+] as const;
+
+export function canSeeFullTopicLibrary(user: AuthUser) {
+  if (user.isSchoolAdmin) return true;
+  return hasAnyRole(user, [...FULL_TOPIC_LIBRARY_ROLES]);
+}
+
+/** 学院管理员/会议秘书可代审（须电话或当面确认并留痕） */
+export const PROXY_REVIEW_ROLES = [
+  RoleCode.COLLEGE_ADMIN,
+  RoleCode.MEETING_SECRETARY,
+] as const;

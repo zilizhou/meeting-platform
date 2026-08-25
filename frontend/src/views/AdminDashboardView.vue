@@ -34,7 +34,7 @@
       <div class="nums">
         <div>
           <strong>{{ month?.bothOkCount ?? '—' }}</strong>
-          <span>本月双会齐全</span>
+          <span>{{ monthLabel }}双会齐全</span>
         </div>
         <div>
           <strong>{{ month?.missingPartyCount ?? '—' }}</strong>
@@ -77,6 +77,34 @@
       </el-button>
       <el-button type="success" :loading="exporting" @click="exportPack">
         {{ exportPackLabel }}
+      </el-button>
+    </div>
+
+    <section v-if="!isViewerOnly" class="ui-sec">
+      <h3><i></i> 召开频次</h3>
+      <span class="n">按学期或自然月配置应开次数</span>
+    </section>
+    <div v-if="!isViewerOnly" class="freq-card">
+      <div class="freq-row">
+        <strong>党组织会议</strong>
+        <el-select v-model="freqForm.partyPeriod" style="width: 140px">
+          <el-option label="按学期" value="SEMESTER" />
+          <el-option label="按自然月" value="MONTH" />
+        </el-select>
+        <el-input-number v-model="freqForm.partyCount" :min="1" :max="12" />
+        <span class="muted">次</span>
+      </div>
+      <div class="freq-row">
+        <strong>党政联席会议</strong>
+        <el-select v-model="freqForm.jointPeriod" style="width: 140px">
+          <el-option label="按学期" value="SEMESTER" />
+          <el-option label="按自然月" value="MONTH" />
+        </el-select>
+        <el-input-number v-model="freqForm.jointCount" :min="1" :max="12" />
+        <span class="muted">次</span>
+      </div>
+      <el-button type="primary" size="small" :loading="freqSaving" @click="saveFrequency">
+        保存频次
       </el-button>
     </div>
 
@@ -148,7 +176,7 @@
     </section>
 
     <div v-if="!missingRows.length" class="ok-banner">
-      本月各学院党组织会议、党政联席会议均已有召开/排期记录
+      {{ monthLabel }}各学院党组织会议、党政联席会议均已按规定频次召开/排期
     </div>
     <div v-else class="miss-list">
       <button
@@ -212,7 +240,7 @@
 
     <!-- 学院本月对比 -->
     <section class="ui-sec">
-      <h3><i></i> 学院本月对比</h3>
+      <h3><i></i> 学院召开对比</h3>
       <span class="n">{{ filteredColleges.length }} 所</span>
     </section>
     <el-table :data="filteredColleges" stripe class="college-table">
@@ -351,7 +379,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
@@ -381,6 +409,13 @@ const warnings = ref<any>({
   unsignedMinutes: [],
   precheckMissing: [],
   monthMissing: [],
+})
+const freqSaving = ref(false)
+const freqForm = reactive({
+  partyPeriod: 'SEMESTER',
+  partyCount: 1,
+  jointPeriod: 'SEMESTER',
+  jointCount: 1,
 })
 
 const isAdmin = computed(
@@ -430,7 +465,7 @@ const briefScopeHint = computed(() => {
 })
 
 const month = computed(() => overview.value?.month || null)
-const monthLabel = computed(() => month.value?.label || '本月')
+const monthLabel = computed(() => month.value?.label || '本学期')
 
 const filteredColleges = computed(() => {
   if (!collegeId.value) return colleges.value
@@ -449,14 +484,14 @@ const missingRows = computed(() => {
       key: `p-${c.collegeId}`,
       collegeId: c.collegeId,
       name: c.name,
-      label: '本月未开党组织会议',
+      label: '未按规定召开党组织会议',
       kind: 'party',
     })),
     ...filter(m.missingJoint).map((c: any) => ({
       key: `j-${c.collegeId}`,
       collegeId: c.collegeId,
       name: c.name,
-      label: '本月未开党政联席会议',
+      label: '未按规定召开党政联席会议',
       kind: 'joint',
     })),
   ]
@@ -470,7 +505,7 @@ const warningGroups = computed(() => {
   return [
     {
       key: 'month',
-      title: '本月缺开',
+      title: '按规定缺开',
       items: filterByCollege(warnings.value.monthMissing),
     },
     {
@@ -593,24 +628,71 @@ function downloadBriefing() {
   URL.revokeObjectURL(a.href)
 }
 
+function applyFrequencyRules(rows: any[]) {
+  const party = (rows || []).find(
+    (r) => r.meetingType === 'PARTY_COMMITTEE' && !r.collegeId,
+  )
+  const joint = (rows || []).find(
+    (r) => r.meetingType === 'JOINT_CONFERENCE' && !r.collegeId,
+  )
+  if (party) {
+    freqForm.partyPeriod = party.period || 'SEMESTER'
+    freqForm.partyCount = party.requiredCount || 1
+  }
+  if (joint) {
+    freqForm.jointPeriod = joint.period || 'SEMESTER'
+    freqForm.jointCount = joint.requiredCount || 1
+  }
+}
+
+async function saveFrequency() {
+  freqSaving.value = true
+  try {
+    await http.put('/admin/frequency-rules', {
+      rules: [
+        {
+          meetingType: 'PARTY_COMMITTEE',
+          period: freqForm.partyPeriod,
+          requiredCount: freqForm.partyCount,
+        },
+        {
+          meetingType: 'JOINT_CONFERENCE',
+          period: freqForm.jointPeriod,
+          requiredCount: freqForm.jointCount,
+        },
+      ],
+    })
+    ElMessage.success('召开频次已保存')
+    await load()
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  } finally {
+    freqSaving.value = false
+  }
+}
+
 async function load() {
   if (!isAdmin.value) return
   loading.value = true
   activeBriefing.value = null
   try {
     const params = collegeId.value ? { collegeId: collegeId.value } : {}
-    const [o, c, m, t, w] = await Promise.all([
+    const [o, c, m, t, w, rules] = await Promise.all([
       http.get('/admin/overview'),
       http.get('/admin/colleges'),
       http.get('/admin/meetings', { params }),
       http.get('/admin/transfers', { params }),
       http.get('/admin/warnings'),
+      isViewerOnly.value
+        ? Promise.resolve([])
+        : http.get('/admin/frequency-rules').catch(() => []),
     ])
     overview.value = o
     colleges.value = c as any
     meetings.value = m as any
     transfers.value = t as any
     warnings.value = w as any
+    applyFrequencyRules(rules as any[])
     await loadBriefings()
     const qid = String(route.query.briefing || '')
     if (qid) await openBriefing(qid)
@@ -912,6 +994,30 @@ onMounted(load)
 .deny {
   background: #fff;
   border-radius: 12px;
+}
+.freq-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.freq-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.freq-row strong {
+  min-width: 110px;
+  font-size: 13px;
+}
+.freq-card .muted {
+  color: var(--muted);
+  font-size: 13px;
 }
 @media (max-width: 960px) {
   .warn-chips {

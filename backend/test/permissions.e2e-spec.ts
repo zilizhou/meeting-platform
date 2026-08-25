@@ -156,4 +156,68 @@ describe('权限与重大事项表决优化（E2E）', () => {
       .set('Authorization', `Bearer ${ctx.users.viceDean.token}`)
       .expect(403);
   });
+
+  it('副院长可见全量议题库，列席仅见与我相关', async () => {
+    const topicId = await createApprovedTopic(ctx, '可见性全量议题');
+    const viceList = await request(ctx.app.getHttpServer())
+      .get('/api/topics')
+      .set('Authorization', `Bearer ${ctx.users.viceDean.token}`)
+      .expect(200);
+    expect(viceList.body.some((t: { id: string }) => t.id === topicId)).toBe(
+      true,
+    );
+
+    const attendeeList = await request(ctx.app.getHttpServer())
+      .get('/api/topics')
+      .set('Authorization', `Bearer ${ctx.users.attendee.token}`)
+      .expect(200);
+    expect(attendeeList.body.some((t: { id: string }) => t.id === topicId)).toBe(
+      false,
+    );
+
+    await request(ctx.app.getHttpServer())
+      .get(`/api/topics/${topicId}`)
+      .set('Authorization', `Bearer ${ctx.users.attendee.token}`)
+      .expect(403);
+  });
+
+  it('学院管理员可代审通过与退回', async () => {
+    const createRes = await request(ctx.app.getHttpServer())
+      .post('/api/topics')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ title: '代审退回议题' })
+      .expect(201);
+    const topicId = createRes.body.id as string;
+    for (const m of (createRes.body.materials || []).filter(
+      (x: { isRequired?: boolean }) => x.isRequired,
+    )) {
+      const { writeFileSync } = await import('fs');
+      const { join } = await import('path');
+      const tmp = join(process.env.UPLOAD_DIR!, `${m.id}-proxy.txt`);
+      writeFileSync(tmp, 'x');
+      await request(ctx.app.getHttpServer())
+        .post(`/api/topics/materials/${m.id}/upload`)
+        .set('Authorization', `Bearer ${ctx.users.office.token}`)
+        .attach('file', tmp)
+        .expect(201);
+    }
+    await request(ctx.app.getHttpServer())
+      .post(`/api/topics/${topicId}/submit-review`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(201);
+
+    const rejected = await request(ctx.app.getHttpServer())
+      .post(`/api/topics/${topicId}/review`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({
+        decision: 'REJECTED',
+        proxy: true,
+        proxyMethod: 'PHONE',
+        proxyCounterparty: '李院长',
+        proxySide: 'DEAN',
+      })
+      .expect(201);
+    expect(rejected.body.status).toBe('DEFERRED');
+    expect(String(rejected.body.jointReviews?.[0]?.comment || '')).toMatch(/代审/);
+  });
 });

@@ -46,6 +46,7 @@ async function seedCategories() {
 
   // 与《指导手册（2025年版）》学院党组织会议"一、讨论决定事项"（一）～（八）逐条对应
   const partyCategories = [
+    ['FIRST_TOPIC', '第一议题（政治理论学习）', 0],
     ['PARTY_BUILD', '党的建设事项', 1],
     ['CADRE', '干部队伍建设事项', 2],
     ['TALENT', '人才政治引领与联系服务事项', 3],
@@ -65,6 +66,23 @@ async function seedCategories() {
         sortOrder,
         needPrecheck: false,
       },
+    });
+  }
+}
+
+async function seedFrequencyRules() {
+  for (const meetingType of ['PARTY_COMMITTEE', 'JOINT_CONFERENCE'] as const) {
+    await prisma.meetingFrequencyRule.upsert({
+      where: {
+        collegeId_meetingType: { collegeId: '', meetingType },
+      },
+      create: {
+        collegeId: '',
+        meetingType,
+        period: 'SEMESTER',
+        requiredCount: 1,
+      },
+      update: {},
     });
   }
 }
@@ -843,6 +861,7 @@ async function main() {
   await prisma.meeting.deleteMany();
   await prisma.rosterMember.deleteMany();
   await prisma.categoryDict.deleteMany();
+  await prisma.meetingFrequencyRule.deleteMany();
   await prisma.userRole.deleteMany();
   await prisma.user.deleteMany();
   await prisma.role.deleteMany();
@@ -893,6 +912,7 @@ async function main() {
   });
 
   await seedCategories();
+  await seedFrequencyRules();
 
   const colleges: CollegeSeedSpec[] = [
     {

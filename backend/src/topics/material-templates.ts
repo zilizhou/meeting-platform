@@ -49,6 +49,10 @@ const JOINT_TEMPLATES: Record<string, MaterialTemplateItem[]> = {
 };
 
 const PARTY_TEMPLATES: Record<string, MaterialTemplateItem[]> = {
+  FIRST_TOPIC: [
+    { name: '学习材料/原文及辅导材料', requiredKey: 'study_material', isRequired: true },
+    { name: '学习安排或传达要点', requiredKey: 'study_plan', isRequired: false },
+  ],
   PARTY_BUILD: [
     { name: '调研材料/情况说明', requiredKey: 'survey', isRequired: true },
     { name: '组织建设方案', requiredKey: 'org_plan', isRequired: true },

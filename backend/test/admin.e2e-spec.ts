@@ -58,6 +58,40 @@ describe('校级监管看板（E2E）', () => {
       .expect(200);
     expect(warnings.body).toHaveProperty('complianceFails');
     expect(warnings.body).toHaveProperty('precheckMissing');
+    expect(warnings.body).toHaveProperty('monthMissing');
+
+    const rules = await request(ctx.app.getHttpServer())
+      .get('/api/admin/frequency-rules')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect(Array.isArray(rules.body)).toBe(true);
+
+    const saved = await request(ctx.app.getHttpServer())
+      .put('/api/admin/frequency-rules')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        rules: [
+          {
+            meetingType: 'PARTY_COMMITTEE',
+            period: 'SEMESTER',
+            requiredCount: 1,
+          },
+          {
+            meetingType: 'JOINT_CONFERENCE',
+            period: 'SEMESTER',
+            requiredCount: 1,
+          },
+        ],
+      })
+      .expect(200);
+    expect(
+      saved.body.some(
+        (r: { meetingType: string; period: string }) =>
+          r.meetingType === 'PARTY_COMMITTEE' && r.period === 'SEMESTER',
+      ),
+    ).toBe(true);
+
+    expect(overview.body.month?.period).toBe('SEMESTER');
 
     await request(ctx.app.getHttpServer())
       .get('/api/admin/meetings')

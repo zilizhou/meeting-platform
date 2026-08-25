@@ -213,11 +213,33 @@ async function seedFixture(prisma: PrismaService) {
   await prisma.categoryDict.create({
     data: {
       meetingType: 'PARTY_COMMITTEE',
+      code: 'FIRST_TOPIC',
+      name: '第一议题（政治理论学习）',
+      sortOrder: 0,
+    },
+  });
+  await prisma.categoryDict.create({
+    data: {
+      meetingType: 'PARTY_COMMITTEE',
       code: 'PARTY_BUILD',
       name: '党建与组织建设',
       sortOrder: 1,
     },
   });
+  for (const meetingType of ['PARTY_COMMITTEE', 'JOINT_CONFERENCE'] as const) {
+    await prisma.meetingFrequencyRule.upsert({
+      where: {
+        collegeId_meetingType: { collegeId: '', meetingType },
+      },
+      create: {
+        collegeId: '',
+        meetingType,
+        period: 'SEMESTER',
+        requiredCount: 1,
+      },
+      update: {},
+    });
+  }
 
   return {
     collegeId: college.id,
@@ -295,6 +317,59 @@ export async function createApprovedTopic(
     .expect(201);
 
   expect(dual.body.status).toBe('APPROVED');
+  return topicId;
+}
+
+export async function firstTopicCategoryId(ctx: TestCtx) {
+  const cat = await ctx.prisma.categoryDict.findFirst({
+    where: { meetingType: 'PARTY_COMMITTEE', code: 'FIRST_TOPIC' },
+  });
+  if (!cat) throw new Error('missing FIRST_TOPIC category');
+  return cat.id;
+}
+
+export async function createApprovedPartyTopic(
+  ctx: TestCtx,
+  title = '第一议题：政治理论学习',
+  opts?: { categoryId?: string },
+) {
+  const categoryId = opts?.categoryId ?? (await firstTopicCategoryId(ctx));
+  const createRes = await request(ctx.app.getHttpServer())
+    .post('/api/topics')
+    .set('Authorization', `Bearer ${ctx.users.office.token}`)
+    .send({
+      title,
+      content: '自动化测试',
+      meetingType: 'PARTY_COMMITTEE',
+      categoryId,
+    })
+    .expect(201);
+
+  const topicId = createRes.body.id as string;
+  const required = (createRes.body.materials || []).filter(
+    (m: { isRequired?: boolean }) => m.isRequired,
+  );
+  for (const m of required) {
+    const tmp = join(TEST_UPLOAD, `${m.id}.txt`);
+    writeFileSync(tmp, `material-${m.id}`);
+    await request(ctx.app.getHttpServer())
+      .post(`/api/topics/materials/${m.id}/upload`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .attach('file', tmp)
+      .expect(201);
+  }
+
+  await request(ctx.app.getHttpServer())
+    .post(`/api/topics/${topicId}/submit-review`)
+    .set('Authorization', `Bearer ${ctx.users.office.token}`)
+    .expect(201);
+
+  await request(ctx.app.getHttpServer())
+    .post(`/api/topics/${topicId}/review`)
+    .set('Authorization', `Bearer ${ctx.users.secretary.token}`)
+    .send({ decision: 'APPROVED' })
+    .expect(201);
+
   return topicId;
 }
 

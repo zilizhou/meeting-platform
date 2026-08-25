@@ -91,6 +91,14 @@
           >
             暂缓
           </el-button>
+          <el-button
+            v-if="roles.canProxyReview.value && row.status === 'PENDING_REVIEW'"
+            link
+            type="warning"
+            @click="$router.push(`/topics/${row.id}`)"
+          >
+            代审
+          </el-button>
         </template>
       </el-table-column>
     </el-table>

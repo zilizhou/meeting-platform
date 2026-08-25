@@ -231,6 +231,9 @@
           至少勾选 1 项议题方可创建（{{
             createMode === 'party' ? '未审题勾选后视为通过' : '未双审勾选后视为通过'
           }}）。已入其他会议的议题不可再选。
+          <template v-if="createMode === 'party'">
+            党组织会议须纳入「第一议题（政治理论学习）」，否则不能开会。
+          </template>
         </p>
 
         <div class="topic-table" :class="{ party: createMode === 'party' }">
@@ -261,6 +264,7 @@
                 </span>
                 <span class="col-title">
                   <em>{{ t.title }}</em>
+                  <small v-if="t.category?.code === 'FIRST_TOPIC'">第一议题</small>
                   <small v-if="t.locked">已入会 · {{ t.meeting?.title || '其他会议' }}</small>
                   <small v-else-if="t.status !== 'APPROVED'">未审 · 选中即通过</small>
                 </span>
@@ -587,6 +591,14 @@ async function submitCreate() {
   }
   const meetingType =
     createMode.value === 'party' ? 'PARTY_COMMITTEE' : 'JOINT_CONFERENCE'
+  if (meetingType === 'PARTY_COMMITTEE') {
+    const selected = topics.value.filter((t) => form.topicIds.includes(t.id))
+    const hasFirst = selected.some((t) => t.category?.code === 'FIRST_TOPIC')
+    if (!hasFirst) {
+      ElMessage.warning('党组织会议须纳入「第一议题（政治理论学习）」后方可开会')
+      return
+    }
+  }
   creating.value = true
   try {
     await http.post('/meetings', { ...form, meetingType })

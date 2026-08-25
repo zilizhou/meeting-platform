@@ -48,6 +48,7 @@
           <option value="">请选择</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
+        <p v-if="isParty" class="hint">党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。</p>
       </label>
 
       <div class="checks">

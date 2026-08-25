@@ -26,6 +26,7 @@ import {
   VoteMethod,
 } from '../common/constants';
 import { assertCollegeVisible, assertAnyRole } from '../common/roles';
+import { FIRST_TOPIC_CODE } from '../common/first-topic';
 import {
   ImportMeetingType,
   MeetingImportConfirmDto,
@@ -594,11 +595,21 @@ export class PartyImportService {
       ];
 
       for (const [idx, topicDraft] of dto.topics.entries()) {
+        const firstTopicCategory =
+          idx === 0 && mt === MeetingType.PARTY_COMMITTEE
+            ? await tx.categoryDict.findFirst({
+                where: {
+                  meetingType: MeetingType.PARTY_COMMITTEE,
+                  code: FIRST_TOPIC_CODE,
+                },
+              })
+            : null;
         const topic = await tx.topic.create({
           data: {
             collegeId,
             meetingId: createdMeeting.id,
             meetingType: mt,
+            categoryId: firstTopicCategory?.id,
             title: topicDraft.title.trim(),
             content: [
               topicDraft.minutesSection?.trim() || '',

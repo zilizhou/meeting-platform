@@ -412,3 +412,17 @@ model Notification {
   @@index([userId, readAt])
 }
 
+/// 两会召开频次：collegeId 空串 = 全校默认；学院可覆盖
+/// period: SEMESTER | MONTH
+model MeetingFrequencyRule {
+  id            String   @id @default(cuid())
+  collegeId     String   @default("")
+  meetingType   String
+  period        String   @default("SEMESTER")
+  requiredCount Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([collegeId, meetingType])
+}
+

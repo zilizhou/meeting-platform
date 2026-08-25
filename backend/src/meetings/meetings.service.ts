@@ -20,6 +20,7 @@ import {
   TopicStatus,
 } from '../common/constants';
 import { assertAnyRole, isCollegeVisible, prismaCollegeIdFilter, PARTY_MINUTES_SIGN_ROLES, STAFF_ROLES } from '../common/roles';
+import { assertPartyMeetingCanOpen, FIRST_TOPIC_CODE } from '../common/first-topic';
 import {
   AbsentOpinionDto,
   CreateMeetingDto,
@@ -89,6 +90,7 @@ export class MeetingsService {
     }
     const topicsToAttach = await this.prisma.topic.findMany({
       where: { id: { in: topicIds } },
+      include: { category: true },
     });
     if (topicsToAttach.length !== new Set(topicIds).size) {
       throw new BadRequestException('部分议题不存在，不能创建会议');
@@ -130,6 +132,8 @@ export class MeetingsService {
       }
     }
 
+    assertPartyMeetingCanOpen(meetingType, topicsToAttach);
+
     const isMajor = dto.isMajor || false;
     const meeting = await this.prisma.meeting.create({
       data: {
@@ -154,10 +158,22 @@ export class MeetingsService {
     });
 
     if (topicIds.length) {
-      await this.prisma.topic.updateMany({
-        where: { id: { in: topicIds } },
-        data: { meetingId: meeting.id, status: TopicStatus.ON_AGENDA },
+      const ordered = [...topicsToAttach].sort((a, b) => {
+        const aFirst = a.category?.code === FIRST_TOPIC_CODE ? 0 : 1;
+        const bFirst = b.category?.code === FIRST_TOPIC_CODE ? 0 : 1;
+        if (aFirst !== bFirst) return aFirst - bFirst;
+        return topicIds.indexOf(a.id) - topicIds.indexOf(b.id);
       });
+      for (let i = 0; i < ordered.length; i++) {
+        await this.prisma.topic.update({
+          where: { id: ordered[i].id },
+          data: {
+            meetingId: meeting.id,
+            status: TopicStatus.ON_AGENDA,
+            sortOrder: i,
+          },
+        });
+      }
     }
 
     await this.audit.log({
@@ -214,7 +230,7 @@ export class MeetingsService {
         college: { select: { id: true, name: true } },
         topics: {
           include: {
-            category: { select: { id: true, name: true } },
+            category: { select: { id: true, name: true, code: true } },
             proposer: { select: { id: true, realName: true, title: true } },
             materials: { orderBy: { createdAt: 'asc' } },
             jointReviews: true,
@@ -255,6 +271,7 @@ export class MeetingsService {
     if (meeting.status === MeetingStatus.IN_PROGRESS) {
       return meeting;
     }
+    assertPartyMeetingCanOpen(meeting.meetingType, meeting.topics);
     const updated = await this.prisma.meeting.update({
       where: { id },
       data: { status: MeetingStatus.IN_PROGRESS },
@@ -302,6 +319,7 @@ export class MeetingsService {
     this.assertInSession(meeting, '签到', true);
     // 会前签到即视为开会：已排期 → 进行中
     if (meeting.status === MeetingStatus.SCHEDULED) {
+      assertPartyMeetingCanOpen(meeting.meetingType, meeting.topics);
       await this.prisma.meeting.update({
         where: { id: meetingId },
         data: { status: MeetingStatus.IN_PROGRESS },
