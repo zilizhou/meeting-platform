@@ -43,50 +43,48 @@
       <article
         v-for="(m, idx) in messages"
         :key="idx"
-        class="msg-card ui-card"
-        :class="m.role === 'user' ? 'joint user' : 'ai'"
+        class="msg-row"
+        :class="m.role === 'user' ? 'user' : 'assistant'"
       >
-        <div class="top">
-          <span class="ui-tag" :class="m.role === 'user' ? 'joint' : undefined">
-            {{ m.role === 'user' ? '我' : '智能体' }}
-          </span>
-        </div>
-        <div
-          v-if="m.role === 'assistant'"
-          class="msg-md"
-          v-html="renderMarkdown(m.content)"
-        />
-        <pre v-else class="msg-text">{{ m.content }}</pre>
-        <div v-if="m.citations?.length" class="cites">
-          <div v-for="c in m.citations" :key="c.id">{{ c.title }} · {{ c.source }}</div>
-        </div>
-        <div v-if="m.actions?.length" class="actions">
+        <div class="bubble">
+          <div class="who">{{ m.role === 'user' ? '我' : '智能体' }}</div>
           <div
-            v-for="a in m.actions"
-            :key="a.id"
-            class="confirm-card"
-            :class="{ danger: a.requiresConfirm }"
-          >
-            <div class="t">{{ a.title }}</div>
-            <div class="d">{{ a.description }}</div>
-            <div class="note">红线：审题 / 决议登记须人工确认</div>
-            <div class="btns">
-              <button
-                v-if="a.link && !a.requiresConfirm"
-                class="ui-btn"
-                type="button"
-                @click="go(a.link!)"
-              >
-                {{ navButtonLabel(a.link) }}
-              </button>
-              <template v-else-if="a.requiresConfirm">
-                <button class="ui-btn light" type="button" @click="confirmAction(a, false)">
-                  取消
+            v-if="m.role === 'assistant'"
+            class="msg-md"
+            v-html="renderMarkdown(m.content)"
+          />
+          <pre v-else class="msg-text">{{ m.content }}</pre>
+          <div v-if="m.citations?.length" class="cites">
+            <div v-for="c in m.citations" :key="c.id">{{ c.title }} · {{ c.source }}</div>
+          </div>
+          <div v-if="m.actions?.length" class="actions">
+            <div
+              v-for="a in m.actions"
+              :key="a.id"
+              class="confirm-card"
+              :class="{ danger: a.requiresConfirm }"
+            >
+              <div class="t">{{ a.title }}</div>
+              <div class="d">{{ a.description }}</div>
+              <div class="note">红线：审题 / 决议登记须人工确认</div>
+              <div class="btns">
+                <button
+                  v-if="a.link && !a.requiresConfirm"
+                  class="ui-btn"
+                  type="button"
+                  @click="go(a.link!)"
+                >
+                  {{ navButtonLabel(a.link) }}
                 </button>
-                <button class="ui-btn" type="button" @click="confirmAction(a, true)">
-                  {{ a.executable ? '确认' : '去页面办理' }}
-                </button>
-              </template>
+                <template v-else-if="a.requiresConfirm">
+                  <button class="ui-btn light" type="button" @click="confirmAction(a, false)">
+                    取消
+                  </button>
+                  <button class="ui-btn" type="button" @click="confirmAction(a, true)">
+                    {{ a.executable ? '确认' : '去页面办理' }}
+                  </button>
+                </template>
+              </div>
             </div>
           </div>
         </div>
@@ -354,8 +352,47 @@ onMounted(async () => {
   padding-bottom: 8px;
 }
 
-.msg-card.user {
-  margin-left: 12%;
+.msg-row {
+  display: flex;
+  margin: 0 0 12px;
+}
+.msg-row.user {
+  justify-content: flex-end;
+}
+.msg-row.assistant {
+  justify-content: flex-start;
+}
+.msg-row .bubble {
+  max-width: min(92%, 640px);
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+}
+.msg-row.user .bubble {
+  background: var(--joint, #1a4f8b);
+  color: #fff;
+  border-radius: 14px 14px 4px 14px;
+  box-shadow: 0 6px 16px rgba(26, 79, 139, 0.18);
+}
+.msg-row.assistant .bubble {
+  background: #fff;
+  color: var(--text, #1e293b);
+  border: 1px solid var(--line, #e6e8ee);
+  border-left: 3px solid #0f766e;
+  border-radius: 14px 14px 14px 4px;
+  box-shadow: var(--shadow);
+}
+.msg-row .who {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.msg-row.user .who {
+  color: rgba(255, 255, 255, 0.78);
+  text-align: right;
+}
+.msg-row.assistant .who {
+  color: #0f766e;
 }
 
 .clear-btn {
@@ -376,10 +413,6 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
-.msg-card.ai::before {
-  background: var(--joint);
-}
-
 .msg-text {
   margin: 0;
   white-space: pre-wrap;
@@ -387,13 +420,13 @@ onMounted(async () => {
   font: inherit;
   font-size: 14px;
   line-height: 1.55;
-  color: var(--text);
+  color: inherit;
 }
 
 .msg-md {
   font-size: 14px;
   line-height: 1.6;
-  color: var(--text);
+  color: inherit;
   word-break: break-word;
 }
 .msg-md :deep(p) {
@@ -437,6 +470,10 @@ onMounted(async () => {
   white-space: pre-wrap;
 }
 
+.msg-row.user .msg-text {
+  color: #fff;
+}
+
 .cites {
   margin-top: 10px;
   padding-top: 8px;
@@ -444,6 +481,9 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--muted);
   line-height: 1.45;
+}
+.msg-row.assistant .cites {
+  border-top-color: #e2e8f0;
 }
 
 .confirm-card {

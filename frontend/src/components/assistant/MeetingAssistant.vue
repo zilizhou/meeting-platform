@@ -48,6 +48,7 @@
           :class="m.role"
         >
           <div class="bubble">
+            <div class="who">{{ m.role === 'user' ? '我' : '智能体' }}</div>
             <div
               v-if="m.role === 'assistant'"
               class="msg-md"
@@ -400,11 +401,32 @@ onMounted(async () => {
 .bubble {
   max-width: 92%;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: #f3f4f6;
+  border-radius: 14px;
 }
 .msg.user .bubble {
-  background: #e8f1fb;
+  background: var(--joint, #1a4f8b);
+  color: #fff;
+  border-radius: 14px 14px 4px 14px;
+}
+.msg.assistant .bubble {
+  background: #fff;
+  color: #1e293b;
+  border: 1px solid var(--line, #e5e7eb);
+  border-left: 3px solid #0f766e;
+  border-radius: 14px 14px 14px 4px;
+}
+.who {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+.msg.user .who {
+  color: rgba(255, 255, 255, 0.78);
+  text-align: right;
+}
+.msg.assistant .who {
+  color: #0f766e;
 }
 .bubble pre {
   margin: 0;
@@ -413,11 +435,13 @@ onMounted(async () => {
   font-family: inherit;
   font-size: 13px;
   line-height: 1.55;
+  color: inherit;
 }
 .msg-md {
   font-size: 13px;
   line-height: 1.6;
   word-break: break-word;
+  color: inherit;
 }
 .msg-md :deep(p) {
   margin: 0 0 0.55em;

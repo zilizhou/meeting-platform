@@ -3,7 +3,7 @@
     <div class="ui-hero is-official">
       <div class="eyebrow"><b></b> 议题办理</div>
       <h2>议题</h2>
-      <p>申报、我的议题、议题库都在本页切换，不必来回跳转。</p>
+      <p>申报、我的议题、议题库在本页切换。</p>
       <div class="nums">
         <button type="button" class="num kpi gold" :class="{ on: pane === 'mine' }" @click="setPane('mine')">
           <strong>{{ mine.length }}</strong>
@@ -30,34 +30,39 @@
       </div>
     </div>
 
-    <div class="ui-sec">
-      <h3><i></i>议题入口</h3>
-      <span class="n">点卡片在下方切换</span>
-    </div>
-    <div class="ui-grid is-3">
-      <button class="w-entry" type="button" :class="{ on: pane === 'create' }" @click="setPane('create')">
-        <div class="ico">申</div>
-        <strong>申报议题</strong>
-        <em>描述事项 · 提交审核</em>
-      </button>
-      <button class="w-entry" type="button" :class="{ on: pane === 'mine' }" @click="setPane('mine')">
-        <div class="ico">我</div>
-        <strong>我的议题</strong>
-        <em>本人申报 · 跟踪进度</em>
+    <div class="ui-filter is-equal" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="pane === 'create'"
+        :class="{ on: pane === 'create' }"
+        @click="setPane('create')"
+      >
+        申报议题
       </button>
       <button
-        class="w-entry"
         type="button"
+        role="tab"
+        :aria-selected="pane === 'mine'"
+        :class="{ on: pane === 'mine' }"
+        @click="setPane('mine')"
+      >
+        我的议题
+        <template v-if="mine.length"> · {{ mine.length }}</template>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="pane === 'library'"
         :class="{ on: pane === 'library' }"
         @click="setPane('library', 'all')"
       >
-        <div class="ico">库</div>
-        <strong>议题库</strong>
-        <em>审题 · 入会准备</em>
+        议题库
+        <template v-if="topics.length"> · {{ topics.length }}</template>
       </button>
     </div>
 
-    <div ref="paneEl" class="pane">
+    <div class="pane">
       <TopicCreateView
         v-show="pane === 'create'"
         embedded
@@ -103,7 +108,7 @@
           <h3><i></i>议题库</h3>
           <span class="n">{{ libraryList.length }} 项</span>
         </div>
-        <div class="ui-filter is-equal" role="tablist">
+        <div class="ui-filter is-equal library-sub" role="tablist">
           <button
             type="button"
             role="tab"
@@ -153,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
@@ -179,7 +184,6 @@ const auth = useAuthStore()
 const topics = ref<TopicRow[]>([])
 const pane = ref<Pane>('mine')
 const libraryFilter = ref<LibraryFilter>('all')
-const paneEl = ref<HTMLElement | null>(null)
 
 const STATUS_MAP: Record<string, string> = {
   DRAFT: '草稿',
@@ -225,11 +229,16 @@ function formatDay(iso?: string) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-async function setPane(next: Pane, filter?: LibraryFilter) {
+function setPane(next: Pane, filter?: LibraryFilter) {
   pane.value = next
   if (next === 'library' && filter) libraryFilter.value = filter
-  await nextTick()
-  paneEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  syncQuery(next)
+}
+
+function syncQuery(next: Pane) {
+  const cur = String(route.query.pane || '')
+  if (cur === next) return
+  router.replace({ query: { ...route.query, pane: next } })
 }
 
 function open(t: TopicRow) {
@@ -249,7 +258,7 @@ async function load() {
 
 async function onCreated() {
   await load()
-  await setPane('mine')
+  setPane('mine')
 }
 
 function applyQueryPane() {
@@ -268,15 +277,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.ui-grid.is-3 {
-  grid-template-columns: repeat(3, 1fr);
-}
-.w-entry.on {
-  border-color: rgba(26, 79, 139, 0.35);
-  box-shadow: 0 0 0 2px rgba(26, 79, 139, 0.12);
-}
 .pane {
   margin-top: 4px;
+}
+.library-sub {
+  margin-bottom: 10px;
 }
 .ui-card {
   cursor: pointer;
@@ -297,10 +302,5 @@ onMounted(() => {
   margin-top: 8px;
   font-size: 12px;
   color: var(--muted);
-}
-@media (max-width: 720px) {
-  .ui-grid.is-3 {
-    grid-template-columns: 1fr;
-  }
 }
 </style>
