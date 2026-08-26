@@ -99,6 +99,9 @@ export class PartyImportService {
     if (!agendaFile || !recordFile || !minutesFile) {
       throw new BadRequestException('请同时上传议题表、会议记录、会议纪要三份文件');
     }
+    this.files.normalizeMulterFile(agendaFile);
+    this.files.normalizeMulterFile(recordFile);
+    this.files.normalizeMulterFile(minutesFile);
 
     const [agendaText, recordText, minutesText] = await Promise.all([
       extractDocText(agendaFile.buffer, agendaFile.originalname),
@@ -664,6 +667,7 @@ export class PartyImportService {
               (s) => mat.requiredKey === `IMPORT_${s.kind.toUpperCase()}`,
             );
             if (!slot) continue;
+            this.files.normalizeMulterFile(slot.file);
             this.files.assertAllowed(slot.file.originalname, slot.file.mimetype);
             const dir = this.files.ensureTopicDir(collegeId, topic.id);
             const storedName = this.files.buildStoredName(slot.file.originalname);

@@ -129,12 +129,21 @@
             @change="onMinutesFile"
           />
         </label>
+        <button
+          v-if="meeting.minutes?.originalName && meeting.status !== 'ARCHIVED'"
+          class="ui-btn light"
+          type="button"
+          :disabled="minutesDeleting"
+          @click="deleteMinutesFile"
+        >
+          {{ minutesDeleting ? '删除中…' : '删除附件' }}
+        </button>
       </div>
       <p class="minutes-hint">
         可在系统内编辑正文，也可上传线下纪要（Word / PDF）。核对后保存即可导出或归档。
       </p>
-      <p v-if="meeting.minutes?.originalName" class="minutes-file">
-        已上传：{{ meeting.minutes.originalName }}
+      <p v-if="minutesFileName" class="minutes-file">
+        已上传：{{ minutesFileName }}
         <button class="ui-link" type="button" @click="downloadMinutesFile">下载附件</button>
         <button
           v-if="roles.canSaveMinutes.value && meeting.status !== 'ARCHIVED'"
@@ -281,6 +290,20 @@ const minutesAiLoading = ref(false)
 const minutesUploading = ref(false)
 const minutesDeleting = ref(false)
 const activeTopicId = ref('')
+
+/** 兼容历史上 latin1 误解码的中文文件名 */
+function displayUploadFilename(name?: string | null) {
+  if (!name) return ''
+  if (/[\u4e00-\u9fff]/.test(name)) return name
+  try {
+    const bytes = Uint8Array.from(name, (c) => c.charCodeAt(0) & 0xff)
+    const decoded = new TextDecoder('utf-8').decode(bytes)
+    if (/[\u4e00-\u9fff]/.test(decoded)) return decoded
+  } catch {
+    return name
+  }
+  return name
+}
 const topicDialogVisible = ref(false)
 const topicDetailLoading = ref(false)
 const topicDetailExtra = ref<any>(null)
@@ -389,9 +412,12 @@ const hasMinutes = computed(() => {
 })
 const minutesMeta = computed(() => {
   if (!hasMinutes.value) return '尚未保存纪要'
-  const name = meeting.value?.minutes?.originalName
+  const name = minutesFileName.value
   return name ? `已保存 · 附件 ${name}` : '已保存'
 })
+const minutesFileName = computed(() =>
+  displayUploadFilename(meeting.value?.minutes?.originalName),
+)
 const missingFirstTopic = computed(() => {
   if (!isParty.value) return false
   const topics = meeting.value?.topics || []
@@ -619,7 +645,7 @@ async function downloadMinutesFile() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = meeting.value?.minutes?.originalName || '会议纪要'
+    a.download = minutesFileName.value || '会议纪要'
     a.click()
     URL.revokeObjectURL(url)
   } catch (e: any) {
@@ -630,7 +656,7 @@ async function downloadMinutesFile() {
 async function deleteMinutesFile() {
   try {
     await ElMessageBox.confirm(
-      `确认删除已上传的线下纪要「${meeting.value?.minutes?.originalName || '附件'}」？删除后可重新上传。`,
+      `确认删除已上传的线下纪要「${minutesFileName.value || '附件'}」？删除后可重新上传。`,
       '删除附件',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
     )

@@ -575,6 +575,7 @@ export class TopicsService {
     file?: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('请选择要上传的文件');
+    this.files.normalizeMulterFile(file);
     this.files.assertAllowed(file.originalname, file.mimetype);
 
     const material = await this.prisma.material.findUnique({
@@ -672,7 +673,7 @@ export class TopicsService {
 
     const stream = createReadStream(abs);
     const filename = encodeURIComponent(
-      material.originalName || material.name || 'file',
+      this.files.decodeOriginalName(material.originalName || material.name || 'file'),
     );
     return {
       file: new StreamableFile(stream),

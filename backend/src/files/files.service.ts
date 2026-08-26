@@ -21,6 +21,38 @@ const ALLOWED_EXT = new Set([
   '.rar',
 ]);
 
+/**
+ * Multer/busboy 默认按 latin1 解析 Content-Disposition 文件名，
+ * 浏览器实际发送的是 UTF-8，中文会变成「å±±ä¸œ」这类乱码。
+ */
+export function decodeUploadFilename(name: string | null | undefined): string {
+  if (!name) return '';
+  if (/[\u4e00-\u9fff]/.test(name)) return name;
+  try {
+    const decoded = Buffer.from(name, 'latin1').toString('utf8');
+    if (!decoded || decoded.includes('\uFFFD')) return name;
+    if (/[\u4e00-\u9fff]/.test(decoded)) return decoded;
+  } catch {
+    return name;
+  }
+  return name;
+}
+
+export function repairStoredFilenameFields<T extends {
+  originalName?: string | null;
+  content?: string | null;
+}>(row: T): T {
+  const raw = row.originalName;
+  if (!raw) return row;
+  const originalName = decodeUploadFilename(raw);
+  if (originalName === raw) return row;
+  let content = row.content ?? null;
+  if (content?.includes(raw)) {
+    content = content.split(raw).join(originalName);
+  }
+  return { ...row, originalName, content };
+}
+
 @Injectable()
 export class FilesService {
   readonly uploadRoot: string;
@@ -32,6 +64,15 @@ export class FilesService {
     if (!existsSync(this.uploadRoot)) {
       mkdirSync(this.uploadRoot, { recursive: true });
     }
+  }
+
+  decodeOriginalName(originalName: string) {
+    return decodeUploadFilename(originalName);
+  }
+
+  normalizeMulterFile(file: Express.Multer.File) {
+    file.originalname = decodeUploadFilename(file.originalname);
+    return file;
   }
 
   assertAllowed(originalName: string, mimeType?: string) {

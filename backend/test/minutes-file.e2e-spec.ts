@@ -5,6 +5,7 @@ import {
   createTestApp,
   TestCtx,
 } from './helpers';
+import { decodeUploadFilename } from '../src/files/files.service';
 
 describe('线下纪要附件（E2E）', () => {
   let ctx: TestCtx;
@@ -15,6 +16,14 @@ describe('线下纪要附件（E2E）', () => {
 
   afterAll(async () => {
     await ctx.app.close();
+  });
+
+  it('还原 multer latin1 误解码的中文文件名', () => {
+    const raw = Buffer.from('山东学院.docx', 'utf8').toString('latin1');
+    expect(raw).not.toBe('山东学院.docx');
+    expect(decodeUploadFilename(raw)).toBe('山东学院.docx');
+    expect(decodeUploadFilename('山东学院.docx')).toBe('山东学院.docx');
+    expect(decodeUploadFilename('minutes.txt')).toBe('minutes.txt');
   });
 
   it('可上传、下载并删除线下纪要附件', async () => {
@@ -54,5 +63,22 @@ describe('线下纪要附件（E2E）', () => {
       .delete(`/api/meetings/${meetingId}/minutes/file`)
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
       .expect(404);
+  });
+
+  it('上传中文文件名时保存为可读名称', async () => {
+    const topicId = await createApprovedTopic(ctx, '中文纪要文件名议题');
+    const meetingId = await createMeetingWithTopic(ctx, topicId, {
+      title: '中文纪要文件名测试会',
+    });
+
+    const uploaded = await request(ctx.app.getHttpServer())
+      .post(`/api/meetings/${meetingId}/minutes/upload`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .attach('file', Buffer.from('chinese minutes'), '山东学院.docx')
+      .expect(201);
+
+    expect(uploaded.body.minutes?.originalName).toBe('山东学院.docx');
+    expect(String(uploaded.body.minutes?.content || '')).toContain('山东学院.docx');
+    expect(String(uploaded.body.minutes?.content || '')).not.toMatch(/å±±/);
   });
 });

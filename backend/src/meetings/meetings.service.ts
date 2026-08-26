@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ComplianceService } from '../compliance/compliance.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { FilesService } from '../files/files.service';
+import { FilesService, repairStoredFilenameFields } from '../files/files.service';
 import { AuthUser } from '../common/types';
 import {
   JointReviewSide,
@@ -315,6 +315,12 @@ export class MeetingsService {
     if (!meeting) throw new NotFoundException('会议不存在');
     if (!isCollegeVisible(user, meeting.collegeId)) {
       throw new ForbiddenException();
+    }
+    if (meeting.minutes) {
+      return {
+        ...meeting,
+        minutes: repairStoredFilenameFields(meeting.minutes),
+      };
     }
     return meeting;
   }
@@ -910,6 +916,7 @@ export class MeetingsService {
 
   async uploadMinutesFile(user: AuthUser, meetingId: string, file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('请选择要上传的纪要文件');
+    this.files.normalizeMulterFile(file);
     this.files.assertAllowed(file.originalname, file.mimetype);
     const meeting = await this.detail(user, meetingId);
     if (meeting.status === MeetingStatus.ARCHIVED) {
@@ -989,7 +996,9 @@ export class MeetingsService {
     if (!existsSync(abs)) {
       throw new NotFoundException('纪要文件不存在或已被清理');
     }
-    const filename = encodeURIComponent(minutes.originalName || '会议纪要');
+    const filename = encodeURIComponent(
+      this.files.decodeOriginalName(minutes.originalName || '会议纪要'),
+    );
     return {
       file: new StreamableFile(createReadStream(abs)),
       filename,
