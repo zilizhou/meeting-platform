@@ -158,7 +158,7 @@ export function useOnboarding() {
     if (roles.value.includes('MEETING_SECRETARY')) return '征集议题、创建会议并归档。'
     if (roles.value.includes('SECRETARY')) return '审核议题、主持会议，并整理会议纪要。'
     if (roles.value.includes('DEAN')) return '审核联席议题、参加会议，并查看会议纪要。'
-    return '处理阅件、会后决议及分配给你的事项。'
+    return '处理待办、会后决议及分配给你的事项。'
   })
   // 暂时关闭全部引导：欢迎层与步骤条都不弹出
   const showWelcome = computed(() => false)

@@ -340,15 +340,7 @@
             <div v-if="row.fileSize" class="muted tiny">{{ formatSize(row.fileSize) }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="阅件" width="110">
-          <template #default="{ row }">
-            <el-tag v-if="row.myReadAt" size="small" type="success">已回执</el-tag>
-            <el-tag v-else-if="row.uploaded" size="small" type="warning">待阅</el-tag>
-            <span v-else class="muted">—</span>
-            <div v-if="row.receiptCount" class="muted tiny">{{ row.receiptCount }} 人已阅</div>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-upload
               v-if="!String(row.filePath || '').startsWith('party-resolution://')"
@@ -365,14 +357,6 @@
               @click="onDownload(row)"
             >
               下载
-            </el-button>
-            <el-button
-              link
-              type="warning"
-              :disabled="!row.uploaded || String(row.filePath || '').startsWith('party-resolution://')"
-              @click="markRead(row)"
-            >
-              {{ row.myReadAt ? '已阅' : '阅件回执' }}
             </el-button>
           </template>
         </el-table-column>
@@ -754,16 +738,6 @@ async function onDownload(row: any) {
       `/topics/materials/${row.id}/download`,
       row.originalName || row.name || 'material',
     )
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
-}
-
-async function markRead(row: any) {
-  try {
-    await http.post(`/topics/materials/${row.id}/read`, {})
-    ElMessage.success('阅件回执已提交')
-    await load()
   } catch (e: any) {
     ElMessage.error(String(e))
   }

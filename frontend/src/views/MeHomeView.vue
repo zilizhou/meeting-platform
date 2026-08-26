@@ -33,8 +33,8 @@
             <span>待审题</span>
           </div>
           <div class="stat">
-            <b>{{ summary.materialRead }}</b>
-            <span>待签收</span>
+            <b>{{ summary.minutesSign }}</b>
+            <span>纪要</span>
           </div>
           <div class="stat warn">
             <b>{{ summary.supervision }}</b>

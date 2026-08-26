@@ -46,21 +46,8 @@ export class WorkspaceService {
     }
     items.push(...(await this.pendingSupervisions(user)));
     items.push(...(await this.pendingMinutes(user)));
-    items.push(...(await this.pendingMaterialReads(user)));
 
-    const reviewTopicIds = new Set(
-      items
-        .filter(
-          (i) => i.type === 'JOINT_REVIEW' || i.type === 'PARTY_REVIEW',
-        )
-        .map((i) => i.topicId)
-        .filter((id): id is string => Boolean(id)),
-    );
-    const visible = items.filter(
-      (i) => i.type !== 'MATERIAL_READ' || !reviewTopicIds.has(i.topicId!),
-    );
-
-    visible.sort((a, b) => {
+    items.sort((a, b) => {
       const rank = todoRank(a) - todoRank(b);
       if (rank !== 0) return rank;
       const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
@@ -69,18 +56,18 @@ export class WorkspaceService {
     });
 
     const summary = {
-      total: visible.length,
-      jointReview: visible.filter((i) => i.type === 'JOINT_REVIEW').length,
-      partyReview: visible.filter((i) => i.type === 'PARTY_REVIEW').length,
-      minutesSign: visible.filter(
+      total: items.length,
+      jointReview: items.filter((i) => i.type === 'JOINT_REVIEW').length,
+      partyReview: items.filter((i) => i.type === 'PARTY_REVIEW').length,
+      minutesSign: items.filter(
         (i) => i.type === 'MINUTES' || i.type === 'MINUTES_SIGN',
       ).length,
-      supervision: visible.filter((i) => i.type === 'SUPERVISION').length,
-      checkin: visible.filter((i) => i.type === 'CHECKIN').length,
-      materialRead: visible.filter((i) => i.type === 'MATERIAL_READ').length,
+      supervision: items.filter((i) => i.type === 'SUPERVISION').length,
+      checkin: 0,
+      materialRead: 0,
     };
 
-    return { summary, items: visible };
+    return { summary, items };
   }
 
   /** 双会标准流程 + 本院进行中事项所处环节 */
@@ -484,60 +471,6 @@ export class WorkspaceService {
     }));
   }
 
-  private async pendingMaterialReads(user: AuthUser): Promise<TodoItem[]> {
-    if (!user.collegeId && !user.isSchoolAdmin) return [];
-
-    const materials = await this.prisma.material.findMany({
-      where: {
-        uploaded: true,
-        topic: {
-          status: {
-            in: [
-              TopicStatus.APPROVED,
-              TopicStatus.ON_AGENDA,
-              TopicStatus.PENDING_REVIEW,
-            ],
-          },
-          ...(user.collegeId && !user.isSchoolAdmin
-            ? { collegeId: user.collegeId }
-            : {}),
-        },
-        receipts: { none: { userId: user.sub } },
-      },
-      include: {
-        topic: {
-          select: {
-            id: true,
-            title: true,
-            meetingType: true,
-            createdAt: true,
-            college: { select: { name: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-    });
-
-    // 按议题聚合，避免材料过多刷屏
-    const byTopic = new Map<string, { topic: (typeof materials)[0]['topic']; count: number }>();
-    for (const m of materials) {
-      const cur = byTopic.get(m.topicId);
-      if (cur) cur.count += 1;
-      else byTopic.set(m.topicId, { topic: m.topic, count: 1 });
-    }
-
-    return [...byTopic.entries()].map(([topicId, v]) => ({
-      id: `read-${topicId}`,
-      type: 'MATERIAL_READ',
-      title: v.topic.title,
-      subtitle: `${v.topic.college?.name || ''} · ${v.count} 份材料未回执`,
-      meetingType: v.topic.meetingType,
-      topicId,
-      createdAt: v.topic.createdAt.toISOString(),
-    }));
-  }
-
   private async pendingMinutes(user: AuthUser): Promise<TodoItem[]> {
     if (!hasAnyRole(user, [...MINUTES_EDIT_ROLES])) return [];
 
@@ -579,8 +512,7 @@ function todoRank(item: TodoItem) {
   if (item.type === 'SUPERVISION') {
     return /逾期/.test(item.subtitle || '') ? 1 : 2;
   }
-  if (item.type === 'MATERIAL_READ') return 3;
-  return 4;
+  return 3;
 }
 
 function supervisionStatusLabel(status: string) {

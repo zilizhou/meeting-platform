@@ -12,7 +12,7 @@
         <div><b>{{ summary.jointReview }}</b><span>联席双审</span></div>
         <div><b>{{ summary.partyReview }}</b><span>党委审题</span></div>
         <div><b>{{ summary.supervision }}</b><span>督办</span></div>
-        <div><b>{{ summary.materialRead }}</b><span>待签收</span></div>
+        <div><b>{{ summary.minutesSign }}</b><span>纪要</span></div>
       </div>
     </el-card>
 
@@ -237,7 +237,6 @@ function typeLabel(type: string) {
     MINUTES_SIGN: '整理纪要',
     SUPERVISION: '督办',
     CHECKIN: '签到',
-    MATERIAL_READ: '材料签收',
   }
   return map[type] || type
 }
@@ -249,7 +248,6 @@ function typeTag(type: string) {
     MINUTES_SIGN: '',
     SUPERVISION: 'success',
     CHECKIN: 'info',
-    MATERIAL_READ: 'warning',
   }
   return map[type] || 'info'
 }

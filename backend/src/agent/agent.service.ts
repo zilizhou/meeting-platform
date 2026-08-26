@@ -32,7 +32,6 @@ const TODO_TYPE_LABEL: Record<string, string> = {
   MINUTES_SIGN: '整理纪要',
   SUPERVISION: '督办反馈',
   CHECKIN: '会议签到',
-  MATERIAL_READ: '材料签收',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -461,7 +460,7 @@ export class AgentService {
     const lines = [
       `【今日会议工作简报】${user.realName}`,
       '',
-      `1. 待办 ${todos.summary.total} 项（审题 ${todos.summary.jointReview + todos.summary.partyReview} / 纪要 ${todos.summary.minutesSign} / 督办 ${todos.summary.supervision} / 签收 ${todos.summary.materialRead}）`,
+      `1. 待办 ${todos.summary.total} 项（审题 ${todos.summary.jointReview + todos.summary.partyReview} / 纪要 ${todos.summary.minutesSign} / 督办 ${todos.summary.supervision}）`,
       `2. 未读消息 ${unread.count} 条`,
       `3. 进行中/已排期会议 ${upcoming.length} 场`,
       ...upcoming.map(
@@ -1060,7 +1059,6 @@ export class AgentService {
       `- 党组织审题 ${todos.summary.partyReview}`,
       `- 纪要 ${todos.summary.minutesSign}`,
       `- 督办 ${todos.summary.supervision}`,
-      `- 待签收材料 ${todos.summary.materialRead}`,
     ];
     if (todos.items.length) {
       lines.push('', '二、优先处理');

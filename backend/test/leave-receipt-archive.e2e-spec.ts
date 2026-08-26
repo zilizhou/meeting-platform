@@ -7,7 +7,7 @@ import {
   TestCtx,
 } from './helpers';
 
-describe('请假 / 阅件回执 / 归档（E2E）', () => {
+describe('请假 / 归档（E2E）', () => {
   let ctx: TestCtx;
 
   beforeAll(async () => {
@@ -63,57 +63,6 @@ describe('请假 / 阅件回执 / 归档（E2E）', () => {
       .set('Authorization', `Bearer ${ctx.users.viceDean.token}`)
       .send({ method: 'HAND', approve: true })
       .expect(400);
-  });
-
-  it('材料签收回执可提交，待办出现待签收材料', async () => {
-    const createRes = await request(ctx.app.getHttpServer())
-      .post('/api/topics')
-      .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .send({ title: '阅件回执议题', content: 'test' })
-      .expect(201);
-    const topicId = createRes.body.id as string;
-    const material = (createRes.body.materials || []).find((m: any) => m.isRequired);
-    expect(material).toBeTruthy();
-
-    const { writeFileSync } = await import('fs');
-    const { join } = await import('path');
-    const tmp = join(process.env.UPLOAD_DIR!, `${material.id}-read.txt`);
-    writeFileSync(tmp, 'read-me');
-    await request(ctx.app.getHttpServer())
-      .post(`/api/topics/materials/${material.id}/upload`)
-      .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .attach('file', tmp)
-      .expect(201);
-
-    await request(ctx.app.getHttpServer())
-      .post(`/api/topics/${topicId}/submit-review`)
-      .set('Authorization', `Bearer ${ctx.users.office.token}`)
-      .expect(201);
-
-    const todos = await request(ctx.app.getHttpServer())
-      .get('/api/workspace/todos')
-      .set('Authorization', `Bearer ${ctx.users.viceDean.token}`)
-      .expect(200);
-    expect(todos.body.summary.materialRead).toBeGreaterThanOrEqual(1);
-    expect(
-      todos.body.items.some(
-        (i: any) => i.type === 'MATERIAL_READ' && i.topicId === topicId,
-      ),
-    ).toBe(true);
-
-    await request(ctx.app.getHttpServer())
-      .post(`/api/topics/materials/${material.id}/read`)
-      .set('Authorization', `Bearer ${ctx.users.dean.token}`)
-      .send({ note: '已阅' })
-      .expect(201);
-
-    const detail = await request(ctx.app.getHttpServer())
-      .get(`/api/topics/${topicId}`)
-      .set('Authorization', `Bearer ${ctx.users.dean.token}`)
-      .expect(200);
-    const m = detail.body.materials.find((x: any) => x.id === material.id);
-    expect(m.myReadAt).toBeTruthy();
-    expect(m.receiptCount).toBeGreaterThanOrEqual(1);
   });
 
   it('保存纪要后可归档，未保存不可归档', async () => {
