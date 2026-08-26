@@ -125,6 +125,14 @@ export const MINUTES_SIGN_ROLES = [
   RoleCode.DEAN,
 ] as const;
 
+/** 整理 / 上传纪要（会务辅助，非现场签署） */
+export const MINUTES_EDIT_ROLES = [
+  RoleCode.MEETING_SECRETARY,
+  RoleCode.COLLEGE_ADMIN,
+  RoleCode.SECRETARY,
+  RoleCode.VICE_SECRETARY,
+] as const;
+
 /** 议题库全量可见：书记/副书记/院长/副院长/学院管理员/会议秘书/校级 */
 export const FULL_TOPIC_LIBRARY_ROLES = [
   RoleCode.SECRETARY,

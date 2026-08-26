@@ -25,6 +25,8 @@ const ALLOWED_EXT = new Set([
  * Multer/busboy 默认按 latin1 解析 Content-Disposition 文件名，
  * 浏览器实际发送的是 UTF-8，中文会变成「å±±ä¸œ」这类乱码。
  */
+export const MINUTES_FILE_PLACEHOLDER = '线下纪要附件：';
+
 export function decodeUploadFilename(name: string | null | undefined): string {
   if (!name) return '';
   if (/[\u4e00-\u9fff]/.test(name)) return name;
@@ -38,18 +40,45 @@ export function decodeUploadFilename(name: string | null | undefined): string {
   return name;
 }
 
+/** 解码「线下纪要附件：乱码文件名」这类混合文本 */
+export function decodeMojibakeText(text: string | null | undefined): string {
+  if (!text) return '';
+  if (text.startsWith(MINUTES_FILE_PLACEHOLDER)) {
+    return (
+      MINUTES_FILE_PLACEHOLDER +
+      decodeUploadFilename(text.slice(MINUTES_FILE_PLACEHOLDER.length))
+    );
+  }
+  return decodeUploadFilename(text) || text;
+}
+
+function isPlaceholderOnly(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith(MINUTES_FILE_PLACEHOLDER)) return false;
+  return !trimmed.includes('\n') || trimmed.split('\n').slice(1).every((l) => !l.trim());
+}
+
 export function repairStoredFilenameFields<T extends {
   originalName?: string | null;
   content?: string | null;
 }>(row: T): T {
-  const raw = row.originalName;
-  if (!raw) return row;
-  const originalName = decodeUploadFilename(raw);
-  if (originalName === raw) return row;
+  const originalName = row.originalName
+    ? decodeUploadFilename(row.originalName)
+    : row.originalName;
   let content = row.content ?? null;
-  if (content?.includes(raw)) {
-    content = content.split(raw).join(originalName);
+  if (content) {
+    if (isPlaceholderOnly(content)) {
+      const name =
+        originalName ||
+        decodeUploadFilename(content.trim().slice(MINUTES_FILE_PLACEHOLDER.length));
+      content = name ? `${MINUTES_FILE_PLACEHOLDER}${name}` : decodeMojibakeText(content);
+    } else if (content.startsWith(MINUTES_FILE_PLACEHOLDER)) {
+      const lines = content.split('\n');
+      lines[0] = decodeMojibakeText(lines[0]);
+      content = lines.join('\n');
+    }
   }
+  if (originalName === row.originalName && content === row.content) return row;
   return { ...row, originalName, content };
 }
 

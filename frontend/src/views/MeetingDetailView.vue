@@ -129,15 +129,6 @@
             @change="onMinutesFile"
           />
         </label>
-        <button
-          v-if="meeting.minutes?.originalName && meeting.status !== 'ARCHIVED'"
-          class="ui-btn light"
-          type="button"
-          :disabled="minutesDeleting"
-          @click="deleteMinutesFile"
-        >
-          {{ minutesDeleting ? '删除中…' : '删除附件' }}
-        </button>
       </div>
       <p class="minutes-hint">
         可在系统内编辑正文，也可上传线下纪要（Word / PDF）。核对后保存即可导出或归档。
@@ -292,6 +283,8 @@ const minutesDeleting = ref(false)
 const activeTopicId = ref('')
 
 /** 兼容历史上 latin1 误解码的中文文件名 */
+const MINUTES_FILE_PLACEHOLDER = '线下纪要附件：'
+
 function displayUploadFilename(name?: string | null) {
   if (!name) return ''
   if (/[\u4e00-\u9fff]/.test(name)) return name
@@ -303,6 +296,27 @@ function displayUploadFilename(name?: string | null) {
     return name
   }
   return name
+}
+
+function displayMinutesContent(text?: string | null, fileName?: string) {
+  if (!text) return ''
+  const trimmed = text.trim()
+  if (trimmed.startsWith(MINUTES_FILE_PLACEHOLDER) && !trimmed.includes('\n')) {
+    const rest = trimmed.slice(MINUTES_FILE_PLACEHOLDER.length)
+    const decoded = displayUploadFilename(rest)
+    return MINUTES_FILE_PLACEHOLDER + (fileName || decoded)
+  }
+  if (text.startsWith(MINUTES_FILE_PLACEHOLDER)) {
+    const nl = text.indexOf('\n')
+    const first = nl >= 0 ? text.slice(0, nl) : text
+    const restLines = nl >= 0 ? text.slice(nl) : ''
+    return (
+      MINUTES_FILE_PLACEHOLDER +
+      displayUploadFilename(first.slice(MINUTES_FILE_PLACEHOLDER.length)) +
+      restLines
+    )
+  }
+  return text
 }
 const topicDialogVisible = ref(false)
 const topicDetailLoading = ref(false)
@@ -487,7 +501,10 @@ async function load() {
     loadTopicDetailExtra()
   }
   minutesContent.value =
-    meeting.value.minutes?.content || buildMinutesOutline(meeting.value)
+    displayMinutesContent(
+      meeting.value.minutes?.content,
+      displayUploadFilename(meeting.value.minutes?.originalName),
+    ) || buildMinutesOutline(meeting.value)
   try {
     const latest: any = await http.get(
       `/ai/meetings/${route.params.id}/minutes-draft`,

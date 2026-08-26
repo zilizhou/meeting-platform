@@ -5,7 +5,7 @@ import {
   createTestApp,
   TestCtx,
 } from './helpers';
-import { decodeUploadFilename } from '../src/files/files.service';
+import { decodeUploadFilename, decodeMojibakeText, repairStoredFilenameFields } from '../src/files/files.service';
 
 describe('线下纪要附件（E2E）', () => {
   let ctx: TestCtx;
@@ -24,6 +24,14 @@ describe('线下纪要附件（E2E）', () => {
     expect(decodeUploadFilename(raw)).toBe('山东学院.docx');
     expect(decodeUploadFilename('山东学院.docx')).toBe('山东学院.docx');
     expect(decodeUploadFilename('minutes.txt')).toBe('minutes.txt');
+    const mixed = '线下纪要附件：' + Buffer.from('20210319外国语学院.docx', 'utf8').toString('latin1');
+    expect(decodeMojibakeText(mixed)).toBe('线下纪要附件：20210319外国语学院.docx');
+    const repaired = repairStoredFilenameFields({
+      originalName: '050201英语（语言大数据）.pdf',
+      content: mixed,
+    });
+    expect(repaired.originalName).toBe('050201英语（语言大数据）.pdf');
+    expect(repaired.content).toBe('线下纪要附件：050201英语（语言大数据）.pdf');
   });
 
   it('可上传、下载并删除线下纪要附件', async () => {

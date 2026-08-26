@@ -31,7 +31,12 @@ export function useRoles() {
     isMeetingSecretary: computed(() => has('MEETING_SECRETARY', 'COLLEGE_ADMIN')),
     canReviewJoint: computed(() => has('SECRETARY', 'DEAN', 'COLLEGE_ADMIN')),
     canReviewParty: computed(() => has('SECRETARY', 'COLLEGE_ADMIN')),
-    canProxyReview: computed(() => has('MEETING_SECRETARY', 'COLLEGE_ADMIN')),
+    canProxyReview: computed(() => {
+      if (isSchoolAdmin.value) return false
+      const codes = roles.value
+      if (codes.includes('COLLEGE_ADMIN')) return false
+      return codes.includes('MEETING_SECRETARY')
+    }),
     canSeeFullTopicLibrary: computed(() =>
       has(
         'SECRETARY',

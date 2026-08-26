@@ -43,10 +43,6 @@
       · 党政联席会议 {{ holding.joint?.count }}/{{ holding.joint?.required }}
       {{ holding.joint?.held ? '已达标' : '未达标' }}。
     </div>
-    <div v-if="activeTab === 'party'" class="rule-banner party">
-      <strong>第一议题硬规则</strong>
-      党组织会议须将「第一议题（政治理论学习）」纳入议程，否则不能创建、不能开会。
-    </div>
 
     <section v-if="guideTasks.length" class="task-guide">
       <div class="task-guide-head">

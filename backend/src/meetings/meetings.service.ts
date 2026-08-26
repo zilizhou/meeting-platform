@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ComplianceService } from '../compliance/compliance.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { FilesService, repairStoredFilenameFields } from '../files/files.service';
+import { FilesService, repairStoredFilenameFields, MINUTES_FILE_PLACEHOLDER, decodeMojibakeText } from '../files/files.service';
 import { AuthUser } from '../common/types';
 import {
   JointReviewSide,
@@ -317,9 +317,22 @@ export class MeetingsService {
       throw new ForbiddenException();
     }
     if (meeting.minutes) {
+      const repaired = repairStoredFilenameFields(meeting.minutes);
+      if (
+        repaired.originalName !== meeting.minutes.originalName ||
+        repaired.content !== meeting.minutes.content
+      ) {
+        await this.prisma.minutes.update({
+          where: { id: meeting.minutes.id },
+          data: {
+            originalName: repaired.originalName,
+            content: repaired.content ?? '',
+          },
+        });
+      }
       return {
         ...meeting,
-        minutes: repairStoredFilenameFields(meeting.minutes),
+        minutes: repaired,
       };
     }
     return meeting;
@@ -907,8 +920,8 @@ export class MeetingsService {
     }
     const minutes = await this.prisma.minutes.upsert({
       where: { meetingId },
-      create: { meetingId, content: dto.content },
-      update: { content: dto.content, version: { increment: 1 } },
+      create: { meetingId, content: decodeMojibakeText(dto.content) },
+      update: { content: decodeMojibakeText(dto.content), version: { increment: 1 } },
     });
     await this.markResolvedWhenMinutesReady(meetingId, meeting.status);
     return minutes;
@@ -951,9 +964,13 @@ export class MeetingsService {
       }
     }
 
-    const placeholder = existing?.content?.trim()
-      ? existing.content
-      : `线下纪要附件：${file.originalname}`;
+    const existingContent = existing?.content?.trim() || '';
+    const keepEditedBody =
+      Boolean(existingContent) &&
+      !existingContent.startsWith(MINUTES_FILE_PLACEHOLDER);
+    const placeholder = keepEditedBody
+      ? existing!.content
+      : `${MINUTES_FILE_PLACEHOLDER}${file.originalname}`;
 
     const minutes = await this.prisma.minutes.upsert({
       where: { meetingId },
@@ -971,7 +988,7 @@ export class MeetingsService {
         mimeType: file.mimetype,
         fileSize: file.size,
         version: { increment: 1 },
-        ...(existing?.content?.trim() ? {} : { content: placeholder }),
+        ...(keepEditedBody ? {} : { content: placeholder }),
       },
     });
 
@@ -1025,9 +1042,10 @@ export class MeetingsService {
       }
     }
 
-    const placeholderPrefix = '线下纪要附件：';
     const content = minutes.content?.trim() || '';
-    const nextContent = content.startsWith(placeholderPrefix) ? '' : minutes.content;
+    const nextContent = content.startsWith(MINUTES_FILE_PLACEHOLDER)
+      ? ''
+      : minutes.content;
 
     await this.prisma.minutes.update({
       where: { id: minutes.id },

@@ -65,7 +65,7 @@ describe('请假 / 阅件回执 / 归档（E2E）', () => {
       .expect(400);
   });
 
-  it('材料阅件回执可提交，工作台出现待阅件', async () => {
+  it('材料签收回执可提交，待办出现待签收材料', async () => {
     const createRes = await request(ctx.app.getHttpServer())
       .post('/api/topics')
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
@@ -92,7 +92,7 @@ describe('请假 / 阅件回执 / 归档（E2E）', () => {
 
     const todos = await request(ctx.app.getHttpServer())
       .get('/api/workspace/todos')
-      .set('Authorization', `Bearer ${ctx.users.dean.token}`)
+      .set('Authorization', `Bearer ${ctx.users.viceDean.token}`)
       .expect(200);
     expect(todos.body.summary.materialRead).toBeGreaterThanOrEqual(1);
     expect(

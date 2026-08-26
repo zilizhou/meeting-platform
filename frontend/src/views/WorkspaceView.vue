@@ -12,7 +12,7 @@
         <div><b>{{ summary.jointReview }}</b><span>联席双审</span></div>
         <div><b>{{ summary.partyReview }}</b><span>党委审题</span></div>
         <div><b>{{ summary.supervision }}</b><span>督办</span></div>
-        <div><b>{{ summary.materialRead }}</b><span>待阅件</span></div>
+        <div><b>{{ summary.materialRead }}</b><span>待签收</span></div>
       </div>
     </el-card>
 
@@ -233,10 +233,11 @@ function typeLabel(type: string) {
   const map: Record<string, string> = {
     JOINT_REVIEW: '联席双审',
     PARTY_REVIEW: '党委审题',
-    MINUTES_SIGN: '纪要签署',
+    MINUTES: '整理纪要',
+    MINUTES_SIGN: '整理纪要',
     SUPERVISION: '督办',
     CHECKIN: '签到',
-    MATERIAL_READ: '阅件',
+    MATERIAL_READ: '材料签收',
   }
   return map[type] || type
 }

@@ -26,12 +26,13 @@ const DISCLAIMER =
   '智能助理仅辅助汇报与查询；审题、表决、签署等须您本人确认。AI 不替代制度审签。';
 
 const TODO_TYPE_LABEL: Record<string, string> = {
-  JOINT_REVIEW: '联席双审',
-  PARTY_REVIEW: '党委审题',
-  MINUTES_SIGN: '纪要签署',
+  JOINT_REVIEW: '联席审题',
+  PARTY_REVIEW: '党组织审题',
+  MINUTES: '整理纪要',
+  MINUTES_SIGN: '整理纪要',
   SUPERVISION: '督办反馈',
   CHECKIN: '会议签到',
-  MATERIAL_READ: '材料阅件',
+  MATERIAL_READ: '材料签收',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -460,7 +461,7 @@ export class AgentService {
     const lines = [
       `【今日会议工作简报】${user.realName}`,
       '',
-      `1. 待办 ${todos.summary.total} 项（双审 ${todos.summary.jointReview} / 党委审 ${todos.summary.partyReview} / 纪要 ${todos.summary.minutesSign} / 督办 ${todos.summary.supervision} / 签到 ${todos.summary.checkin} / 阅件 ${todos.summary.materialRead}）`,
+      `1. 待办 ${todos.summary.total} 项（审题 ${todos.summary.jointReview + todos.summary.partyReview} / 纪要 ${todos.summary.minutesSign} / 督办 ${todos.summary.supervision} / 签收 ${todos.summary.materialRead}）`,
       `2. 未读消息 ${unread.count} 条`,
       `3. 进行中/已排期会议 ${upcoming.length} 场`,
       ...upcoming.map(
@@ -1056,11 +1057,10 @@ export class AgentService {
       '',
       `一、待办合计 ${todos.summary.total} 项`,
       `- 联席双审 ${todos.summary.jointReview}`,
-      `- 党委审题 ${todos.summary.partyReview}`,
+      `- 党组织审题 ${todos.summary.partyReview}`,
       `- 纪要 ${todos.summary.minutesSign}`,
       `- 督办 ${todos.summary.supervision}`,
-      `- 待签到 ${todos.summary.checkin}`,
-      `- 待阅件 ${todos.summary.materialRead}`,
+      `- 待签收材料 ${todos.summary.materialRead}`,
     ];
     if (todos.items.length) {
       lines.push('', '二、优先处理');

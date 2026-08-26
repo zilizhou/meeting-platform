@@ -3,7 +3,7 @@
     <div class="ui-hero party">
       <div class="eyebrow"><b></b> 党委红轨 · 议题库</div>
       <h2>党组织会议议题库</h2>
-      <p>学院党组织会议历次议题的集中管理入口。须有「第一议题」入会后方可开会；学院管理员可审题或代审。</p>
+      <p>学院党组织会议历次议题的集中管理入口。须有「第一议题」入会后方可开会；学院管理员可直接审题。</p>
       <div class="nums">
         <button
           type="button"
@@ -35,7 +35,7 @@
     <div class="rule-banner party">
       <strong>第一议题 · 审题</strong>
       党组织会议必须把「第一议题（政治理论学习）」纳入议程，否则不能开会。
-      学院管理员可直接同意/暂缓，也可在征得书记同意后代审留痕。
+      学院管理员可直接同意/暂缓。
       <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
     </div>
     <div v-if="!hasReadyFirstTopic" class="rule-banner warn">

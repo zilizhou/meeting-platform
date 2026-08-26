@@ -35,7 +35,7 @@
     <div class="rule-banner">
       <strong>可见范围 · 审题</strong>
       书记、副书记、院长、副院长、学院管理员、会议秘书可看全量议题；列席、委员、部门负责人仅看与自己相关的议题。
-      学院管理员可直接同意/暂缓（一次完成双审），也可代审留痕。
+      学院管理员可直接同意/暂缓（联席会议题一次完成双审）。
       <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
     </div>
 

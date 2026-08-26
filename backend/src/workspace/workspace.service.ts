@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types';
 import {
   JointReviewSide,
+  MeetingStatus,
   MeetingType,
   ReviewDecision,
   RoleCode,
   SupervisionStatus,
   TopicStatus,
 } from '../common/constants';
+import { hasAnyRole, MINUTES_EDIT_ROLES } from '../common/roles';
 
 export interface TodoItem {
   id: string;
@@ -43,25 +45,42 @@ export class WorkspaceService {
       items.push(...(await this.pendingPartyReviews(user)));
     }
     items.push(...(await this.pendingSupervisions(user)));
+    items.push(...(await this.pendingMinutes(user)));
     items.push(...(await this.pendingMaterialReads(user)));
 
-    items.sort((a, b) => {
+    const reviewTopicIds = new Set(
+      items
+        .filter(
+          (i) => i.type === 'JOINT_REVIEW' || i.type === 'PARTY_REVIEW',
+        )
+        .map((i) => i.topicId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const visible = items.filter(
+      (i) => i.type !== 'MATERIAL_READ' || !reviewTopicIds.has(i.topicId!),
+    );
+
+    visible.sort((a, b) => {
+      const rank = todoRank(a) - todoRank(b);
+      if (rank !== 0) return rank;
       const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
       const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
       return tb - ta;
     });
 
     const summary = {
-      total: items.length,
-      jointReview: items.filter((i) => i.type === 'JOINT_REVIEW').length,
-      partyReview: items.filter((i) => i.type === 'PARTY_REVIEW').length,
-      minutesSign: items.filter((i) => i.type === 'MINUTES_SIGN').length,
-      supervision: items.filter((i) => i.type === 'SUPERVISION').length,
-      checkin: items.filter((i) => i.type === 'CHECKIN').length,
-      materialRead: items.filter((i) => i.type === 'MATERIAL_READ').length,
+      total: visible.length,
+      jointReview: visible.filter((i) => i.type === 'JOINT_REVIEW').length,
+      partyReview: visible.filter((i) => i.type === 'PARTY_REVIEW').length,
+      minutesSign: visible.filter(
+        (i) => i.type === 'MINUTES' || i.type === 'MINUTES_SIGN',
+      ).length,
+      supervision: visible.filter((i) => i.type === 'SUPERVISION').length,
+      checkin: visible.filter((i) => i.type === 'CHECKIN').length,
+      materialRead: visible.filter((i) => i.type === 'MATERIAL_READ').length,
     };
 
-    return { summary, items };
+    return { summary, items: visible };
   }
 
   /** 双会标准流程 + 本院进行中事项所处环节 */
@@ -313,7 +332,7 @@ export class WorkspaceService {
       return topics.map((t) => ({
         id: `joint-review-admin-${t.id}`,
         type: 'JOINT_REVIEW',
-        title: `联席会议题待审：${t.title}`,
+        title: t.title,
         subtitle: `${t.college?.name || ''} · 学院审核`,
         meetingType: t.meetingType,
         topicId: t.id,
@@ -354,7 +373,7 @@ export class WorkspaceService {
     return reviews.map((r) => ({
       id: `joint-review-${r.id}`,
       type: 'JOINT_REVIEW',
-      title: `联席会议题待审：${r.topic.title}`,
+      title: r.topic.title,
       subtitle: `${r.topic.college?.name || ''} · ${side === 'SECRETARY' ? '书记审' : '院长审'}`,
       meetingType: r.topic.meetingType,
       topicId: r.topic.id,
@@ -375,11 +394,17 @@ export class WorkspaceService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const isCollegeAdmin =
+      user.isSchoolAdmin || user.roles.includes(RoleCode.COLLEGE_ADMIN);
+    const isSecretary = user.roles.includes(RoleCode.SECRETARY);
+    const reviewLabel =
+      isCollegeAdmin && !isSecretary ? '学院审核' : '书记审题';
+
     return topics.map((t) => ({
       id: `party-review-${t.id}`,
       type: 'PARTY_REVIEW',
-      title: `党组织会议议题待审：${t.title}`,
-      subtitle: `${t.college?.name || ''} · 书记审题`,
+      title: t.title,
+      subtitle: `${t.college?.name || ''} · ${reviewLabel}`,
       meetingType: t.meetingType,
       topicId: t.id,
       createdAt: t.createdAt.toISOString(),
@@ -414,8 +439,8 @@ export class WorkspaceService {
     return tasks.map((t) => ({
       id: `supervision-${t.id}`,
       type: 'SUPERVISION',
-      title: `督办待办：${t.title}`,
-      subtitle: `${t.resolution.topic.college?.name || ''} · ${t.status}`,
+      title: t.title,
+      subtitle: `${t.resolution.topic.college?.name || ''} · ${supervisionStatusLabel(t.status)}`,
       meetingType: t.resolution.topic.meetingType,
       topicId: t.resolution.topic.id,
       taskId: t.id,
@@ -505,11 +530,68 @@ export class WorkspaceService {
     return [...byTopic.entries()].map(([topicId, v]) => ({
       id: `read-${topicId}`,
       type: 'MATERIAL_READ',
-      title: `待阅件：${v.topic.title}`,
+      title: v.topic.title,
       subtitle: `${v.topic.college?.name || ''} · ${v.count} 份材料未回执`,
       meetingType: v.topic.meetingType,
       topicId,
       createdAt: v.topic.createdAt.toISOString(),
     }));
   }
+
+  private async pendingMinutes(user: AuthUser): Promise<TodoItem[]> {
+    if (!hasAnyRole(user, [...MINUTES_EDIT_ROLES])) return [];
+
+    const meetings = await this.prisma.meeting.findMany({
+      where: {
+        status: { in: [MeetingStatus.ENDED, MeetingStatus.RESOLVED] },
+        ...(user.collegeId && !user.isSchoolAdmin
+          ? { collegeId: user.collegeId }
+          : {}),
+      },
+      include: {
+        minutes: { select: { content: true, filePath: true } },
+        college: { select: { name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+
+    return meetings
+      .filter((m) => {
+        const text = m.minutes?.content?.trim();
+        return !text && !m.minutes?.filePath;
+      })
+      .map((m) => ({
+        id: `minutes-${m.id}`,
+        type: 'MINUTES',
+        title: m.title,
+        subtitle: `${m.college?.name || ''} · 会后待整理纪要`,
+        meetingType: m.meetingType,
+        meetingId: m.id,
+        createdAt: m.updatedAt.toISOString(),
+      }));
+  }
+}
+
+function todoRank(item: TodoItem) {
+  if (item.type === 'JOINT_REVIEW' || item.type === 'PARTY_REVIEW') return 0;
+  if (item.type === 'MINUTES' || item.type === 'MINUTES_SIGN') return 1;
+  if (item.type === 'SUPERVISION') {
+    return /逾期/.test(item.subtitle || '') ? 1 : 2;
+  }
+  if (item.type === 'MATERIAL_READ') return 3;
+  return 4;
+}
+
+function supervisionStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    PENDING: '待接收',
+    ACCEPTED: '已接收',
+    IN_PROGRESS: '办理中',
+    FEEDBACK: '已反馈',
+    DONE: '已办结',
+    OVERDUE: '已逾期',
+    ADJUST_REQUEST: '申请调整',
+  };
+  return map[status] || status;
 }

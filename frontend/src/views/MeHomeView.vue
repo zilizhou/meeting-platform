@@ -29,12 +29,12 @@
         </div>
         <div v-else class="stats">
           <div class="stat party">
-            <b>{{ summary.partyReview }}</b>
-            <span>党组织待办</span>
+            <b>{{ summary.partyReview + summary.jointReview }}</b>
+            <span>待审题</span>
           </div>
           <div class="stat">
-            <b>{{ summary.jointReview }}</b>
-            <span>党政联席待办</span>
+            <b>{{ summary.materialRead }}</b>
+            <span>待签收</span>
           </div>
           <div class="stat warn">
             <b>{{ summary.supervision }}</b>
@@ -158,6 +158,7 @@ const summary = reactive({
   minutesSign: 0,
   supervision: 0,
   checkin: 0,
+  materialRead: 0,
 })
 
 const avatarText = computed(() => (auth.user?.realName || '用').slice(0, 1))
