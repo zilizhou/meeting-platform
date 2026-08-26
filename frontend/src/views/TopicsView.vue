@@ -422,14 +422,14 @@ function decisionLabel(s: string) {
 }
 
 async function load() {
-  const [list, partyCats, jointCats] = await Promise.all([
+  const [list, partyCats, jointCats]: any[] = await Promise.all([
     http.get('/topics'),
     http.get('/org/categories', { params: { meetingType: 'PARTY_COMMITTEE' } }),
     http.get('/org/categories', { params: { meetingType: 'JOINT_CONFERENCE' } }),
   ])
-  topics.value = list as any[]
-  partyCategories.value = partyCats as any[]
-  jointCategories.value = jointCats as any[]
+  topics.value = Array.isArray(list) ? list : []
+  partyCategories.value = Array.isArray(partyCats) ? partyCats : []
+  jointCategories.value = Array.isArray(jointCats) ? jointCats : []
 }
 
 function openCreate() {
