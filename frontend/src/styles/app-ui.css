@@ -318,6 +318,104 @@ body,
   opacity: 0.75;
 }
 
+/* 顶栏指标分色：同一页内、不同模块之间都能区分 */
+.ui-hero .nums .kpi {
+  padding: 8px 14px 10px;
+  border-radius: 12px;
+  border-left: 3px solid currentColor;
+}
+.ui-hero .nums .kpi span {
+  opacity: 0.95;
+}
+.ui-hero .nums .kpi.gold {
+  background: rgba(232, 201, 106, 0.42);
+  border-left-color: #e8c96a;
+}
+.ui-hero .nums .kpi.gold strong,
+.ui-hero .nums .kpi.gold span {
+  color: #f6de9a;
+}
+.ui-hero .nums .kpi.coral {
+  background: rgba(232, 130, 90, 0.46);
+  border-left-color: #e8825a;
+}
+.ui-hero .nums .kpi.coral strong,
+.ui-hero .nums .kpi.coral span {
+  color: #ffc4a8;
+}
+.ui-hero .nums .kpi.sky {
+  background: rgba(110, 181, 214, 0.42);
+  border-left-color: #6eb5d6;
+}
+.ui-hero .nums .kpi.sky strong,
+.ui-hero .nums .kpi.sky span {
+  color: #b8e0f2;
+}
+.ui-hero .nums .kpi.mint {
+  background: rgba(110, 196, 168, 0.42);
+  border-left-color: #6ec4a8;
+}
+.ui-hero .nums .kpi.mint strong,
+.ui-hero .nums .kpi.mint span {
+  color: #b6eed8;
+}
+.ui-hero .nums .kpi.amber {
+  background: rgba(255, 168, 76, 0.46);
+  border-left-color: #ffa84c;
+}
+.ui-hero .nums .kpi.amber strong,
+.ui-hero .nums .kpi.amber span {
+  color: #ffd4a0;
+}
+.ui-hero .nums .kpi.party {
+  background: rgba(196, 90, 90, 0.5);
+  border-left-color: #e07070;
+}
+.ui-hero .nums .kpi.party strong,
+.ui-hero .nums .kpi.party span {
+  color: #ffc9c9;
+}
+.ui-hero .nums .kpi.joint {
+  background: rgba(61, 127, 212, 0.5);
+  border-left-color: #5b9af0;
+}
+.ui-hero .nums .kpi.joint strong,
+.ui-hero .nums .kpi.joint span {
+  color: #c5dcff;
+}
+.ui-hero .nums .kpi.violet {
+  background: rgba(167, 139, 250, 0.46);
+  border-left-color: #a78bfa;
+}
+.ui-hero .nums .kpi.violet strong,
+.ui-hero .nums .kpi.violet span {
+  color: #ddd0ff;
+}
+.ui-hero .nums .kpi.plum {
+  background: rgba(168, 90, 122, 0.5);
+  border-left-color: #c46a8e;
+}
+.ui-hero .nums .kpi.plum strong,
+.ui-hero .nums .kpi.plum span {
+  color: #f0c0d4;
+}
+.ui-hero .nums .kpi.teal {
+  background: rgba(74, 143, 154, 0.5);
+  border-left-color: #5ab8c4;
+}
+.ui-hero .nums .kpi.teal strong,
+.ui-hero .nums .kpi.teal span {
+  color: #b8e4ea;
+}
+.ui-hero .nums .kpi.warn {
+  background: rgba(220, 120, 70, 0.48);
+  border-left-color: #f08a4a;
+}
+.ui-hero .nums .kpi.warn strong,
+.ui-hero .nums .kpi.warn span {
+  color: #ffc9a0;
+}
+
 /* 顶栏数字与下方 tab 联动高亮 */
 .ui-hero .nums .num {
   appearance: none;
@@ -344,8 +442,8 @@ body,
 }
 
 .ui-hero .nums .num:hover:not(.on) {
-  background: rgba(255, 255, 255, 0.12);
-  opacity: 0.92;
+  opacity: 0.96;
+  filter: brightness(1.08);
 }
 
 .ui-hero .nums .num.on {
@@ -412,6 +510,68 @@ body,
 
 .ui-hero .nums .num.neutral.on::after {
   background: #14325c;
+}
+
+/* 未选中时也带色，避免顶栏数字全是白字 */
+.ui-hero .nums .num.all:not(.on) {
+  background: rgba(240, 195, 106, 0.42);
+}
+.ui-hero .nums .num.all:not(.on) strong,
+.ui-hero .nums .num.all:not(.on) span {
+  color: #f6de9a;
+  opacity: 1;
+}
+.ui-hero .nums .num.party:not(.on) {
+  background: rgba(196, 90, 90, 0.48);
+}
+.ui-hero .nums .num.party:not(.on) strong,
+.ui-hero .nums .num.party:not(.on) span {
+  color: #ffc9c9;
+  opacity: 1;
+}
+.ui-hero .nums .num.joint:not(.on) {
+  background: rgba(61, 127, 212, 0.48);
+}
+.ui-hero .nums .num.joint:not(.on) strong,
+.ui-hero .nums .num.joint:not(.on) span {
+  color: #c5dcff;
+  opacity: 1;
+}
+.ui-hero .nums .num.neutral:not(.on) {
+  background: rgba(255, 255, 255, 0.16);
+}
+.ui-hero .nums .num.neutral:not(.on) strong,
+.ui-hero .nums .num.neutral:not(.on) span {
+  color: #e8eef8;
+  opacity: 1;
+}
+
+.ui-hero .nums .num.kpi.gold.on {
+  background: #e8c96a;
+  color: #3d2a0a;
+  box-shadow: 0 4px 14px rgba(232, 201, 106, 0.45);
+}
+.ui-hero .nums .num.kpi.gold.on strong,
+.ui-hero .nums .num.kpi.gold.on span {
+  color: #3d2a0a;
+}
+.ui-hero .nums .num.kpi.warn.on {
+  background: #dc7846;
+  color: #fff8f4;
+  box-shadow: 0 4px 14px rgba(220, 120, 70, 0.45);
+}
+.ui-hero .nums .num.kpi.warn.on strong,
+.ui-hero .nums .num.kpi.warn.on span {
+  color: #fff8f4;
+}
+.ui-hero .nums .num.kpi.sky.on {
+  background: #5aa8c8;
+  color: #06202c;
+  box-shadow: 0 4px 14px rgba(90, 168, 200, 0.45);
+}
+.ui-hero .nums .num.kpi.sky.on strong,
+.ui-hero .nums .num.kpi.sky.on span {
+  color: #06202c;
 }
 
 /* 党委红轨 hero 上的「全部」仍用琥珀，其余默认走 party */

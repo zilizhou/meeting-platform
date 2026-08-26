@@ -68,13 +68,52 @@ export class AdminController {
     return this.admin.collegeStats(user);
   }
 
+  @Get('stats')
+  stats(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('collegeId') collegeId?: string,
+  ) {
+    return this.admin.dashboardStats(user, { from, to, collegeId });
+  }
+
+  @Get('topics')
+  topics(
+    @CurrentUser() user: AuthUser,
+    @Query('q') q?: string,
+    @Query('collegeId') collegeId?: string,
+    @Query('meetingType') meetingType?: string,
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.admin.searchTopics(user, {
+      q,
+      collegeId,
+      meetingType,
+      status,
+      from,
+      to,
+    });
+  }
+
   @Get('meetings')
   meetings(
     @CurrentUser() user: AuthUser,
     @Query('collegeId') collegeId?: string,
     @Query('meetingType') meetingType?: string,
+    @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.admin.meetingLedger(user, { collegeId, meetingType });
+    return this.admin.meetingLedger(user, {
+      collegeId,
+      meetingType,
+      q,
+      from,
+      to,
+    });
   }
 
   @Get('warnings')

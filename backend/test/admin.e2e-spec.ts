@@ -93,10 +93,22 @@ describe('校级监管看板（E2E）', () => {
 
     expect(overview.body.month?.period).toBe('SEMESTER');
 
-    await request(ctx.app.getHttpServer())
-      .get('/api/admin/meetings')
+    const stats = await request(ctx.app.getHttpServer())
+      .get('/api/admin/stats')
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
+    expect(stats.body.colleges.count).toBeGreaterThanOrEqual(1);
+    expect(stats.body.topics).toHaveProperty('total');
+    expect(stats.body.meetings).toHaveProperty('party');
+    expect(Array.isArray(stats.body.monthly)).toBe(true);
+
+    const topics = await request(ctx.app.getHttpServer())
+      .get('/api/admin/topics')
+      .query({ q: '会议' })
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect(topics.body).toHaveProperty('items');
+    expect(topics.body).toHaveProperty('summary');
 
     await request(ctx.app.getHttpServer())
       .get('/api/admin/transfers')

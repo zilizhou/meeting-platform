@@ -48,7 +48,12 @@
           :class="m.role"
         >
           <div class="bubble">
-            <pre>{{ m.content }}</pre>
+            <div
+              v-if="m.role === 'assistant'"
+              class="msg-md"
+              v-html="renderMarkdown(m.content)"
+            />
+            <pre v-else>{{ m.content }}</pre>
             <div v-if="m.citations?.length" class="cites">
               <div v-for="c in m.citations" :key="c.id" class="cite">
                 {{ c.title }} · {{ c.source }}
@@ -70,7 +75,7 @@
                     type="primary"
                     @click="go(a.link)"
                   >
-                    前往办理
+                    {{ navButtonLabel(a.link) }}
                   </el-button>
                   <template v-else-if="a.requiresConfirm">
                     <el-button size="small" @click="confirmAction(a, false)">
@@ -113,6 +118,8 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
+import { renderMarkdown, stripAgentMetaSuffix } from '@/utils/markdown'
+import { streamAgentChat } from '@/utils/agentStream'
 
 interface AgentAction {
   id: string
@@ -134,17 +141,13 @@ interface ChatMsg {
 
 const route = useRoute()
 const router = useRouter()
+const WELCOME =
+  '您好，我是会议智能助理。可提供今日简报、议题/会议概况、风险解释、督办预警、规则问答与审题意见草稿。涉及审题、表决、签署时，须您本人确认。'
 const open = ref(false)
 const loading = ref(false)
 const input = ref('')
 const sessionId = ref('')
-const messages = ref<ChatMsg[]>([
-  {
-    role: 'assistant',
-    content:
-      '您好，我是会议智能助理。可提供今日简报、议题/会议概况、风险解释、督办预警、规则问答与审题意见草稿。涉及审题、表决、签署时，须您本人确认。',
-  },
-])
+const messages = ref<ChatMsg[]>([{ role: 'assistant', content: WELCOME }])
 const listEl = ref<HTMLElement | null>(null)
 const configured = ref(false)
 
@@ -171,6 +174,13 @@ function pageContext() {
   return ctx
 }
 
+function navButtonLabel(link?: string) {
+  if (!link) return '前往办理'
+  if (link.startsWith('/meetings')) return '前往会议'
+  if (link.startsWith('/topics')) return '前往议题'
+  return '前往办理'
+}
+
 async function scrollBottom() {
   await nextTick()
   if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight
@@ -182,6 +192,29 @@ async function loadStatus() {
     configured.value = Boolean(res.configured)
   } catch {
     configured.value = false
+  }
+}
+
+async function loadHistory() {
+  try {
+    const res: any = await http.get('/agent/history', { params: { limit: 80 } })
+    const saved = Array.isArray(res.messages) ? res.messages : []
+    if (res.sessionId) sessionId.value = String(res.sessionId)
+    if (!saved.length) {
+      messages.value = [{ role: 'assistant', content: WELCOME }]
+      return
+    }
+    messages.value = [
+      { role: 'assistant', content: WELCOME },
+      ...saved.map((m: any) => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: stripAgentMetaSuffix(String(m.content || '')),
+        citations: m.citations,
+        actions: m.actions || [],
+      })),
+    ]
+  } catch {
+    /* ignore */
   }
 }
 
@@ -197,24 +230,60 @@ async function send() {
   input.value = ''
   loading.value = true
   await scrollBottom()
+
+  const assistant: ChatMsg = { role: 'assistant', content: '正在思考…' }
+  messages.value.push(assistant)
+  const idx = messages.value.length - 1
+  await scrollBottom()
+
   try {
-    const res: any = await http.post('/agent/chat', {
-      message: text,
-      sessionId: sessionId.value || undefined,
-      context: pageContext(),
-    })
-    sessionId.value = res.sessionId || sessionId.value
-    messages.value.push({
-      role: 'assistant',
-      content: res.reply || '（无回复）',
-      citations: res.citations,
-      actions: res.actions || [],
-    })
+    let started = false
+    await streamAgentChat(
+      {
+        message: text,
+        sessionId: sessionId.value || undefined,
+        context: pageContext(),
+      },
+      {
+        onStatus: () => {
+          if (!started) {
+            messages.value[idx] = { ...messages.value[idx], content: '' }
+          }
+        },
+        onToken: (chunk) => {
+          if (!started) {
+            started = true
+            messages.value[idx] = { ...messages.value[idx], content: '' }
+          }
+          const cur = messages.value[idx]
+          messages.value[idx] = {
+            ...cur,
+            content: (cur.content || '') + chunk,
+          }
+          void scrollBottom()
+        },
+        onDone: (payload) => {
+          sessionId.value = payload.sessionId || sessionId.value
+          messages.value[idx] = {
+            role: 'assistant',
+            content: payload.reply || messages.value[idx].content || '（无回复）',
+            citations: payload.citations,
+            actions: payload.actions || [],
+          }
+        },
+        onError: (message) => {
+          messages.value[idx] = {
+            role: 'assistant',
+            content: `请求失败：${message}`,
+          }
+        },
+      },
+    )
   } catch (e: any) {
-    messages.value.push({
+    messages.value[idx] = {
       role: 'assistant',
       content: `请求失败：${String(e)}`,
-    })
+    }
   } finally {
     loading.value = false
     await scrollBottom()
@@ -247,7 +316,10 @@ async function confirmAction(action: AgentAction, approved: boolean) {
   }
 }
 
-onMounted(loadStatus)
+onMounted(async () => {
+  await loadStatus()
+  await loadHistory()
+})
 </script>
 
 <style scoped>
@@ -341,6 +413,35 @@ onMounted(loadStatus)
   font-family: inherit;
   font-size: 13px;
   line-height: 1.55;
+}
+.msg-md {
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+.msg-md :deep(p) {
+  margin: 0 0 0.55em;
+}
+.msg-md :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.msg-md :deep(h1),
+.msg-md :deep(h2),
+.msg-md :deep(h3) {
+  margin: 0.25em 0 0.45em;
+  font-size: 14px;
+  font-weight: 700;
+}
+.msg-md :deep(ul),
+.msg-md :deep(ol) {
+  margin: 0.25em 0 0.55em;
+  padding-left: 1.3em;
+}
+.msg-md :deep(li) {
+  margin: 0.15em 0;
+}
+.msg-md :deep(strong) {
+  font-weight: 700;
 }
 .cites {
   margin-top: 8px;

@@ -215,10 +215,27 @@ function extractResolutions(agendaText: string): string[] {
   return items.filter((x) => x && !/负责人签名|备注|办公室/.test(x));
 }
 
-function extractAgendaTopics(agendaText: string): string[] {
+/** 标题是否像「第一议题 / 政治理论学习」 */
+export function isLikelyFirstTopic(title: string) {
+  const t = (title || '').replace(/\s+/g, '');
+  if (!t) return false;
+  return /第一议题|政治理论学习|习近平|中央精神|重要讲话|重要指示|理论武装|学习贯彻|党的二十大|二十届三中全会|主题教育/.test(
+    t,
+  );
+}
+
+function extractAgendaTopics(agendaText: string): {
+  titles: string[];
+  /** 议题表显式「第一议题：」条目在 titles 中的下标 */
+  labeledFirstIndex: number | null;
+} {
   const titles: string[] = [];
+  let labeledFirstIndex: number | null = null;
   const first = agendaText.match(/第一议题[：:]\s*([^\n]+)/);
-  if (first) titles.push(first[1].trim());
+  if (first) {
+    titles.push(first[1].trim());
+    labeledFirstIndex = 0;
+  }
   const numbered = [
     ...agendaText.matchAll(/(?:^|\n)\s*(\d+)[\.、．]\s*([^\n]+)/g),
   ];
@@ -232,7 +249,7 @@ function extractAgendaTopics(agendaText: string): string[] {
     if (resPos >= 0 && pos > resPos) continue;
     titles.push(t);
   }
-  return titles;
+  return { titles, labeledFirstIndex };
 }
 
 function extractMinutesSections(minutesText: string): Array<{
@@ -281,10 +298,14 @@ export function buildTopics(
   minutesText: string,
   meetingType: 'PARTY_COMMITTEE' | 'JOINT_CONFERENCE' = 'PARTY_COMMITTEE',
 ): PartyImportTopicDraft[] {
+  const partyAgenda =
+    meetingType === 'PARTY_COMMITTEE'
+      ? extractAgendaTopics(agendaText)
+      : null;
   const agendaTitles =
     meetingType === 'JOINT_CONFERENCE'
       ? extractJointAgendaTopics(agendaText)
-      : extractAgendaTopics(agendaText);
+      : partyAgenda!.titles;
   const resolutions =
     meetingType === 'JOINT_CONFERENCE'
       ? []
@@ -311,7 +332,19 @@ export function buildTopics(
         (i === 0 ? jointRes : '') ||
         '',
       minutesSection: section?.body || '',
+      isFirstTopic: false,
     });
+  }
+
+  if (meetingType === 'PARTY_COMMITTEE' && topics.length) {
+    let firstIdx = partyAgenda?.labeledFirstIndex ?? null;
+    if (firstIdx == null) {
+      const hit = topics.findIndex((t) => isLikelyFirstTopic(t.title));
+      firstIdx = hit >= 0 ? hit : null;
+    }
+    if (firstIdx != null && topics[firstIdx]) {
+      topics[firstIdx].isFirstTopic = true;
+    }
   }
   return topics;
 }

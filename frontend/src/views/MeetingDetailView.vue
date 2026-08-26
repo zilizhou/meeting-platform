@@ -24,7 +24,10 @@
         title="本场党组织会议未纳入第一议题（政治理论学习），不能标记已召开。"
       />
       <div class="nums">
-        <div><strong>{{ meeting.topics?.length || 0 }}</strong><span>入会议题</span></div>
+        <div class="kpi" :class="isParty ? 'party' : 'joint'">
+          <strong>{{ meeting.topics?.length || 0 }}</strong>
+          <span>入会议题</span>
+        </div>
       </div>
     </div>
 
@@ -485,6 +488,10 @@ function statusLabel(s: string) {
 }
 
 function goBack() {
+  if (route.query.from === 'school') {
+    router.push('/school-meetings')
+    return
+  }
   router.push({
     path: '/meet',
     query: { tab: isParty.value ? 'party' : 'joint' },

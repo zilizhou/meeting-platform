@@ -87,9 +87,11 @@ async function onSubmit() {
       router.replace('/colleges')
       return
     }
-    const viewer =
-      !auth.user?.isSchoolAdmin && (auth.user?.roles || []).includes('SCHOOL_VIEWER')
-    router.replace(viewer ? '/admin' : '/todo')
+    const school =
+      auth.user?.isSchoolAdmin ||
+      (auth.user?.roles || []).includes('SCHOOL_ADMIN') ||
+      (auth.user?.roles || []).includes('SCHOOL_VIEWER')
+    router.replace(school ? '/admin' : '/todo')
   } catch (e: any) {
     error.value = typeof e === 'string' ? e : e?.message || '修改失败'
   } finally {

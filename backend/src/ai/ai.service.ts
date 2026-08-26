@@ -652,14 +652,14 @@ export class AiService {
         [
           '你是高校学院双会议议题起草助手，服务对象为学院办公室/党委秘书。',
           '根据用户的自然语言描述，起草一份可直接提交会议的规范议题稿。',
-          '只输出 JSON 对象，字段为 title、content，不要 Markdown 代码块标记。',
+          '只输出 JSON 对象，字段为 title、content，不要 Markdown 代码块标记，不要解释文字。',
           'title：简洁准确，一般不超过 40 字，以"关于…的请示/报告/议案"等公文式表述为佳。',
-          'content：内容要充实、结构完整，不少于 300 字，按以下四段分节撰写（可用"一、二、三、四、"作为段落序号）：',
+          'content：结构完整，约 180～280 字，按四段分节（用"一、二、三、四、"作序号）：',
           '（1）背景与现状——概述事项由来、现状与必要性；',
-          '（2）政策依据——列出可能适用的制度依据（若描述未提供具体文号，可用概括性表述如"依据学院相关议事规则"，不得编造具体文号/条款编号）；',
-          '（3）拟提请事项——具体、可操作地列明本次会议拟讨论决定的内容；',
-          '（4）预期影响与落实安排——说明实施后的影响面，以及责任分工与时间节点（若描述未提供，可给出合理的通用表述，并提示"需人工核实/补充"）。',
-          '严禁编造具体的人名、金额、文件编号等未在描述中出现的确定性事实；如需补充具体数据，请用"（需人工补充：…）"标出。',
+          '（2）政策依据——概括适用制度，不得编造具体文号/条款编号；',
+          '（3）拟提请事项——列明本次会议拟讨论决定的内容；',
+          '（4）预期影响与落实安排——影响面、责任分工与时限（未知处用"（需人工补充）"）。',
+          '严禁编造描述中未出现的人名、金额、文件编号。',
         ].join('\n'),
         `会议类型：${meetingType === 'PARTY_COMMITTEE' ? '党组织会议' : '党政联席会议'}\n用户描述：\n${description}`,
         { demoKind: 'material_summary' },
@@ -667,15 +667,41 @@ export class AiService {
       if (result.demo) {
         return { title: fallbackTitle, content: fallbackContent };
       }
-      const raw = result.text.trim().replace(/^```json\s*|\s*```$/g, '');
-      const parsed = JSON.parse(raw) as { title?: string; content?: string };
+      const parsed = this.parseJsonObject(result.text) as {
+        title?: string;
+        content?: string;
+      } | null;
       return {
-        title: (parsed.title || fallbackTitle).trim().slice(0, 80),
-        content: (parsed.content || fallbackContent).trim(),
+        title: String(parsed?.title || fallbackTitle).trim().slice(0, 80),
+        content: String(parsed?.content || fallbackContent).trim(),
       };
     } catch {
       return { title: fallbackTitle, content: fallbackContent };
     }
+  }
+
+  private parseJsonObject(raw: string): Record<string, unknown> | null {
+    const stripped = raw
+      .trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '');
+    try {
+      const v = JSON.parse(stripped);
+      if (v && typeof v === 'object') return v as Record<string, unknown>;
+    } catch {
+      /* continue */
+    }
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        const v = JSON.parse(stripped.slice(start, end + 1));
+        if (v && typeof v === 'object') return v as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+    return null;
   }
 
   /** 审题简报：材料齐备、前置、同类历史、关注点（只读辅读） */

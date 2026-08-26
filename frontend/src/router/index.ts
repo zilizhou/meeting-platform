@@ -44,6 +44,11 @@ const router = createRouter({
           component: () => import('@/views/WorkHomeView.vue'),
         },
         {
+          path: 'topics-home',
+          name: 'topics-home',
+          component: () => import('@/views/TopicsHomeView.vue'),
+        },
+        {
           path: 'agent',
           name: 'agent',
           component: () => import('@/views/AgentHomeView.vue'),
@@ -131,12 +136,36 @@ const router = createRouter({
         {
           path: 'admin',
           name: 'admin',
+          component: () => import('@/views/SchoolStatsView.vue'),
+        },
+        {
+          path: 'admin-ops',
+          name: 'admin-ops',
           component: () => import('@/views/AdminDashboardView.vue'),
+        },
+        {
+          path: 'school-topics',
+          name: 'school-topics',
+          component: () => import('@/views/SchoolTopicsView.vue'),
+        },
+        {
+          path: 'school-meetings',
+          name: 'school-meetings',
+          component: () => import('@/views/SchoolMeetingsView.vue'),
         },
       ],
     },
   ],
 })
+
+function isSchoolUser(auth: ReturnType<typeof useAuthStore>) {
+  const roles = auth.user?.roles || []
+  return !!(
+    auth.user?.isSchoolAdmin ||
+    roles.includes('SCHOOL_ADMIN') ||
+    roles.includes('SCHOOL_VIEWER')
+  )
+}
 
 function isSchoolViewerOnly(auth: ReturnType<typeof useAuthStore>) {
   const roles = auth.user?.roles || []
@@ -151,6 +180,7 @@ const VIEWER_BLOCKED = new Set([
   '/workspace',
   '/meet',
   '/work',
+  '/topics-home',
   '/roster',
   '/users',
   '/topic-create',
@@ -167,13 +197,15 @@ router.beforeEach((to) => {
   }
   if ((to.path === '/login' || to.path === '/register') && auth.isLogin) {
     if (auth.mustChangePassword) return '/change-password'
-    return isSchoolViewerOnly(auth) ? '/admin' : '/todo'
+    return isSchoolUser(auth) ? '/admin' : '/todo'
   }
   if (auth.isLogin && auth.mustChangePassword && to.name !== 'change-password') {
     return '/change-password'
   }
-  if (auth.isLogin && isSchoolViewerOnly(auth)) {
+  if (auth.isLogin && isSchoolUser(auth)) {
     if (to.path === '/' || to.path === '') return '/admin'
+  }
+  if (auth.isLogin && isSchoolViewerOnly(auth)) {
     if (VIEWER_BLOCKED.has(to.path)) return '/admin'
   }
 })

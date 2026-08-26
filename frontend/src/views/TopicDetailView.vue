@@ -648,6 +648,10 @@ const reviewSides = computed(() => {
 })
 
 function goBack() {
+  if (route.query.from === 'school') {
+    router.push('/school-topics')
+    return
+  }
   router.push(isParty.value ? '/party-topics' : '/topics')
 }
 
@@ -682,7 +686,7 @@ async function load() {
   } catch {
     reviewBrief.value = null
   }
-  if (topic.value?.meetingType === 'PARTY_COMMITTEE' && route.query.from !== 'party') {
+  if (topic.value?.meetingType === 'PARTY_COMMITTEE' && !route.query.from) {
     router.replace({ query: { ...route.query, from: 'party' } })
   }
 }

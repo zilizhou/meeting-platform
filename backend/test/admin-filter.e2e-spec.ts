@@ -54,15 +54,15 @@ describe('校级监管筛选与导出（E2E）', () => {
       .get('/api/admin/meetings')
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
-    expect(all.body.length).toBeGreaterThanOrEqual(2);
+    expect(all.body.items.length).toBeGreaterThanOrEqual(2);
 
     const filtered = await request(ctx.app.getHttpServer())
       .get('/api/admin/meetings')
       .query({ collegeId: c2.id })
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
-    expect(filtered.body.every((m: any) => m.collegeId === c2.id)).toBe(true);
-    expect(filtered.body.some((m: any) => m.title === '筛选学院会议')).toBe(true);
+    expect(filtered.body.items.every((m: any) => m.collegeId === c2.id)).toBe(true);
+    expect(filtered.body.items.some((m: any) => m.title === '筛选学院会议')).toBe(true);
   });
 
   it('预警项含可跳转 link 字段', async () => {

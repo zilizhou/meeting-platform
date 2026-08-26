@@ -1,9 +1,15 @@
 <template>
   <div>
     <div class="ui-hero party">
-      <div class="eyebrow"><b></b> 党委红轨 · 议题库</div>
-      <h2>党组织会议议题库</h2>
-      <p>学院党组织会议历次议题的集中管理入口。须有「第一议题」入会后方可开会；学院管理员可直接审题。</p>
+      <div class="eyebrow"><b></b> 党委红轨 · {{ mineMode ? '我的议题' : '议题库' }}</div>
+      <h2>{{ mineMode ? '我的党组织会议议题' : '党组织会议议题库' }}</h2>
+      <p>
+        {{
+          mineMode
+            ? '仅显示您作为申报人提交的党组织会议议题，可跟踪审题与入会进度。'
+            : '学院党组织会议历次议题的集中管理入口。须有「第一议题」入会后方可开会；学院管理员可直接审题。'
+        }}
+      </p>
       <div class="nums">
         <button
           type="button"
@@ -11,7 +17,7 @@
           :class="{ on: activeTab === 'all' }"
           @click="activeTab = 'all'"
         >
-          <strong>{{ topics.length }}</strong><span>全部</span>
+          <strong>{{ scopedTopics.length }}</strong><span>全部</span>
         </button>
         <button
           type="button"
@@ -32,13 +38,13 @@
       </div>
     </div>
 
-    <div class="rule-banner party">
+    <div v-if="!mineMode" class="rule-banner party">
       <strong>第一议题 · 审题</strong>
       党组织会议必须把「第一议题（政治理论学习）」纳入议程，否则不能开会。
       学院管理员可直接同意/暂缓。
       <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
     </div>
-    <div v-if="!hasReadyFirstTopic" class="rule-banner warn">
+    <div v-if="!mineMode && !hasReadyFirstTopic" class="rule-banner warn">
       <strong>尚未备妥第一议题</strong>
       议题库里还没有已审过的第一议题。请先征集并完成书记审题，否则无法创建/召开党组织会议。
     </div>
@@ -61,7 +67,7 @@
     </div>
 
     <div class="ui-sec">
-      <h3><i class="party"></i>议题列表</h3>
+      <h3><i class="party"></i>{{ mineMode ? '我的议题' : '议题列表' }}</h3>
       <div class="ui-sec-actions">
         <button
           v-if="roles.canCreateTopic.value"
@@ -69,7 +75,7 @@
           type="button"
           @click="openCreate"
         >
-          议题征集
+          申报议题
         </button>
         <button class="ui-link" type="button" @click="load">刷新</button>
         <span class="n">{{ filteredTopics.length }} 项</span>
@@ -77,9 +83,9 @@
     </div>
 
     <div v-if="!filteredTopics.length" class="ui-empty">
-      当前分组暂无议题
-      <div v-if="!topics.length && roles.canCreateTopic.value" style="margin-top: 10px">
-        <button class="ui-btn party" type="button" @click="openCreate">去议题征集</button>
+      {{ mineMode ? '暂无本人申报的议题' : '当前分组暂无议题' }}
+      <div v-if="!scopedTopics.length && roles.canCreateTopic.value" style="margin-top: 10px">
+        <button class="ui-btn party" type="button" @click="openCreate">去申报议题</button>
       </div>
     </div>
 
@@ -238,13 +244,15 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 
+const route = useRoute()
 const router = useRouter()
 const roles = useRoles()
+const mineMode = computed(() => String(route.query.mine || '') === '1')
 const topics = ref<any[]>([])
 const categories = ref<any[]>([])
 const editVisible = ref(false)
@@ -296,10 +304,16 @@ watch(activeTab, () => {
   })
 })
 
+const scopedTopics = computed(() => {
+  if (!mineMode.value) return topics.value
+  const uid = roles.auth.user?.id
+  return topics.value.filter((t) => t.proposer?.id === uid)
+})
+
 const filteredTopics = computed(() => {
   const def = tabs.find((d) => d.key === activeTab.value)
-  if (!def || !def.statuses.length) return topics.value
-  return topics.value.filter((t) => def.statuses.includes(t.status))
+  if (!def || !def.statuses.length) return scopedTopics.value
+  return scopedTopics.value.filter((t) => def.statuses.includes(t.status))
 })
 
 const hasReadyFirstTopic = computed(() =>
@@ -315,8 +329,8 @@ const proxyTitle = computed(() =>
 )
 
 function countOf(statuses: string[]) {
-  if (!statuses.length) return topics.value.length
-  return topics.value.filter((t) => statuses.includes(t.status)).length
+  if (!statuses.length) return scopedTopics.value.length
+  return scopedTopics.value.filter((t) => statuses.includes(t.status)).length
 }
 
 /** 已上会/已闭会流程状态，普通提交人不可再自行修改或删除 */

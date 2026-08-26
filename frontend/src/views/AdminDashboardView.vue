@@ -6,7 +6,7 @@
       sub-title="校级监管看板仅校级管理员或校级查阅角色可访问。"
     >
       <template #extra>
-        <el-button type="primary" @click="$router.push('/todo')">返回待办</el-button>
+        <el-button type="primary" @click="$router.push('/admin')">返回总览</el-button>
       </template>
     </el-result>
   </div>
@@ -32,19 +32,19 @@
         }}
       </p>
       <div class="nums">
-        <div>
+        <div class="kpi mint">
           <strong>{{ month?.bothOkCount ?? '—' }}</strong>
           <span>{{ monthLabel }}双会齐全</span>
         </div>
-        <div>
+        <div class="kpi party">
           <strong>{{ month?.missingPartyCount ?? '—' }}</strong>
           <span>缺党组织会</span>
         </div>
-        <div>
+        <div class="kpi teal">
           <strong>{{ month?.missingJointCount ?? '—' }}</strong>
           <span>缺联席会</span>
         </div>
-        <div>
+        <div class="kpi warn">
           <strong>{{ warningTotal }}</strong>
           <span>预警合计</span>
         </div>
@@ -689,7 +689,7 @@ async function load() {
     ])
     overview.value = o
     colleges.value = c as any
-    meetings.value = m as any
+    meetings.value = Array.isArray(m) ? m : (m as any)?.items || []
     transfers.value = t as any
     warnings.value = w as any
     applyFrequencyRules(rules as any[])

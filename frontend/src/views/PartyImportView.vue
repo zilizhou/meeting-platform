@@ -7,7 +7,7 @@
       <h2>历史会议导入</h2>
       <p>
         上传议题表、会议记录、会议纪要。党组织按单场解析；党政联席支持合订本一次导入多场。
-        未对齐齐全的场次默认不勾选（规则 B）。
+        未对齐齐全的场次默认不勾选（规则 B）。纪要按现行规则挂为线下附件归档，不做线上代签。
       </p>
     </div>
 
@@ -64,6 +64,9 @@
         2 · 核对场次
         <span class="stats">
           共 {{ preview.stats.total }} 场 · 已勾选 {{ selectedCount }} 场
+          <template v-if="isParty">
+            · 第一议题 {{ preview.stats.withFirstTopic ?? 0 }} 场
+          </template>
         </span>
       </div>
 
@@ -142,9 +145,22 @@
             </label>
           </div>
 
-          <div class="block-title">议题</div>
+          <div class="block-title">
+            议题
+            <span v-if="isParty" class="hint">党组织会议请标记「第一议题」</span>
+          </div>
           <div v-for="(t, ti) in m.topics" :key="ti" class="topic-card">
-            <input v-model="t.title" placeholder="议题标题" />
+            <div class="topic-head">
+              <input v-model="t.title" placeholder="议题标题" />
+              <label v-if="isParty" class="first-topic-toggle">
+                <input
+                  type="checkbox"
+                  :checked="!!t.isFirstTopic"
+                  @change="onFirstTopicToggle(m, ti, ($event.target as HTMLInputElement).checked)"
+                />
+                第一议题
+              </label>
+            </div>
             <textarea v-model="t.resolutionSummary" rows="2" placeholder="决议摘要" />
           </div>
 
@@ -175,7 +191,7 @@
             </el-table-column>
           </el-table>
 
-          <div class="block-title">纪要正文</div>
+          <div class="block-title">纪要正文（线下附件将同步挂载 Word 原件）</div>
           <textarea v-model="m.minutesContent" rows="6" class="minutes" />
         </div>
 
@@ -229,6 +245,7 @@ type Draft = {
     title: string
     resolutionSummary: string
     minutesSection: string
+    isFirstTopic?: boolean
   }>
   people: Array<{
     name: string
@@ -250,7 +267,13 @@ type Preview = {
   collegeName: string | null
   warnings: string[]
   meetings: Draft[]
-  stats: { total: number; selected: number; unselected: number }
+  stats: {
+    total: number
+    selected: number
+    unselected: number
+    withFirstTopic?: number
+    missingFirstTopic?: number
+  }
 }
 
 const router = useRouter()
@@ -336,6 +359,13 @@ function selectAll(v: boolean) {
   for (const m of meetings.value) m.selected = v
 }
 
+/** 一场会议至多一条第一议题 */
+function onFirstTopicToggle(m: Draft, topicIndex: number, checked: boolean) {
+  for (let i = 0; i < (m.topics || []).length; i++) {
+    m.topics[i].isFirstTopic = checked && i === topicIndex
+  }
+}
+
 async function runPreview() {
   if (!canParse.value) return
   parsing.value = true
@@ -376,8 +406,8 @@ async function runConfirm() {
   try {
     await ElMessageBox.confirm(
       forced.length
-        ? `将导入 ${selectedCount.value} 场（其中 ${forced.length} 场未对齐齐全）。确认继续？`
-        : `确认导入 ${selectedCount.value} 场并直接归档？缺失人员将自动建账号（密码 123456）。`,
+        ? `将导入 ${selectedCount.value} 场（其中 ${forced.length} 场未对齐齐全）。纪要挂线下附件并直接归档，确认继续？`
+        : `确认导入 ${selectedCount.value} 场？纪要按线下附件归档（无线上代签），缺失人员将自动建账号（密码 123456）。`,
       '确认导入归档',
       { type: 'warning', confirmButtonText: '确认导入', cancelButtonText: '再看看' },
     )
@@ -560,6 +590,35 @@ async function runConfirm() {
 }
 .block-title {
   margin: 12px 0 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.block-title .hint {
+  font-weight: 500;
+  font-size: 12px;
+  color: #889;
+}
+.topic-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.topic-head input[type='text'],
+.topic-head > input:not([type='checkbox']) {
+  flex: 1;
+}
+.first-topic-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #a11;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 .form-grid input,
 .topic-card input,

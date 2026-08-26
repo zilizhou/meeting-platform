@@ -1,18 +1,27 @@
 <template>
-  <div class="create-page">
-    <div class="ui-hero" :class="isParty ? 'party' : 'joint'">
-      <div class="eyebrow"><b></b> {{ isParty ? '党委红轨' : '联席蓝轨' }} · 议题征集</div>
-      <h2>议题征集</h2>
-      <p>
-        {{
-          isParty
-            ? '党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。可先勾选下方第一议题，再描述事项；AI 辅助可选。'
-            : '先用自然语言描述事项，也可直接填写标题与内容；核对后提交进入议题库。'
-        }}
-      </p>
+  <div class="create-page" :class="{ embedded }">
+    <div v-if="!embedded" class="ui-hero" :class="heroClass">
+      <div class="eyebrow"><b></b> {{ heroEyebrow }} · 申报议题</div>
+      <h2>申报议题</h2>
+      <p>{{ heroDesc }}</p>
     </div>
 
-    <div v-if="isParty" class="rule-banner party">
+    <div class="panel">
+      <div class="step-label">用于哪类会议</div>
+      <p class="hint">可勾选一类或两类。勾选两类时，同一事项会分别写入党组织会议与党政联席会议议题库。</p>
+      <div class="checks">
+        <label class="check">
+          <input v-model="forParty" type="checkbox" />
+          党组织会议
+        </label>
+        <label class="check">
+          <input v-model="forJoint" type="checkbox" />
+          党政联席会议
+        </label>
+      </div>
+    </div>
+
+    <div v-if="forParty" class="rule-banner party">
       <strong>第一议题硬规则</strong>
       党组织会议必须有一项「第一议题」。请在本页勾选；创建会议时还须再次选定该项入议程。
       <label class="check first-topic-banner">
@@ -38,7 +47,6 @@
       </label>
     </div>
 
-    <!-- 步骤 1：描述 -->
     <div class="panel">
       <div class="step-label">1 · 事项描述</div>
       <label>
@@ -51,23 +59,27 @@
       </label>
       <button
         class="ui-btn"
-        :class="isParty ? 'party' : ''"
+        :class="forParty && !forJoint ? 'party' : ''"
         type="button"
         style="width: 100%; height: 42px"
         :disabled="assistLoading"
         @click="runAssist"
       >
-        {{ assistLoading ? '生成中…' : 'AI 辅助生成标题 / 内容 / 分类' }}
+        {{ assistLoading ? '生成中，请稍候…' : 'AI 辅助生成标题 / 内容 / 分类' }}
       </button>
+      <p v-if="assistHint" class="hint" :class="{ warn: assistFailed }">{{ assistHint }}</p>
       <button class="ui-btn light" type="button" style="width: 100%; height: 42px; margin-top: 8px" @click="skipAssist">
         跳过 AI，直接填写
       </button>
     </div>
 
-    <!-- 步骤 2：人工核对 -->
-    <div class="panel">
+    <div ref="resultEl" class="panel">
       <div class="step-label">2 · 人工核对与修改</div>
       <p class="hint">请仔细阅读并修改下方内容，确认无误后再提交到议题库。AI 不自动创建、不替代审签。</p>
+      <div v-if="assistNarrative" class="assist-note">
+        <strong>生成说明</strong>
+        <pre>{{ assistNarrative }}</pre>
+      </div>
 
       <label>
         <span>议题标题</span>
@@ -78,20 +90,30 @@
         <textarea v-model="form.content" rows="12" placeholder="背景、依据与拟议事项" />
       </label>
 
-      <div v-if="isParty" class="checks" style="margin-bottom: 12px">
+      <div v-if="forParty" class="checks" style="margin-bottom: 12px">
         <label class="check">
           <input v-model="isFirstTopic" type="checkbox" />
           本议题为第一议题（政治理论学习）
         </label>
       </div>
-      <p v-if="isParty && isFirstTopic" class="hint ok">已标记为第一议题，创建党组织会议时须勾选该项。</p>
+      <p v-if="forParty && isFirstTopic" class="hint ok">已标记为第一议题，创建党组织会议时须勾选该项。</p>
 
-      <label>
-        <span>议题分类</span>
-        <select v-model="form.categoryId" @change="onCategoryChange">
+      <label v-if="forParty">
+        <span>{{ forJoint ? '党组织会议分类' : '议题分类' }}</span>
+        <select v-model="form.partyCategoryId">
           <option value="">请选择</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">
+          <option v-for="c in partyCategories" :key="c.id" :value="c.id">
             {{ c.code === 'FIRST_TOPIC' ? `第一议题 · ${c.name}` : c.name }}
+          </option>
+        </select>
+      </label>
+
+      <label v-if="forJoint">
+        <span>{{ forParty ? '党政联席会议分类' : '议题分类' }}</span>
+        <select v-model="form.jointCategoryId" @change="onJointCategoryChange">
+          <option value="">请选择</option>
+          <option v-for="c in jointCategories" :key="c.id" :value="c.id">
+            {{ c.name }}
           </option>
         </select>
       </label>
@@ -99,13 +121,15 @@
       <div class="checks">
         <label class="check"><input v-model="form.isMajor" type="checkbox" /> 重大事项</label>
         <label class="check"><input v-model="form.isTempMotion" type="checkbox" /> 临时动议</label>
-        <label class="check"><input v-model="form.isEmergency" type="checkbox" /> 紧急临机</label>
-        <label v-if="!isParty" class="check">
+        <label v-if="forJoint" class="check">
+          <input v-model="form.isEmergency" type="checkbox" /> 紧急临机
+        </label>
+        <label v-if="forJoint" class="check">
           <input v-model="form.needPartyPrecheck" type="checkbox" /> 需党组织会议前置
         </label>
       </div>
 
-      <label v-if="!isParty && form.needPartyPrecheck">
+      <label v-if="forJoint && form.needPartyPrecheck">
         <span>关联党委决议</span>
         <select v-model="form.relatedPartyResolutionId">
           <option value="">请选择</option>
@@ -116,15 +140,15 @@
       </label>
 
       <div class="actions">
-        <button class="ui-btn light" type="button" @click="router.back()">取消</button>
+        <button class="ui-btn light" type="button" @click="onCancel">{{ embedded ? '返回列表' : '取消' }}</button>
         <button
           class="ui-btn"
-          :class="isParty ? 'party' : ''"
+          :class="forParty && !forJoint ? 'party' : ''"
           type="button"
           :disabled="saving"
           @click="submitToLibrary"
         >
-          {{ saving ? '提交中…' : '提交到议题库' }}
+          {{ submitLabel }}
         </button>
       </div>
     </div>
@@ -132,55 +156,86 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 
+interface CategoryItem {
+  id: string
+  name: string
+  code?: string
+  needPrecheck?: boolean
+}
+
+type MeetingKind = 'PARTY_COMMITTEE' | 'JOINT_CONFERENCE'
+
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-const meetingType = computed(() =>
-  String(route.query.meetingType || 'JOINT_CONFERENCE') === 'PARTY_COMMITTEE'
-    ? 'PARTY_COMMITTEE'
-    : 'JOINT_CONFERENCE',
+const props = withDefaults(
+  defineProps<{
+    embedded?: boolean
+  }>(),
+  { embedded: false },
 )
-const isParty = computed(() => meetingType.value === 'PARTY_COMMITTEE')
-const isFirstTopicCategory = computed(() => {
-  const cat = categories.value.find((c) => c.id === form.categoryId)
-  return cat?.code === 'FIRST_TOPIC'
+const emit = defineEmits<{
+  submitted: []
+  cancel: []
+}>()
+
+const queryType = String(route.query.meetingType || '')
+const forParty = ref(queryType === 'PARTY_COMMITTEE')
+const forJoint = ref(queryType === 'JOINT_CONFERENCE')
+
+const bothSelected = computed(() => forParty.value && forJoint.value)
+const anySelected = computed(() => forParty.value || forJoint.value)
+
+const heroClass = computed(() => {
+  if (bothSelected.value || !anySelected.value) return 'is-official'
+  return forParty.value ? 'party' : 'joint'
 })
-const firstTopicCategory = computed(() =>
-  categories.value.find((c) => c.code === 'FIRST_TOPIC'),
-)
-const isFirstTopic = computed({
-  get: () => isFirstTopicCategory.value,
-  set: (checked: boolean) => {
-    if (checked) {
-      if (firstTopicCategory.value) form.categoryId = firstTopicCategory.value.id
-      else ElMessage.warning('系统未配置第一议题分类，请联系管理员')
-    } else if (isFirstTopicCategory.value) {
-      form.categoryId = ''
-    }
-  },
+const heroEyebrow = computed(() => {
+  if (bothSelected.value || !anySelected.value) return '议题办理'
+  return forParty.value ? '党委红轨' : '联席蓝轨'
+})
+const heroDesc = computed(() => {
+  if (!anySelected.value) return '请先勾选本议题用于哪类会议，可同时用于党组织会议和党政联席会议。'
+  if (bothSelected.value) {
+    return '同一事项将分别写入两类会议议题库。党组织会议须有「第一议题」方可开会；联席会议题按双审规则办理。'
+  }
+  if (forParty.value) {
+    return '党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。可先勾选下方第一议题，再描述事项；AI 辅助可选。'
+  }
+  return '先用自然语言描述事项，也可直接填写标题与内容；核对后提交进入议题库。'
+})
+const submitLabel = computed(() => {
+  if (saving.value) return '提交中…'
+  if (bothSelected.value) return '分别提交到两类议题库'
+  return '提交到议题库'
 })
 
-const categories = ref<any[]>([])
+const partyCategories = ref<CategoryItem[]>([])
+const jointCategories = ref<CategoryItem[]>([])
 const colleges = ref<Array<{ id: string; name: string }>>([])
 const selectedCollegeId = ref('')
 const needCollegePick = computed(() => !auth.user?.collegeId)
 const partyResolved = ref<Array<{ title: string; resolutionId: string }>>([])
 const assistLoading = ref(false)
+const assistHint = ref('')
+const assistFailed = ref(false)
+const assistNarrative = ref('')
+const resultEl = ref<HTMLElement | null>(null)
 const saving = ref(false)
-const assist = ref<any>(null)
 const description = ref('')
 
 const form = reactive({
   title: '',
   content: '',
-  categoryId: '',
+  partyCategoryId: '',
+  jointCategoryId: '',
   isMajor: false,
   isTempMotion: false,
   isEmergency: false,
@@ -188,70 +243,128 @@ const form = reactive({
   relatedPartyResolutionId: '',
 })
 
-function onCategoryChange() {
-  const cat = categories.value.find((c) => c.id === form.categoryId)
+const firstTopicCategory = computed(() =>
+  partyCategories.value.find((c) => c.code === 'FIRST_TOPIC'),
+)
+const isFirstTopicCategory = computed(() => {
+  const cat = partyCategories.value.find((c) => c.id === form.partyCategoryId)
+  return cat?.code === 'FIRST_TOPIC'
+})
+const isFirstTopic = computed({
+  get: () => isFirstTopicCategory.value,
+  set: (checked: boolean) => {
+    if (checked) {
+      if (firstTopicCategory.value) form.partyCategoryId = firstTopicCategory.value.id
+      else ElMessage.warning('系统未配置第一议题分类，请联系管理员')
+    } else if (isFirstTopicCategory.value) {
+      form.partyCategoryId = ''
+    }
+  },
+})
+
+function onJointCategoryChange() {
+  const cat = jointCategories.value.find((c) => c.id === form.jointCategoryId)
   if (cat?.needPrecheck) form.needPartyPrecheck = true
 }
 
-function resetFormFlags() {
-  form.isMajor = false
-  form.isTempMotion = false
-  form.isEmergency = false
-  form.needPartyPrecheck = false
-  form.relatedPartyResolutionId = ''
+async function loadColleges() {
+  if (!needCollegePick.value || colleges.value.length) return
+  colleges.value = await http.get('/org/colleges')
+  if (!selectedCollegeId.value && colleges.value.length === 1) {
+    selectedCollegeId.value = colleges.value[0].id
+  }
 }
 
-async function loadMeta() {
-  categories.value = await http.get('/org/categories', {
-    params: { meetingType: meetingType.value },
+async function loadPartyMeta() {
+  partyCategories.value = await http.get('/org/categories', {
+    params: { meetingType: 'PARTY_COMMITTEE' },
   })
-  if (needCollegePick.value) {
-    colleges.value = await http.get('/org/colleges')
-    if (!selectedCollegeId.value && colleges.value.length === 1) {
-      selectedCollegeId.value = colleges.value[0].id
-    }
+}
+
+async function loadJointMeta() {
+  jointCategories.value = await http.get('/org/categories', {
+    params: { meetingType: 'JOINT_CONFERENCE' },
+  })
+  const partyTopics: any[] = await http.get('/topics', {
+    params: { meetingType: 'PARTY_COMMITTEE' },
+  })
+  partyResolved.value = partyTopics
+    .filter((t) => t.resolution?.id)
+    .map((t) => ({
+      title: t.title,
+      resolutionId: t.resolution.id,
+    }))
+}
+
+async function runAssistFor(meetingType: MeetingKind) {
+  return http.post(
+    '/ai/assist/create',
+    {
+      description: description.value.trim(),
+      meetingType,
+    },
+    { timeout: 90000 },
+  ) as Promise<any>
+}
+
+function applyAssistResult(res: any, meetingType: MeetingKind) {
+  const title = String(res?.suggestedTitle || '').trim()
+  const content = String(res?.suggestedContent || '').trim()
+  if (title) form.title = title
+  if (content) form.content = content
+  if (meetingType === 'PARTY_COMMITTEE') {
+    form.partyCategoryId =
+      res?.suggestedCategoryId || form.partyCategoryId || partyCategories.value[0]?.id || ''
+  } else {
+    form.jointCategoryId =
+      res?.suggestedCategoryId || form.jointCategoryId || jointCategories.value[0]?.id || ''
+    onJointCategoryChange()
   }
-  if (!isParty.value) {
-    const partyTopics: any[] = await http.get('/topics', {
-      params: { meetingType: 'PARTY_COMMITTEE' },
-    })
-    partyResolved.value = partyTopics
-      .filter((t) => t.resolution?.id)
-      .map((t) => ({
-        title: t.title,
-        resolutionId: t.resolution.id,
-      }))
+  if (res?.suggestions?.isMajor) form.isMajor = true
+  if (res?.suggestions?.isTempMotion) form.isTempMotion = true
+  if (meetingType === 'JOINT_CONFERENCE') {
+    if (res?.suggestions?.isEmergency) form.isEmergency = true
+    if (res?.suggestions?.needPartyPrecheck) form.needPartyPrecheck = true
   }
+  assistNarrative.value = String(res?.narrative || res?.outputText || '').trim()
 }
 
 async function runAssist() {
-  if (!description.value.trim() || description.value.trim().length < 4) {
-    ElMessage.warning('请先用几句话描述要提的议题（至少 4 字）')
+  assistFailed.value = false
+  assistHint.value = ''
+  if (!description.value.trim() || description.value.trim().length < 2) {
+    assistFailed.value = true
+    assistHint.value = '请先用几句话描述要提的议题'
+    ElMessage.warning(assistHint.value)
     return
   }
+  if (!anySelected.value) {
+    forJoint.value = true
+    assistHint.value = '未勾选会议类型，已默认按党政联席会议生成，可再勾选党组织会议。'
+  }
   assistLoading.value = true
+  assistHint.value = assistHint.value || '正在调用大模型起草标题与正文，大约需要几秒…'
   try {
-    const res: any = await http.post('/ai/assist/create', {
-      description: description.value.trim(),
-      meetingType: meetingType.value,
-    })
-    assist.value = res
-    form.title = res.suggestedTitle || form.title
-    form.content = res.suggestedContent || form.content
-    if (res.suggestedCategoryId) {
-      form.categoryId = res.suggestedCategoryId
-      onCategoryChange()
-    } else if (!form.categoryId) {
-      form.categoryId = categories.value[0]?.id || ''
+    if (forParty.value) await loadPartyMeta()
+    if (forJoint.value) await loadJointMeta()
+    const primary: MeetingKind = forParty.value ? 'PARTY_COMMITTEE' : 'JOINT_CONFERENCE'
+    const res = await runAssistFor(primary)
+    applyAssistResult(res, primary)
+    if (bothSelected.value && primary !== 'JOINT_CONFERENCE') {
+      const jointRes = await runAssistFor('JOINT_CONFERENCE')
+      applyAssistResult(jointRes, 'JOINT_CONFERENCE')
     }
-    resetFormFlags()
-    if (res.suggestions?.isMajor) form.isMajor = true
-    if (res.suggestions?.isTempMotion) form.isTempMotion = true
-    if (res.suggestions?.isEmergency) form.isEmergency = true
-    if (res.suggestions?.needPartyPrecheck) form.needPartyPrecheck = true
-    ElMessage.success('已生成建议稿，请人工核对后提交')
+    if (!form.title.trim() && !form.content.trim()) {
+      skipAssist()
+    }
+    assistHint.value = '已生成建议稿，请在下方核对标题、内容与分类后再提交。'
+    ElMessage.success('已生成建议稿，请向下核对后提交')
+    await nextTick()
+    resultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   } catch (e: any) {
-    ElMessage.error(String(e))
+    assistFailed.value = true
+    assistHint.value = String(e || '生成失败，请稍后重试，或点「跳过 AI，直接填写」')
+    ElMessage.error(assistHint.value)
   } finally {
     assistLoading.value = false
   }
@@ -269,7 +382,38 @@ function skipAssist() {
   }
 }
 
+function basePayload() {
+  const payload: Record<string, unknown> = {
+    title: form.title.trim(),
+    content: form.content.trim(),
+    isMajor: form.isMajor,
+    isTempMotion: form.isTempMotion,
+  }
+  if (needCollegePick.value) payload.collegeId = selectedCollegeId.value
+  return payload
+}
+
+function resetDraft() {
+  description.value = ''
+  assistHint.value = ''
+  assistFailed.value = false
+  assistNarrative.value = ''
+  form.title = ''
+  form.content = ''
+  form.partyCategoryId = ''
+  form.jointCategoryId = ''
+  form.isMajor = false
+  form.isTempMotion = false
+  form.isEmergency = false
+  form.needPartyPrecheck = false
+  form.relatedPartyResolutionId = ''
+}
+
 async function submitToLibrary() {
+  if (!anySelected.value) {
+    ElMessage.warning('请先勾选本议题用于哪类会议')
+    return
+  }
   if (needCollegePick.value && !selectedCollegeId.value) {
     ElMessage.warning('请先选择要写入的学院')
     return
@@ -282,41 +426,53 @@ async function submitToLibrary() {
     ElMessage.warning('请确认议题内容')
     return
   }
-  if (!form.categoryId) {
+  if (forParty.value && !form.partyCategoryId) {
     ElMessage.warning(
-      isParty.value && isFirstTopic.value
-        ? '请勾选「本议题为第一议题」，或选择议题分类'
-        : '请选择议题分类',
+      isFirstTopic.value ? '请勾选「本议题为第一议题」，或选择党组织会议分类' : '请选择党组织会议分类',
     )
     return
   }
-  if (!isParty.value && form.needPartyPrecheck && !form.relatedPartyResolutionId) {
+  if (forJoint.value && !form.jointCategoryId) {
+    ElMessage.warning('请选择党政联席会议分类')
+    return
+  }
+  if (forJoint.value && form.needPartyPrecheck && !form.relatedPartyResolutionId) {
     ElMessage.warning('需党组织会议前置时请关联党委决议')
     return
   }
   saving.value = true
   try {
-    const payload: any = {
-      title: form.title.trim(),
-      content: form.content.trim(),
-      categoryId: form.categoryId || undefined,
-      isMajor: form.isMajor,
-      isTempMotion: form.isTempMotion,
-      isEmergency: form.isEmergency,
-      needPartyPrecheck: form.needPartyPrecheck,
-      meetingType: meetingType.value,
+    const jobs: Promise<unknown>[] = []
+    if (forParty.value) {
+      jobs.push(
+        http.post('/topics', {
+          ...basePayload(),
+          meetingType: 'PARTY_COMMITTEE',
+          categoryId: form.partyCategoryId,
+        }),
+      )
     }
-    if (needCollegePick.value) {
-      payload.collegeId = selectedCollegeId.value
+    if (forJoint.value) {
+      const jointPayload: Record<string, unknown> = {
+        ...basePayload(),
+        meetingType: 'JOINT_CONFERENCE',
+        categoryId: form.jointCategoryId,
+        isEmergency: form.isEmergency,
+        needPartyPrecheck: form.needPartyPrecheck,
+      }
+      if (form.needPartyPrecheck) {
+        jointPayload.relatedPartyResolutionId = form.relatedPartyResolutionId
+      }
+      jobs.push(http.post('/topics', jointPayload))
     }
-    if (!isParty.value && form.needPartyPrecheck) {
-      payload.relatedPartyResolutionId = form.relatedPartyResolutionId
+    await Promise.all(jobs)
+    ElMessage.success(bothSelected.value ? '已分别写入两类议题库' : '已进入议题库')
+    if (props.embedded) {
+      resetDraft()
+      emit('submitted')
+    } else {
+      router.push({ path: '/topics', query: { mine: '1' } })
     }
-    await http.post('/topics', payload)
-    ElMessage.success('已进入议题库')
-    router.push({
-      name: isParty.value ? 'party-topics' : 'topics',
-    })
   } catch (e: any) {
     ElMessage.error(String(e))
   } finally {
@@ -324,17 +480,36 @@ async function submitToLibrary() {
   }
 }
 
-watch(meetingType, () => {
-  assist.value = null
-  description.value = ''
-  form.title = ''
-  form.content = ''
-  form.categoryId = ''
-  resetFormFlags()
-  loadMeta()
+function onCancel() {
+  if (props.embedded) emit('cancel')
+  else router.back()
+}
+
+watch(forParty, async (on) => {
+  if (on) await loadPartyMeta()
+  else {
+    form.partyCategoryId = ''
+    partyCategories.value = []
+  }
 })
 
-onMounted(loadMeta)
+watch(forJoint, async (on) => {
+  if (on) await loadJointMeta()
+  else {
+    form.jointCategoryId = ''
+    form.isEmergency = false
+    form.needPartyPrecheck = false
+    form.relatedPartyResolutionId = ''
+    jointCategories.value = []
+    partyResolved.value = []
+  }
+})
+
+onMounted(async () => {
+  await loadColleges()
+  if (forParty.value) await loadPartyMeta()
+  if (forJoint.value) await loadJointMeta()
+})
 </script>
 
 <style scoped>
@@ -360,6 +535,28 @@ onMounted(loadMeta)
 }
 .hint.warn {
   color: #9a3412;
+}
+.assist-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f4f8fc;
+  border: 1px solid #d7e4f2;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.assist-note strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.assist-note pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+  color: #334155;
+}
+.create-page.embedded {
+  margin-top: 0;
 }
 .panel {
   background: #fff;

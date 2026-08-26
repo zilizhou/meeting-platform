@@ -131,8 +131,8 @@
 
       <div v-if="!visibleGroups.length" class="ui-empty">
         {{ emptyText }}
-        <button class="ui-btn" type="button" style="margin-top: 12px" @click="router.push('/work')">
-          打开工作台
+        <button class="ui-btn" type="button" style="margin-top: 12px" @click="router.push('/topics-home')">
+          打开议题
         </button>
       </div>
     </template>
@@ -274,7 +274,7 @@ const emptyText = computed(() => {
   if (kind.value === 'review') return '当前没有待审议题'
   if (kind.value === 'minutes') return '当前没有待整理纪要'
   if (kind.value === 'supervision') return '当前没有督办事项'
-  return '暂无待办，可到工作台申报议题或查看议题库'
+  return '暂无待办，可到议题申报或查看议题库'
 })
 
 async function load() {
@@ -321,7 +321,7 @@ function go(item: TodoItem) {
     router.push('/supervisions')
     return
   }
-  router.push('/work')
+  router.push('/topics-home')
 }
 
 onMounted(load)

@@ -126,6 +126,54 @@ describe('会议智能助理 Agent（E2E）', () => {
     expect(alert.body.intent).toBe('SUPERVISION_ALERT');
     expect(String(alert.body.reply)).toMatch(/督办/);
 
+    const stats = await request(ctx.app.getHttpServer())
+      .post('/api/agent/chat')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ message: '本月一共有多少党组织会议？' })
+      .expect(201);
+    expect(stats.body.intent).toBe('STATS_ASK');
+    expect(String(stats.body.reply)).toMatch(/结论|场|党组织|共/);
+
+    const search = await request(ctx.app.getHttpServer())
+      .post('/api/agent/chat')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ message: '有哪些议题和人才引进有关？' })
+      .expect(201);
+    expect(search.body.intent).toBe('SEARCH_TOPIC');
+    expect(Array.isArray(search.body.actions)).toBe(true);
+    // 检索类只挂匹配议题入口，不塞无关审题待办
+    expect(
+      search.body.actions.every(
+        (a: any) =>
+          a.type === 'NAVIGATE' &&
+          !String(a.title || '').includes('密码学') &&
+          !String(a.title || '').includes('发展党员'),
+      ),
+    ).toBe(true);
+
+    const history = await request(ctx.app.getHttpServer())
+      .get('/api/agent/history')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(200);
+    expect(Array.isArray(history.body.messages)).toBe(true);
+    expect(history.body.messages.length).toBeGreaterThanOrEqual(2);
+    expect(history.body.messages.some((m: any) => m.role === 'user')).toBe(true);
+    expect(history.body.messages.some((m: any) => m.role === 'assistant')).toBe(
+      true,
+    );
+
+    const cleared = await request(ctx.app.getHttpServer())
+      .delete('/api/agent/history')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(200);
+    expect(cleared.body.ok).toBe(true);
+
+    const empty = await request(ctx.app.getHttpServer())
+      .get('/api/agent/history')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(200);
+    expect(empty.body.messages).toEqual([]);
+
     const draft = await request(ctx.app.getHttpServer())
       .post('/api/agent/chat')
       .set('Authorization', `Bearer ${ctx.users.dean.token}`)

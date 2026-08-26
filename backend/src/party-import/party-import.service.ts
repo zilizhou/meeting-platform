@@ -17,7 +17,6 @@ import { AuditService } from '../audit/audit.service';
 import { FilesService } from '../files/files.service';
 import { AuthUser } from '../common/types';
 import {
-  JointReviewSide,
   MeetingStatus,
   MeetingType,
   ResolutionType,
@@ -39,6 +38,7 @@ import {
   buildTopics,
   extractDocText,
   guessMeetingTitle,
+  isLikelyFirstTopic,
   normalizePersonName,
   parseAttendanceBlocks,
   parseCollegeHint,
@@ -62,8 +62,9 @@ const IMPORT_ROLES = [
   RoleCode.DEAN,
 ] as const;
 
-type UploadSlot = {
-  kind: 'agenda' | 'record' | 'minutes';
+/** 议题表 / 会议记录原件挂在首个议题材料上；纪要挂会议线下纪要附件 */
+type EvidenceSlot = {
+  kind: 'agenda' | 'record';
   file: Express.Multer.File;
 };
 
@@ -158,6 +159,25 @@ export class PartyImportService {
         `已识别党政联席合订本，共 ${meetings.length} 场；确认时仅导入勾选场次`,
       );
     }
+    batchWarnings.push(
+      '纪要将按现行规则挂为线下附件归档，不再做线上代签；议题表与会议记录作为原件材料保留。',
+    );
+
+    const withFirstTopic =
+      meetingType === 'PARTY_COMMITTEE'
+        ? meetings.filter((m) => m.topics.some((t) => t.isFirstTopic)).length
+        : 0;
+    const missingFirstTopic =
+      meetingType === 'PARTY_COMMITTEE'
+        ? meetings.filter(
+            (m) => m.selected && !m.topics.some((t) => t.isFirstTopic),
+          ).length
+        : 0;
+    if (meetingType === 'PARTY_COMMITTEE' && missingFirstTopic > 0) {
+      batchWarnings.push(
+        `有 ${missingFirstTopic} 场勾选会议未识别到「第一议题」；可在议题标题旁勾选标记，或按标题关键词自动识别。历史归档仍可导入。`,
+      );
+    }
 
     const selected = meetings.filter((m) => m.selected).length;
     return {
@@ -171,6 +191,8 @@ export class PartyImportService {
         total: meetings.length,
         selected,
         unselected: meetings.length - selected,
+        withFirstTopic,
+        missingFirstTopic,
       },
     };
   }
@@ -252,14 +274,19 @@ export class PartyImportService {
         count: results.length,
         meetingIds: results.map((r) => r.meetingId),
         createdUsers: createdUsersAll,
-        note: '历史会议批次导入（规则 B：仅勾选场次）',
+        note: '历史会议批次导入（线下纪要附件归档，规则 B：仅勾选场次）',
       },
     });
 
     return {
       meetingType,
       count: results.length,
+      summary: {
+        total: results.length,
+        archived: results.length,
+      },
       meetings: results,
+      items: results,
       createdUsers: createdUsersAll,
       link: results[0]?.link,
     };
@@ -324,6 +351,15 @@ export class PartyImportService {
     const toCreate = people.filter((p) => p.action === 'create');
     if (toCreate.length) {
       warnings.push(`将新建 ${toCreate.length} 人：${toCreate.map((p) => p.name).join('、')}`);
+    }
+    if (
+      meetingType === 'PARTY_COMMITTEE' &&
+      topics.length &&
+      !topics.some((t) => t.isFirstTopic)
+    ) {
+      warnings.push(
+        '未识别「第一议题（政治理论学习）」；请勾选对应议题，或改标题含「第一议题/政治理论学习」等关键词',
+      );
     }
 
     return {
@@ -481,22 +517,17 @@ export class PartyImportService {
       const shouldAttend = resolvedPeople.filter((p) => p.isFormal !== false).length;
       const actualAttend = resolvedPeople.filter((p) => p.status === 'attend').length;
 
-      let deanUserId: string | null = null;
-      if (meetingType === 'JOINT_CONFERENCE') {
-        const dean = await tx.user.findFirst({
-          where: {
-            collegeId,
-            enabled: true,
-            roles: { some: { role: { code: RoleCode.DEAN } } },
-          },
-        });
-        deanUserId = dean?.id || hostUserId;
-      }
-
       const mt =
         meetingType === 'JOINT_CONFERENCE'
           ? MeetingType.JOINT_CONFERENCE
           : MeetingType.PARTY_COMMITTEE;
+
+      const composedContent = this.composeMinutes(
+        minutesContent,
+        location,
+        hostName,
+        recorderName,
+      );
 
       const createdMeeting = await tx.meeting.create({
         data: {
@@ -534,39 +565,36 @@ export class PartyImportService {
           },
           minutes: {
             create: {
-              content: this.composeMinutes(
-                minutesContent,
-                location,
-                hostName,
-                recorderName,
-              ),
+              content: composedContent,
               version: 1,
               effectiveAt: scheduledAt || new Date(),
-              signs: {
-                create:
-                  meetingType === 'JOINT_CONFERENCE'
-                    ? [
-                        {
-                          userId: hostUserId,
-                          side: JointReviewSide.SECRETARY,
-                          signedAt: scheduledAt || new Date(),
-                        },
-                        {
-                          userId: deanUserId || hostUserId,
-                          side: JointReviewSide.DEAN,
-                          signedAt: scheduledAt || new Date(),
-                        },
-                      ]
-                    : [
-                        {
-                          userId: hostUserId,
-                          side: JointReviewSide.SECRETARY,
-                          signedAt: scheduledAt || new Date(),
-                        },
-                      ],
-              },
             },
           },
+        },
+        include: { minutes: true },
+      });
+
+      // 线下纪要：将 Word 原件挂到会议纪要附件（与现行「上传线下纪要」一致）
+      this.files.normalizeMulterFile(files.minutes);
+      this.files.assertAllowed(
+        files.minutes.originalname,
+        files.minutes.mimetype,
+      );
+      const minutesDir = this.files.ensureMeetingDir(collegeId, createdMeeting.id);
+      const minutesStored = this.files.buildStoredName(files.minutes.originalname);
+      writeFileSync(join(minutesDir, minutesStored), files.minutes.buffer);
+      const minutesRel = this.files.relativeMeetingPath(
+        collegeId,
+        createdMeeting.id,
+        minutesStored,
+      );
+      await tx.minutes.update({
+        where: { meetingId: createdMeeting.id },
+        data: {
+          filePath: minutesRel,
+          originalName: files.minutes.originalname,
+          mimeType: files.minutes.mimetype,
+          fileSize: files.minutes.size,
         },
       });
 
@@ -591,28 +619,44 @@ export class PartyImportService {
         });
       }
 
-      const uploadSlots: UploadSlot[] = [
+      const evidenceSlots: EvidenceSlot[] = [
         { kind: 'agenda', file: files.agenda },
         { kind: 'record', file: files.record },
-        { kind: 'minutes', file: files.minutes },
       ];
 
-      for (const [idx, topicDraft] of dto.topics.entries()) {
-        const firstTopicCategory =
-          idx === 0 && mt === MeetingType.PARTY_COMMITTEE
-            ? await tx.categoryDict.findFirst({
-                where: {
-                  meetingType: MeetingType.PARTY_COMMITTEE,
-                  code: FIRST_TOPIC_CODE,
-                },
-              })
-            : null;
+      const firstTopicCategory =
+        mt === MeetingType.PARTY_COMMITTEE
+          ? await tx.categoryDict.findFirst({
+              where: {
+                meetingType: MeetingType.PARTY_COMMITTEE,
+                code: FIRST_TOPIC_CODE,
+              },
+            })
+          : null;
+
+      // 优先用预览勾选的第一议题；否则按标题关键词识别（不强行把第 1 条当第一议题）
+      const topicsForWrite = dto.topics.map((t) => ({
+        ...t,
+        isFirstTopic: false,
+      }));
+      if (mt === MeetingType.PARTY_COMMITTEE && topicsForWrite.length) {
+        const explicit = dto.topics.findIndex((t) => t.isFirstTopic);
+        const auto = topicsForWrite.findIndex((t) =>
+          isLikelyFirstTopic(t.title),
+        );
+        const pick = explicit >= 0 ? explicit : auto;
+        if (pick >= 0) topicsForWrite[pick].isFirstTopic = true;
+      }
+
+      for (const [idx, topicDraft] of topicsForWrite.entries()) {
+        const useFirstTopic =
+          Boolean(topicDraft.isFirstTopic) && Boolean(firstTopicCategory?.id);
         const topic = await tx.topic.create({
           data: {
             collegeId,
             meetingId: createdMeeting.id,
             meetingType: mt,
-            categoryId: firstTopicCategory?.id,
+            categoryId: useFirstTopic ? firstTopicCategory!.id : undefined,
             title: topicDraft.title.trim(),
             content: [
               topicDraft.minutesSection?.trim() || '',
@@ -629,7 +673,7 @@ export class PartyImportService {
             materials: {
               create:
                 idx === 0
-                  ? uploadSlots.map((s) => ({
+                  ? evidenceSlots.map((s) => ({
                       name: this.materialLabel(s.kind, meetingType),
                       requiredKey: `IMPORT_${s.kind.toUpperCase()}`,
                       isRequired: false,
@@ -663,7 +707,7 @@ export class PartyImportService {
 
         if (idx === 0 && topic.materials.length) {
           for (const mat of topic.materials) {
-            const slot = uploadSlots.find(
+            const slot = evidenceSlots.find(
               (s) => mat.requiredKey === `IMPORT_${s.kind.toUpperCase()}`,
             );
             if (!slot) continue;
@@ -716,14 +760,20 @@ export class PartyImportService {
     hostName: string,
     recorderName: string,
   ) {
-    if (content.includes('会议地点') || content.includes('主持人') || content.includes('出席')) {
-      return `${content}\n\n——\n【导入说明】本纪要由历史 Word 原件导入，签署记录为归档代签。`;
+    const note =
+      '【导入说明】本纪要由历史 Word 原件导入；线下纪要附件已挂载，无需线上签署。';
+    if (
+      content.includes('会议地点') ||
+      content.includes('主持人') ||
+      content.includes('出席')
+    ) {
+      return `${content}\n\n——\n${note}`;
     }
     const header = [
       location ? `会议地点：${location}` : '',
       hostName ? `主持人：${hostName}` : '',
       recorderName ? `记录人：${recorderName}` : '',
-      '【导入说明】本纪要由历史 Word 原件导入，签署记录为归档代签，不代表线上重签。',
+      note,
       '',
     ]
       .filter(Boolean)
@@ -732,14 +782,13 @@ export class PartyImportService {
   }
 
   private materialLabel(
-    kind: UploadSlot['kind'],
+    kind: EvidenceSlot['kind'],
     meetingType: ImportMeetingType,
   ) {
     const prefix =
       meetingType === 'JOINT_CONFERENCE' ? '合订本原件' : '历史原件';
     if (kind === 'agenda') return `${prefix}·议题表`;
-    if (kind === 'record') return `${prefix}·会议记录`;
-    return `${prefix}·会议纪要`;
+    return `${prefix}·会议记录`;
   }
 
   private async resolveCollege(user: AuthUser, hint: string) {

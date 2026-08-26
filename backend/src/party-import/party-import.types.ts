@@ -13,6 +13,8 @@ export interface PartyImportTopicDraft {
   title: string;
   resolutionSummary: string;
   minutesSection: string;
+  /** 党组织会议：是否识别为「第一议题（政治理论学习）」 */
+  isFirstTopic?: boolean;
 }
 
 export interface PartyImportPersonDraft {
@@ -59,6 +61,10 @@ export interface MeetingImportPreview {
     total: number;
     selected: number;
     unselected: number;
+    /** 党组织：已识别第一议题的场次数 */
+    withFirstTopic: number;
+    /** 党组织：勾选场次中缺第一议题的数量 */
+    missingFirstTopic: number;
   };
 }
 

@@ -10,7 +10,13 @@
       <div class="side-brand">
         <div class="marks" aria-hidden="true"><i class="p" /><i class="j" /></div>
         <strong>明德同枢</strong>
-        <em>{{ isViewerShell ? '校级查阅 · 双会监管' : '二级学院双会管理系统' }}</em>
+        <em>{{
+          isSchoolShell
+            ? isViewerShell
+              ? '校级查阅 · 双会监管'
+              : '校级监管 · 双会总览'
+            : '二级学院双会管理系统'
+        }}</em>
       </div>
       <nav class="side-nav">
         <button
@@ -28,7 +34,7 @@
       <div class="side-more">
         <button v-if="canViewAudit" type="button" @click="router.push('/audit')">操作审计</button>
         <button
-          v-if="isAdmin && !isViewerShell"
+          v-if="isAdmin && !isSchoolShell"
           type="button"
           @click="router.push('/admin')"
         >
@@ -92,6 +98,42 @@ const isViewerShell = computed(
   () => isSchoolViewer.value && !isSchoolAdmin.value,
 )
 
+/** 校级管理员 / 校级查阅 / 分管查阅共用统计-议题-会议界面 */
+const isSchoolShell = computed(() => isSchoolAdmin.value || isSchoolViewer.value)
+
+const schoolTabs: TabItem[] = [
+  {
+    name: 'admin',
+    label: '总览',
+    path: '/admin',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-5H4v5Zm10-11h6V4h-6v5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+  },
+  {
+    name: 'school-topics',
+    label: '议题',
+    path: '/school-topics',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M7 4.5h10A1.5 1.5 0 0 1 18.5 6v13.2L12 16.2l-6.5 3V6A1.5 1.5 0 0 1 7 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.2 8.5h5.6M9.2 11.5h5.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  },
+  {
+    name: 'school-meetings',
+    label: '会议',
+    path: '/school-meetings',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  },
+  {
+    name: 'agent',
+    label: '智能体',
+    path: '/agent',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8"/><path d="M9.2 12.2h.01M14.8 12.2h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M9.2 14.6c.8.9 1.7 1.3 2.8 1.3s2-.4 2.8-1.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  },
+  {
+    name: 'me',
+    label: '我的',
+    path: '/me',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 19c1.5-3 4-4.5 7-4.5S17.5 16 19 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  },
+]
+
 const collegeTabs: TabItem[] = [
   {
     name: 'todo',
@@ -100,50 +142,23 @@ const collegeTabs: TabItem[] = [
     icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M8 7h11M8 12h11M8 17h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 7.2h.01M5 12.2h.01M5 17.2h.01" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`,
   },
   {
+    name: 'topics-home',
+    label: '议题',
+    path: '/topics-home',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M7 4.5h10A1.5 1.5 0 0 1 18.5 6v13.2L12 16.2l-6.5 3V6A1.5 1.5 0 0 1 7 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.2 8.5h5.6M9.2 11.5h5.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  },
+  {
     name: 'meet',
     label: '会议',
     path: '/meet',
     icon: `<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   },
-  {
-    name: 'work',
-    label: '工作台',
-    path: '/work',
-    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
-  },
-  {
-    name: 'agent',
-    label: '智能体',
-    path: '/agent',
-    icon: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8"/><path d="M9.2 12.2h.01M14.8 12.2h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M9.2 14.6c.8.9 1.7 1.3 2.8 1.3s2-.4 2.8-1.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  },
-  {
-    name: 'me',
-    label: '我的',
-    path: '/me',
-    icon: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 19c1.5-3 4-4.5 7-4.5S17.5 16 19 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  },
-]
-
-const viewerTabs: TabItem[] = [
-  {
-    name: 'admin',
-    label: '总览',
-    path: '/admin',
-    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-5H4v5Zm10-11h6V4h-6v5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
-  },
-  {
-    name: 'supervisions',
-    label: '督办',
-    path: '/supervisions',
-    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M9 11l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/></svg>`,
-  },
-  {
-    name: 'archives',
-    label: '档案',
-    path: '/archives',
-    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v8A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-10Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
-  },
+  // {
+  //   name: 'work',
+  //   label: '工作台',
+  //   path: '/work',
+  //   icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+  // },
   {
     name: 'agent',
     label: '智能体',
@@ -158,7 +173,7 @@ const viewerTabs: TabItem[] = [
   },
 ]
 
-const tabs = computed(() => (isViewerShell.value ? viewerTabs : collegeTabs))
+const tabs = computed(() => (isSchoolShell.value ? schoolTabs : collegeTabs))
 
 const tabNames = computed(() => new Set(tabs.value.map((t) => t.name)))
 
@@ -199,7 +214,22 @@ const canViewAudit = computed(() => {
 })
 
 function isTabActive(name: string) {
-  return route.name === name
+  if (route.name === name) return true
+  if (name === 'topics-home') {
+    return ['topics', 'party-topics', 'topic-create', 'topic-detail'].includes(
+      String(route.name),
+    ) && route.query.from !== 'school'
+  }
+  if (name === 'school-topics') {
+    return route.name === 'topic-detail' && route.query.from === 'school'
+  }
+  if (name === 'school-meetings') {
+    return route.name === 'meeting-detail' && route.query.from === 'school'
+  }
+  if (name === 'admin') {
+    return route.name === 'admin-ops'
+  }
+  return false
 }
 
 function goTab(name: string) {
@@ -210,24 +240,25 @@ function goTab(name: string) {
 /** 子页面固定回到业务父级，避免 history.back 落到无关页 */
 const BACK_PARENT: Record<string, string> = {
   archives: '/meet',
-  'party-topics': '/work',
-  topics: '/work',
-  'topic-create': '/work',
+  'party-topics': '/topics-home',
+  topics: '/topics-home',
+  'topic-create': '/topics-home',
   roster: '/work',
   supervisions: '/work',
 }
 
 const VIEWER_BACK_PARENT: Record<string, string> = {
-  archives: '/admin',
+  archives: '/school-meetings',
   supervisions: '/admin',
   audit: '/admin',
-  'meeting-detail': '/admin',
-  'topic-detail': '/admin',
+  'admin-ops': '/admin',
+  'meeting-detail': '/school-meetings',
+  'topic-detail': '/school-topics',
 }
 
 function goBack() {
   const name = String(route.name || '')
-  const parent = isViewerShell.value
+  const parent = isSchoolShell.value
     ? VIEWER_BACK_PARENT[name] || '/admin'
     : BACK_PARENT[name]
   if (parent) {
@@ -235,11 +266,11 @@ function goBack() {
     return
   }
   if (window.history.length > 1) router.back()
-  else router.push(isViewerShell.value ? '/admin' : '/todo')
+  else router.push(isSchoolShell.value ? '/admin' : '/todo')
 }
 
 async function loadTodoCount() {
-  if (isViewerShell.value) {
+  if (isSchoolShell.value) {
     todoCount.value = 0
     return
   }

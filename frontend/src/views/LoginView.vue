@@ -109,7 +109,7 @@ async function onSubmit() {
     const isAdmin =
       auth.user?.isSchoolAdmin || roles.includes('SCHOOL_ADMIN')
     const isViewerOnly = !isAdmin && roles.includes('SCHOOL_VIEWER')
-    router.push(isViewerOnly ? '/admin' : '/todo')
+    router.push(isAdmin || isViewerOnly ? '/admin' : '/todo')
   } catch (e: any) {
     error.value = String(e?.message || e || '登录失败')
   } finally {

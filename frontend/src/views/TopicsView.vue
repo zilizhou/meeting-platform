@@ -1,9 +1,15 @@
 <template>
   <div>
-    <div class="ui-hero joint">
-      <div class="eyebrow"><b></b> 联席蓝轨 · 议题库</div>
-      <h2>党政联席会议题库</h2>
-      <p>征集后的议题在此集中办理：补材料、提交双审、学院审核与入会准备。</p>
+    <div class="ui-hero is-official">
+      <div class="eyebrow"><b></b> {{ mineMode ? '我的议题' : '议题库' }}</div>
+      <h2>{{ mineMode ? '我的议题' : '议题库' }}</h2>
+      <p>
+        {{
+          mineMode
+            ? '仅显示您作为申报人提交的议题，可跟踪审核与入会进度。'
+            : '党组织会议与党政联席会议议题集中办理：补材料、审题与入会准备。'
+        }}
+      </p>
       <div class="nums">
         <button
           type="button"
@@ -11,7 +17,7 @@
           :class="{ on: activeTab === 'all' }"
           @click="activeTab = 'all'"
         >
-          <strong>{{ topics.length }}</strong><span>全部</span>
+          <strong>{{ scopedTopics.length }}</strong><span>全部</span>
         </button>
         <button
           type="button"
@@ -32,10 +38,10 @@
       </div>
     </div>
 
-    <div class="rule-banner">
+    <div v-if="!mineMode" class="rule-banner">
       <strong>可见范围 · 审题</strong>
-      书记、副书记、院长、副院长、学院管理员、会议秘书可看全量议题；列席、委员、部门负责人仅看与自己相关的议题。
-      学院管理员可直接同意/暂缓（联席会议题一次完成双审）。
+      书记、副书记、院长、副院长、学院管理员、会议秘书可看全量议题；其他人仅看与自己相关的议题。
+      学院管理员可直接审题。党组织会议须有「第一议题」方可开会；联席会议题由书记、院长双审。
       <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
     </div>
 
@@ -56,7 +62,7 @@
     </div>
 
     <div class="ui-sec">
-      <h3><i></i>议题列表</h3>
+      <h3><i></i>{{ mineMode ? '我的议题' : '议题列表' }}</h3>
       <div class="ui-sec-actions">
         <button
           v-if="roles.canCreateTopic.value"
@@ -64,7 +70,7 @@
           type="button"
           @click="openCreate"
         >
-          议题征集
+          申报议题
         </button>
         <button class="ui-link" type="button" @click="load">刷新</button>
         <span class="n">{{ filteredTopics.length }} 项</span>
@@ -72,23 +78,28 @@
     </div>
 
     <div v-if="!filteredTopics.length" class="ui-empty">
-      当前分组暂无议题
-      <div v-if="!topics.length && roles.canCreateTopic.value" style="margin-top: 10px">
-        <button class="ui-btn" type="button" @click="openCreate">去议题征集</button>
+      {{ mineMode ? '暂无本人申报的议题' : '当前分组暂无议题' }}
+      <div v-if="!scopedTopics.length && roles.canCreateTopic.value" style="margin-top: 10px">
+        <button class="ui-btn" type="button" @click="openCreate">去申报议题</button>
       </div>
     </div>
 
-    <article v-for="t in filteredTopics" :key="t.id" class="ui-card joint">
+    <article v-for="t in filteredTopics" :key="t.id" class="ui-card" :class="isPartyTopic(t) ? 'party' : 'joint'">
       <div class="top">
+        <span class="ui-tag" :class="isPartyTopic(t) ? 'party' : 'joint'">
+          {{ isPartyTopic(t) ? '党组织会议' : '党政联席会议' }}
+        </span>
         <span class="ui-tag" :class="statusInfo(t).tag">{{ statusInfo(t).label }}</span>
+        <span v-if="t.category?.code === 'FIRST_TOPIC'" class="ui-tag party">第一议题</span>
         <span v-if="t.isEmergency" class="ui-tag warn">紧急临机</span>
         <span v-else-if="t.isTempMotion" class="ui-tag warn">临时动议</span>
         <span v-if="t.isMajor" class="ui-tag warn">重大</span>
         <span v-if="t.needPartyPrecheck" class="ui-tag joint">党委前置</span>
+        <span v-if="t.transferTo" class="ui-tag joint">已转联席会</span>
         <span v-if="t.resolution?.isPublic" class="ui-tag ok">已公开</span>
       </div>
 
-      <h4 class="card-title" @click="$router.push(`/topics/${t.id}`)">{{ t.title }}</h4>
+      <h4 class="card-title" @click="$router.push(topicPath(t))">{{ t.title }}</h4>
       <p v-if="t.content" class="content-line">{{ t.content }}</p>
 
       <div class="meta">
@@ -99,17 +110,17 @@
 
       <div class="foot">
         <div class="foot-links">
-          <button class="ui-link" type="button" @click="$router.push(`/topics/${t.id}`)">详情</button>
+          <button class="ui-link" type="button" @click="$router.push(topicPath(t))">详情</button>
           <button
             v-if="roles.canSubmitReview.value && (t.status === 'DRAFT' || t.status === 'DEFERRED')"
             class="ui-link"
             type="button"
             @click="submitReview(t)"
           >
-            提交双审
+            {{ isPartyTopic(t) ? '提交书记审' : '提交双审' }}
           </button>
           <button
-            v-if="roles.canReviewJoint.value && t.status === 'PENDING_REVIEW'"
+            v-if="canReviewTopic(t) && t.status === 'PENDING_REVIEW'"
             class="ui-link"
             type="button"
             @click="review(t, 'APPROVED')"
@@ -117,7 +128,7 @@
             同意
           </button>
           <button
-            v-if="roles.canReviewJoint.value && t.status === 'PENDING_REVIEW'"
+            v-if="canReviewTopic(t) && t.status === 'PENDING_REVIEW'"
             class="ui-link"
             type="button"
             @click="review(t, 'REJECTED')"
@@ -156,18 +167,27 @@
       </div>
     </article>
 
-    <el-dialog v-model="editVisible" title="编辑党政联席会议题" width="560px">
+    <el-dialog v-model="editVisible" title="编辑议题" width="560px">
       <el-form label-width="110px">
         <el-form-item label="标题">
           <el-input v-model="editForm.title" />
         </el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="editForm.categoryId" style="width: 100%">
-            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+          <el-select v-model="editForm.categoryId" style="width: 100%" @change="onEditCategory">
+            <el-option
+              v-for="c in editCategories"
+              :key="c.id"
+              :label="c.code === 'FIRST_TOPIC' ? `第一议题 · ${c.name}` : c.name"
+              :value="c.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="内容">
           <el-input v-model="editForm.content" type="textarea" :rows="6" />
+        </el-form-item>
+        <el-form-item v-if="editingIsParty" label="第一议题">
+          <el-switch v-model="editForm.isFirstTopic" @change="onEditFirstTopic" />
+          <span class="muted" style="margin-left: 8px; font-size: 12px">政治理论学习，创建会议时必选</span>
         </el-form-item>
         <el-form-item label="重大事项">
           <el-switch v-model="editForm.isMajor" />
@@ -175,7 +195,7 @@
         <el-form-item label="临时动议">
           <el-switch v-model="editForm.isTempMotion" />
         </el-form-item>
-        <el-form-item label="紧急临机">
+        <el-form-item v-if="!editingIsParty" label="紧急临机">
           <el-switch v-model="editForm.isEmergency" />
         </el-form-item>
       </el-form>
@@ -194,7 +214,7 @@
         title="代审须先电话或当面征得书记/院长同意，系统仅留痕，不替代本人审签。"
       />
       <el-form label-width="100px">
-        <el-form-item label="代审一侧">
+        <el-form-item v-if="!proxyIsParty" label="代审一侧">
           <el-select v-model="proxyForm.proxySide" style="width: 100%">
             <el-option label="党委书记" value="SECRETARY" />
             <el-option label="院长" value="DEAN" />
@@ -229,21 +249,26 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 
+const route = useRoute()
 const router = useRouter()
 const roles = useRoles()
+const mineMode = computed(() => String(route.query.mine || '') === '1')
 const topics = ref<any[]>([])
-const categories = ref<any[]>([])
+const partyCategories = ref<any[]>([])
+const jointCategories = ref<any[]>([])
 const editVisible = ref(false)
 const saving = ref(false)
 const editingId = ref('')
+const editingMeetingType = ref<'PARTY_COMMITTEE' | 'JOINT_CONFERENCE'>('JOINT_CONFERENCE')
 const proxyVisible = ref(false)
 const proxySubmitting = ref(false)
 const proxyTopicId = ref('')
+const proxyIsParty = ref(false)
 const proxyForm = reactive({
   decision: 'APPROVED' as 'APPROVED' | 'REJECTED',
   proxyMethod: 'PHONE' as 'PHONE' | 'IN_PERSON',
@@ -255,6 +280,7 @@ const editForm = reactive({
   title: '',
   content: '',
   categoryId: '',
+  isFirstTopic: false,
   isMajor: false,
   isTempMotion: false,
   isEmergency: false,
@@ -288,10 +314,16 @@ watch(activeTab, () => {
   })
 })
 
+const scopedTopics = computed(() => {
+  if (!mineMode.value) return topics.value
+  const uid = roles.auth.user?.id
+  return topics.value.filter((t) => t.proposer?.id === uid)
+})
+
 const filteredTopics = computed(() => {
   const def = tabs.find((d) => d.key === activeTab.value)
-  if (!def || !def.statuses.length) return topics.value
-  return topics.value.filter((t) => def.statuses.includes(t.status))
+  if (!def || !def.statuses.length) return scopedTopics.value
+  return scopedTopics.value.filter((t) => def.statuses.includes(t.status))
 })
 
 const proxyTitle = computed(() =>
@@ -299,8 +331,8 @@ const proxyTitle = computed(() =>
 )
 
 function countOf(statuses: string[]) {
-  if (!statuses.length) return topics.value.length
-  return topics.value.filter((t) => statuses.includes(t.status)).length
+  if (!statuses.length) return scopedTopics.value.length
+  return scopedTopics.value.filter((t) => statuses.includes(t.status)).length
 }
 
 const LOCKED_STATUSES = ['ON_AGENDA', 'DISCUSSED', 'RESOLVED']
@@ -311,6 +343,23 @@ function formatTime(iso?: string) {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
+function isPartyTopic(t: any) {
+  return t.meetingType === 'PARTY_COMMITTEE'
+}
+
+function topicPath(t: any) {
+  return isPartyTopic(t) ? `/topics/${t.id}?from=party` : `/topics/${t.id}`
+}
+
+function canReviewTopic(t: any) {
+  return isPartyTopic(t) ? roles.canReviewParty.value : roles.canReviewJoint.value
+}
+
+const editingIsParty = computed(() => editingMeetingType.value === 'PARTY_COMMITTEE')
+const editCategories = computed(() =>
+  editingIsParty.value ? partyCategories.value : jointCategories.value,
+)
 
 function isOwner(t: any) {
   return t.proposer?.id === roles.auth.user?.id
@@ -329,15 +378,16 @@ function canDelete(t: any) {
 }
 
 function statusInfo(t: any): { label: string; tag: '' | 'party' | 'joint' | 'warn' | 'ok' | 'danger' } {
+  const party = isPartyTopic(t)
   switch (t.status) {
     case 'DRAFT':
       return { label: '草稿', tag: '' }
     case 'PENDING_REVIEW':
-      return { label: '待双审', tag: 'warn' }
+      return { label: party ? '待书记审题' : '待双审', tag: 'warn' }
     case 'DEFERRED':
       return { label: '已暂缓·待修改', tag: 'warn' }
     case 'APPROVED':
-      return { label: '双审通过·待排会', tag: 'joint' }
+      return { label: party ? '审题通过·待排会' : '双审通过·待排会', tag: 'joint' }
     case 'ON_AGENDA':
       if (t.meeting?.status === 'IN_PROGRESS') return { label: '讨论中', tag: 'danger' }
       if (t.meeting?.status === 'SCHEDULED') return { label: '已排期·待开会', tag: 'joint' }
@@ -345,7 +395,10 @@ function statusInfo(t: any): { label: string; tag: '' | 'party' | 'joint' | 'war
     case 'DISCUSSED':
       return { label: '已暂缓·待再议', tag: 'warn' }
     case 'RESOLVED':
-      return { label: '已决议', tag: 'ok' }
+      if (party && t.resolution?.resultType === 'PRINCIPLE_APPROVED') {
+        return { label: '已决议·原则同意', tag: 'ok' }
+      }
+      return { label: party ? '已决议·同意' : '已决议', tag: 'ok' }
     case 'REJECTED':
       return { label: '未通过', tag: 'danger' }
     default:
@@ -369,27 +422,46 @@ function decisionLabel(s: string) {
 }
 
 async function load() {
-  topics.value = await http.get('/topics', {
-    params: { meetingType: 'JOINT_CONFERENCE' },
-  })
-  categories.value = await http.get('/org/categories', {
-    params: { meetingType: 'JOINT_CONFERENCE' },
-  })
+  const [list, partyCats, jointCats] = await Promise.all([
+    http.get('/topics'),
+    http.get('/org/categories', { params: { meetingType: 'PARTY_COMMITTEE' } }),
+    http.get('/org/categories', { params: { meetingType: 'JOINT_CONFERENCE' } }),
+  ])
+  topics.value = list as any[]
+  partyCategories.value = partyCats as any[]
+  jointCategories.value = jointCats as any[]
 }
 
 function openCreate() {
-  router.push({ name: 'topic-create', query: { meetingType: 'JOINT_CONFERENCE' } })
+  router.push({ path: '/topics-home', query: { pane: 'create' } })
 }
 
 function openEdit(t: any) {
   editingId.value = t.id
+  editingMeetingType.value = isPartyTopic(t) ? 'PARTY_COMMITTEE' : 'JOINT_CONFERENCE'
   editForm.title = t.title
   editForm.content = t.content || ''
   editForm.categoryId = t.categoryId || ''
+  editForm.isFirstTopic = t.category?.code === 'FIRST_TOPIC'
   editForm.isMajor = Boolean(t.isMajor)
   editForm.isTempMotion = Boolean(t.isTempMotion)
   editForm.isEmergency = Boolean(t.isEmergency)
   editVisible.value = true
+}
+
+function onEditCategory() {
+  const cat = editCategories.value.find((c) => c.id === editForm.categoryId)
+  editForm.isFirstTopic = cat?.code === 'FIRST_TOPIC'
+}
+
+function onEditFirstTopic(checked: boolean) {
+  const first = editCategories.value.find((c) => c.code === 'FIRST_TOPIC')
+  if (checked) {
+    if (first) editForm.categoryId = first.id
+    else ElMessage.warning('系统未配置第一议题分类')
+  } else if (first && editForm.categoryId === first.id) {
+    editForm.categoryId = ''
+  }
 }
 
 async function saveEdit() {
@@ -405,7 +477,7 @@ async function saveEdit() {
       categoryId: editForm.categoryId || undefined,
       isMajor: editForm.isMajor,
       isTempMotion: editForm.isTempMotion,
-      isEmergency: editForm.isEmergency,
+      isEmergency: editingIsParty.value ? false : editForm.isEmergency,
     })
     ElMessage.success('已保存修改')
     editVisible.value = false
@@ -430,7 +502,7 @@ async function removeTopic(t: any) {
 async function submitReview(row: any) {
   try {
     await http.post(`/topics/${row.id}/submit-review`)
-    ElMessage.success('已提交书记、院长双审')
+    ElMessage.success(isPartyTopic(row) ? '已提交党委书记审题' : '已提交书记、院长双审')
     await load()
   } catch (e: any) {
     ElMessage.error(String(e))
@@ -449,6 +521,7 @@ async function review(row: any, decision: 'APPROVED' | 'REJECTED') {
 
 function openProxyReview(row: any, decision: 'APPROVED' | 'REJECTED') {
   proxyTopicId.value = row.id
+  proxyIsParty.value = isPartyTopic(row)
   proxyForm.decision = decision
   proxyForm.proxyMethod = 'PHONE'
   proxyForm.proxyCounterparty = ''
@@ -470,7 +543,7 @@ async function submitProxyReview() {
       proxy: true,
       proxyMethod: proxyForm.proxyMethod,
       proxyCounterparty: proxyForm.proxyCounterparty.trim(),
-      proxySide: proxyForm.proxySide,
+      ...(proxyIsParty.value ? {} : { proxySide: proxyForm.proxySide }),
     })
     ElMessage.success(proxyForm.decision === 'APPROVED' ? '已代审通过' : '已代审退回')
     proxyVisible.value = false
@@ -503,7 +576,7 @@ onMounted(load)
   cursor: pointer;
 }
 .card-title:hover {
-  color: var(--joint);
+  color: var(--text);
 }
 .content-line {
   margin: 6px 0 0;

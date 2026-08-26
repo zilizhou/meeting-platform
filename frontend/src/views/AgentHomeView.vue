@@ -2,13 +2,11 @@
   <div class="agent-page">
     <div ref="listEl" class="agent-scroll">
       <div class="ui-hero is-official">
-        <div class="eyebrow"><b></b> 辅助找事 · 不替代审签</div>
+        <div class="eyebrow"><b></b> {{ heroEyebrow }}</div>
         <h2>会议智能体</h2>
         <p>{{ statusNote }}</p>
         <div class="nums">
-          <div><strong>{{ dialogRounds }}</strong><span>轮对话</span></div>
-          <div><strong>{{ configured ? '在线' : '演示' }}</strong><span>运行模式</span></div>
-          <div><strong>{{ pendingActions }}</strong><span>待确认</span></div>
+          <div class="kpi sky"><strong>{{ dialogRounds }}</strong><span>轮对话</span></div>
         </div>
       </div>
 
@@ -28,7 +26,18 @@
 
       <div class="ui-sec">
         <h3><i></i>对话记录</h3>
-        <span class="n">{{ messages.length }} 条</span>
+        <div class="ui-sec-actions">
+          <span class="n">{{ messages.length }} 条</span>
+          <button
+            v-if="hasSavedHistory"
+            class="clear-btn"
+            type="button"
+            :disabled="loading"
+            @click="clearHistory"
+          >
+            清空记录
+          </button>
+        </div>
       </div>
 
       <article
@@ -42,7 +51,12 @@
             {{ m.role === 'user' ? '我' : '智能体' }}
           </span>
         </div>
-        <pre class="msg-text">{{ m.content }}</pre>
+        <div
+          v-if="m.role === 'assistant'"
+          class="msg-md"
+          v-html="renderMarkdown(m.content)"
+        />
+        <pre v-else class="msg-text">{{ m.content }}</pre>
         <div v-if="m.citations?.length" class="cites">
           <div v-for="c in m.citations" :key="c.id">{{ c.title }} · {{ c.source }}</div>
         </div>
@@ -63,7 +77,7 @@
                 type="button"
                 @click="go(a.link!)"
               >
-                前往办理
+                {{ navButtonLabel(a.link) }}
               </button>
               <template v-else-if="a.requiresConfirm">
                 <button class="ui-btn light" type="button" @click="confirmAction(a, false)">
@@ -99,6 +113,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
+import { renderMarkdown, stripAgentMetaSuffix } from '@/utils/markdown'
+import { streamAgentChat } from '@/utils/agentStream'
 
 interface AgentAction {
   id: string
@@ -124,16 +140,21 @@ const { isSchoolViewer, isSchoolAdmin } = useRoles()
 const isViewerOnly = computed(
   () => isSchoolViewer.value && !isSchoolAdmin.value,
 )
+const welcomeText = computed(() =>
+  isViewerOnly.value
+    ? '您好。可按学院、议题或会议关键词提问，例如「哪些学院召开了有关人才引进的会议」。答复供查阅参考，不替代正式审签。'
+    : '您好。可问今日简报、待办、议题检索与议事规则。审题、表决、签署只给引导，须您本人确认。',
+)
 const loading = ref(false)
 const input = ref('')
 const sessionId = ref('')
-const configured = ref(false)
 const listEl = ref<HTMLElement | null>(null)
+const hasSavedHistory = ref(false)
 const messages = ref<ChatMsg[]>([
   {
     role: 'assistant',
     content:
-      '您好。可问今日简报、待办、议题、督办与议事规则。审题/决议/签署只给建议，须您本人确认，不自动改状态。',
+      '您好。可问今日简报、待办、议题检索与议事规则。审题、表决、签署只给引导，须您本人确认。',
   },
 ])
 
@@ -143,27 +164,29 @@ const quickAsks = computed(() =>
     : ['今日简报', '我有哪些待办？', '督办预警', '缺席书面意见算不算票？'],
 )
 
-const statusNote = computed(() => {
-  if (isViewerOnly.value) {
-    return configured.value
-      ? '可问召开态势、缺开预警、督办与议事规则。只读辅助，不替代审签。'
-      : '演示/知识库模式 · 校级查阅只读辅助'
-  }
-  return configured.value
-    ? '可问今日简报、待办、议题与规则。审题/决议须您确认。'
-    : '演示/知识库模式 · 辅助不替代审签'
-})
+const heroEyebrow = computed(() =>
+  isViewerOnly.value ? '校级查阅 · 智能问答' : '会务问答 · 智能辅助',
+)
+
+const statusNote = computed(() =>
+  isViewerOnly.value
+    ? '用自然语言查询所管学院的会议、议题与召开情况；结果可一键打开详情，仅供查阅参考。'
+    : '用自然语言查待办、简报、议题与议事规则；需要办理时给出入口，审题与表决仍须本人确认。',
+)
 
 const dialogRounds = computed(() =>
   Math.max(0, messages.value.filter((m) => m.role === 'user').length),
 )
 
-const pendingActions = computed(() =>
-  messages.value.reduce((n, m) => n + (m.actions?.length || 0), 0),
-)
-
 function pageContext() {
   return { route: route.fullPath }
+}
+
+function navButtonLabel(link?: string) {
+  if (!link) return '前往办理'
+  if (link.startsWith('/meetings')) return '前往会议'
+  if (link.startsWith('/topics')) return '前往议题'
+  return '前往办理'
 }
 
 async function scrollBottom() {
@@ -171,12 +194,44 @@ async function scrollBottom() {
   if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight
 }
 
-async function loadStatus() {
+async function loadHistory() {
   try {
-    const res: any = await http.get('/agent/status')
-    configured.value = Boolean(res.configured)
+    const res: any = await http.get('/agent/history', { params: { limit: 80 } })
+    const saved = Array.isArray(res.messages) ? res.messages : []
+    if (res.sessionId) sessionId.value = String(res.sessionId)
+    hasSavedHistory.value = saved.length > 0
+    if (!saved.length) {
+      messages.value = [{ role: 'assistant', content: welcomeText.value }]
+      return
+    }
+    messages.value = [
+      { role: 'assistant', content: welcomeText.value },
+      ...saved.map((m: any) => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: stripAgentMetaSuffix(String(m.content || '')),
+        citations: m.citations,
+        actions: m.actions || [],
+      })),
+    ]
+    await scrollBottom()
   } catch {
-    configured.value = false
+    /* 无历史不影响使用 */
+  }
+}
+
+async function clearHistory() {
+  if (loading.value) return
+  loading.value = true
+  try {
+    await http.delete('/agent/history')
+    sessionId.value = ''
+    hasSavedHistory.value = false
+    messages.value = [{ role: 'assistant', content: welcomeText.value }]
+    ElMessage.success('对话记录已清空')
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  } finally {
+    loading.value = false
   }
 }
 
@@ -192,21 +247,61 @@ async function send() {
   input.value = ''
   loading.value = true
   await scrollBottom()
+
+  const assistant: ChatMsg = { role: 'assistant', content: '正在思考…' }
+  messages.value.push(assistant)
+  const idx = messages.value.length - 1
+  await scrollBottom()
+
   try {
-    const res: any = await http.post('/agent/chat', {
-      message: text,
-      sessionId: sessionId.value || undefined,
-      context: pageContext(),
-    })
-    sessionId.value = res.sessionId || sessionId.value
-    messages.value.push({
-      role: 'assistant',
-      content: res.reply || '（无回复）',
-      citations: res.citations,
-      actions: res.actions || [],
-    })
+    let started = false
+    await streamAgentChat(
+      {
+        message: text,
+        sessionId: sessionId.value || undefined,
+        context: pageContext(),
+      },
+      {
+        onStatus: () => {
+          if (!started) {
+            messages.value[idx] = { ...messages.value[idx], content: '' }
+          }
+        },
+        onToken: (chunk) => {
+          if (!started) {
+            started = true
+            messages.value[idx] = { ...messages.value[idx], content: '' }
+          }
+          const cur = messages.value[idx]
+          messages.value[idx] = {
+            ...cur,
+            content: (cur.content || '') + chunk,
+          }
+          void scrollBottom()
+        },
+        onDone: (payload) => {
+          sessionId.value = payload.sessionId || sessionId.value
+          hasSavedHistory.value = true
+          messages.value[idx] = {
+            role: 'assistant',
+            content: payload.reply || messages.value[idx].content || '（无回复）',
+            citations: payload.citations,
+            actions: payload.actions || [],
+          }
+        },
+        onError: (message) => {
+          messages.value[idx] = {
+            role: 'assistant',
+            content: `请求失败：${message}`,
+          }
+        },
+      },
+    )
   } catch (e: any) {
-    messages.value.push({ role: 'assistant', content: `请求失败：${String(e)}` })
+    messages.value[idx] = {
+      role: 'assistant',
+      content: `请求失败：${String(e)}`,
+    }
   } finally {
     loading.value = false
     await scrollBottom()
@@ -236,7 +331,10 @@ async function confirmAction(action: AgentAction, approved: boolean) {
   }
 }
 
-onMounted(loadStatus)
+onMounted(async () => {
+  messages.value = [{ role: 'assistant', content: welcomeText.value }]
+  await loadHistory()
+})
 </script>
 
 <style scoped>
@@ -260,6 +358,24 @@ onMounted(loadStatus)
   margin-left: 12%;
 }
 
+.clear-btn {
+  margin-left: auto;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.clear-btn:hover:not(:disabled) {
+  color: var(--party);
+}
+.clear-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .msg-card.ai::before {
   background: var(--joint);
 }
@@ -272,6 +388,53 @@ onMounted(loadStatus)
   font-size: 14px;
   line-height: 1.55;
   color: var(--text);
+}
+
+.msg-md {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  word-break: break-word;
+}
+.msg-md :deep(p) {
+  margin: 0 0 0.65em;
+}
+.msg-md :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.msg-md :deep(h1),
+.msg-md :deep(h2),
+.msg-md :deep(h3) {
+  margin: 0.4em 0 0.5em;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.msg-md :deep(ul),
+.msg-md :deep(ol) {
+  margin: 0.35em 0 0.65em;
+  padding-left: 1.35em;
+}
+.msg-md :deep(li) {
+  margin: 0.2em 0;
+}
+.msg-md :deep(strong) {
+  font-weight: 700;
+}
+.msg-md :deep(code) {
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+.msg-md :deep(pre) {
+  margin: 0.5em 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow-x: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
 }
 
 .cites {

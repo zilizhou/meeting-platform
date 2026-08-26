@@ -17,10 +17,11 @@ import {
   RoleCode,
   SupervisionStatus,
 } from '../common/constants';
+import { prismaCollegeIdFilter, getVisibleCollegeIds } from '../common/roles';
 import { AgentChatDto, AgentConfirmDto } from './dto/agent.dto';
 import { AgentAction, AgentChatResult } from './agent.types';
 
-const PROMPT_VERSION_AGENT = 'agent-chat-v2';
+const PROMPT_VERSION_AGENT = 'agent-chat-v3';
 const KIND_AGENT = 'AGENT_CHAT';
 const DISCLAIMER =
   '智能助理仅辅助汇报与查询；审题、表决、签署等须您本人确认。AI 不替代制度审签。';
@@ -79,6 +80,8 @@ export class AgentService {
         'DAILY_BRIEF',
         'TOPIC_BRIEF',
         'MEETING_BRIEF',
+        'STATS_ASK',
+        'OPEN_QA',
         'RISK_EXPLAIN',
         'DRAFT_REVIEW_COMMENT',
         'MESSAGE_DIGEST',
@@ -198,6 +201,12 @@ export class AgentService {
       const built = await this.searchTopics(user, message);
       reply = built.reply;
       actions.push(...built.actions);
+      // 检索结果已按会议/议题口径结构化，不再经 LLM 改写，避免口径错乱
+    } else if (intent === 'STATS_ASK') {
+      const built = await this.buildStatsAsk(user, message);
+      reply = built.reply;
+      actions.push(...built.actions);
+      // 统计数字已结构化，不再经 LLM 改写，避免口径/时段被改错
     } else if (intent === 'REPORT_TODOS' || intent === 'REPORT_PROGRESS') {
       reply = this.buildReport(user, todos, flow, intent);
       actions.push(...this.todoActions(todos.items.slice(0, 5)));
@@ -227,8 +236,36 @@ export class AgentService {
         actions.push(...built.actions);
       }
     } else {
-      reply = this.buildHelpReply(todos);
-      actions.push(...this.todoActions(todos.items.slice(0, 3)));
+      // 未命中专用意图：有大模型则开放问答；否则才回固定帮助模板
+      // 仅当检索真正命中相关议题时才挂入口卡，避免「无结果」却列出无关卡片
+      const wantTopicHint = /(议题|审题|材料|人才|实验室|经费|规划|会议)/.test(
+        message,
+      );
+      const topicHint = wantTopicHint
+        ? await this.searchTopics(user, message)
+        : null;
+      const open = await this.answerOpenQuestion(
+        user,
+        message,
+        todos,
+        flow,
+        topicHint?.reply,
+      );
+      if (open) {
+        reply = open.reply;
+        demo = open.demo;
+        provider = open.provider;
+        model = open.model;
+        if (topicHint?.actions?.length) actions.push(...topicHint.actions);
+      } else if (topicHint?.actions?.length) {
+        reply = topicHint.reply;
+        actions.push(...topicHint.actions);
+      } else if (topicHint && !topicHint.actions.length) {
+        reply = topicHint.reply;
+      } else {
+        reply = this.buildHelpReply(todos);
+        actions.push(...this.todoActions(todos.items.slice(0, 3)));
+      }
     }
 
     // 去重导航动作
@@ -267,13 +304,15 @@ export class AgentService {
         provider,
         model,
         promptVersion: PROMPT_VERSION_AGENT,
-        inputDigest: message.slice(0, 500),
+        inputDigest: message.slice(0, 2000),
         outputText: reply,
         metaJson: JSON.stringify({
           sessionId,
           intent,
           demo,
           actionIds: uniqActions.map((a) => a.id),
+          actions: uniqActions,
+          citations: citations || [],
           context: dto.context || null,
         }),
       },
@@ -288,6 +327,128 @@ export class AgentService {
     });
 
     return result;
+  }
+
+  /**
+   * SSE 流式对话：先完整生成答复，再按块推送 token，最后 done 带上 actions 等元数据。
+   */
+  async chatStream(
+    user: AuthUser,
+    dto: AgentChatDto,
+    emit: (event: string, data: unknown) => void,
+  ) {
+    emit('status', { phase: 'thinking' });
+    const result = await this.chat(user, dto);
+    emit('meta', {
+      sessionId: result.sessionId,
+      intent: result.intent,
+      demo: result.demo,
+      provider: result.provider,
+      model: result.model,
+    });
+    const text = String(result.reply || '');
+    const chunkSize = 14;
+    for (let i = 0; i < text.length; i += chunkSize) {
+      emit('token', { text: text.slice(i, i + chunkSize) });
+      // 轻微间隔，形成可读的流式效果
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    emit('done', {
+      sessionId: result.sessionId,
+      intent: result.intent,
+      reply: result.reply,
+      demo: result.demo,
+      provider: result.provider,
+      model: result.model,
+      citations: result.citations || [],
+      actions: result.actions || [],
+      disclaimer: result.disclaimer,
+    });
+  }
+
+  /** 当前用户智能体对话历史（按时间正序） */
+  async history(user: AuthUser, query?: { limit?: number }) {
+    const limit = Math.min(120, Math.max(1, Number(query?.limit) || 80));
+    const rows = await this.prisma.aiGeneration.findMany({
+      where: { userId: user.sub, kind: KIND_AGENT },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        inputDigest: true,
+        outputText: true,
+        metaJson: true,
+        provider: true,
+        model: true,
+        createdAt: true,
+      },
+    });
+    rows.reverse();
+
+    const messages: Array<{
+      id: string;
+      role: 'user' | 'assistant';
+      content: string;
+      createdAt: string;
+      citations?: AgentChatResult['citations'];
+      actions?: AgentAction[];
+      generationId?: string;
+    }> = [];
+
+    let sessionId = '';
+    for (const row of rows) {
+      let meta: any = {};
+      try {
+        meta = row.metaJson ? JSON.parse(row.metaJson) : {};
+      } catch {
+        meta = {};
+      }
+      if (meta.sessionId) sessionId = String(meta.sessionId);
+      const userText = String(row.inputDigest || '').trim();
+      if (userText) {
+        messages.push({
+          id: `${row.id}-u`,
+          role: 'user',
+          content: userText,
+          createdAt: row.createdAt.toISOString(),
+          generationId: row.id,
+        });
+      }
+      const reply = String(row.outputText || '').trim();
+      if (reply) {
+        messages.push({
+          id: `${row.id}-a`,
+          role: 'assistant',
+          content: reply,
+          createdAt: row.createdAt.toISOString(),
+          citations: Array.isArray(meta.citations) ? meta.citations : undefined,
+          actions: Array.isArray(meta.actions) ? meta.actions : undefined,
+          generationId: row.id,
+        });
+      }
+    }
+
+    return {
+      sessionId: sessionId || null,
+      messages,
+      totalTurns: rows.length,
+      disclaimer: DISCLAIMER,
+    };
+  }
+
+  /** 清空当前用户智能体对话记录 */
+  async clearHistory(user: AuthUser) {
+    const result = await this.prisma.aiGeneration.deleteMany({
+      where: { userId: user.sub, kind: KIND_AGENT },
+    });
+    await this.audit.log({
+      user,
+      action: 'AGENT_HISTORY_CLEAR',
+      resource: 'AgentSession',
+      resourceId: user.sub,
+      detail: { deleted: result.count },
+    });
+    return { ok: true, deleted: result.count };
   }
 
   async confirm(user: AuthUser, actionId: string, dto: AgentConfirmDto) {
@@ -388,7 +549,21 @@ export class AgentService {
     if (/会议简报|这场会|会中情况|签到情况|表决情况|会议概况/.test(message)) {
       return 'MEETING_BRIEF';
     }
-    if (/查找|搜索|有没有.*议题|搜一下/.test(message)) {
+    // 数量/统计类：本月有多少党组织会议、议题一共几项等
+    if (
+      /(多少|几场|几次|几项|几个|一共|共有|有几|数量|统计)/.test(message) &&
+      /(会议|议题|党组织|联席|双会|召开)/.test(message)
+    ) {
+      return 'STATS_ASK';
+    }
+    if (/本月|本学期|本年|今年|近\s*12\s*个月/.test(message) && /(召开|缺开|预警)/.test(message)) {
+      return 'STATS_ASK';
+    }
+    if (
+      /查找|搜索|有没有.*议题|有哪些.*议题|哪些议题|搜一下|和.+有关|相关议题|涉及.+议题|议题.*有关|有关.+的(?:会议|议题)|召开了?.+会议|哪些学院.*(?:会议|议题)/.test(
+        message,
+      )
+    ) {
       return 'SEARCH_TOPIC';
     }
     if (/待办|我有什么|要处理|提醒我|汇报一下/.test(message)) {
@@ -405,7 +580,7 @@ export class AgentService {
     if (/汇报|总结|概况/.test(message)) return 'REPORT_TODOS';
     // 在议题/会议页随口问 → 上下文简报
     if (context?.topicId || context?.meetingId) return 'CONTEXT_HELP';
-    return 'HELP';
+    return 'OPEN_QA';
   }
 
   private async maybePolish(question: string, facts: string, systemExtra: string) {
@@ -414,10 +589,327 @@ export class AgentService {
       const polished = await this.llm.chat(
         `你是高校双会议智能助理。${systemExtra} 禁止建议自动审批/表决/签署。`,
         `用户问：${question}\n\n事实材料：\n${facts}`,
-        { demoKind: 'material_summary' },
+        { demoKind: 'material_summary', fallbackOnNetworkError: false },
       );
       if (polished.demo) return null;
       return polished;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 解析用户话里的时间范围 */
+  private parseAskRange(message: string): {
+    label: string;
+    from: Date;
+    to: Date;
+  } {
+    const now = new Date();
+    const end = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
+    if (/本月|这个月|当月/.test(message)) {
+      const from = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { label: `${now.getFullYear()}年${now.getMonth() + 1}月`, from, to: end };
+    }
+    if (/本学期|这学期/.test(message)) {
+      const m = now.getMonth() + 1;
+      const from =
+        m >= 2 && m <= 7
+          ? new Date(now.getFullYear(), 1, 1)
+          : m >= 8
+            ? new Date(now.getFullYear(), 7, 1)
+            : new Date(now.getFullYear() - 1, 7, 1);
+      return { label: '本学期', from, to: end };
+    }
+    // 「一年来 / 近一年」按近 12 个月，须先于「多少→默认本月」
+    if (
+      /一年来|近一年来|这一年来|过去一年|近一年|一年内|近\s*一\s*年|近\s*12\s*个月|过去\s*12\s*个月/.test(
+        message,
+      )
+    ) {
+      const from = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+      return { label: '近12个月', from, to: end };
+    }
+    if (/本年|今年|本年度|这一年(?!来)/.test(message)) {
+      const from = new Date(now.getFullYear(), 0, 1);
+      return { label: `${now.getFullYear()}年`, from, to: end };
+    }
+    if (/全部|迄今|累计|一共有过/.test(message) && !/本月|本年|今年|一年/.test(message)) {
+      return {
+        label: '全部时段',
+        from: new Date(2000, 0, 1),
+        to: end,
+      };
+    }
+    // 未写时段时：带「年」倾向本年，否则本月
+    if (/多少|几场|几次|几项|统计/.test(message)) {
+      if (/年/.test(message)) {
+        const from = new Date(now.getFullYear(), 0, 1);
+        return { label: `${now.getFullYear()}年`, from, to: end };
+      }
+      const from = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { label: `${now.getFullYear()}年${now.getMonth() + 1}月`, from, to: end };
+    }
+    const from = new Date(now.getFullYear(), 0, 1);
+    return { label: `${now.getFullYear()}年`, from, to: end };
+  }
+
+  /** 从问句解析学院；仅限当前用户可见范围 */
+  private async resolveCollegeFromMessage(user: AuthUser, message: string) {
+    const visible = getVisibleCollegeIds(user);
+    const colleges = await this.prisma.college.findMany({
+      where:
+        visible === 'ALL'
+          ? {}
+          : visible.length
+            ? { id: { in: visible } }
+            : { id: '__none__' },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    const hit = colleges.find(
+      (c) =>
+        message.includes(c.name) ||
+        message.includes(c.name.replace(/学院$/, '')),
+    );
+    if (hit) return hit;
+    return null;
+  }
+
+  private async buildStatsAsk(user: AuthUser, message: string) {
+    const range = this.parseAskRange(message);
+    const namedCollege = await this.resolveCollegeFromMessage(user, message);
+    const collegeFilter = namedCollege
+      ? { collegeId: namedCollege.id }
+      : prismaCollegeIdFilter(user);
+    const scopeLabel = namedCollege
+      ? namedCollege.name
+      : '您的可见学院范围';
+    const askTopics = /议题/.test(message) && !/会议/.test(message);
+    const onlyParty =
+      /党组织|党委会/.test(message) && !/联席|双会/.test(message);
+    const onlyJoint =
+      /联席|党政联席/.test(message) && !/党组织|双会/.test(message);
+
+    const meetingTypeFilter = onlyParty
+      ? MeetingType.PARTY_COMMITTEE
+      : onlyJoint
+        ? MeetingType.JOINT_CONFERENCE
+        : undefined;
+
+    const dateOr = {
+      OR: [
+        { scheduledAt: { gte: range.from, lte: range.to } },
+        { scheduledAt: null, createdAt: { gte: range.from, lte: range.to } },
+      ],
+    };
+
+    const [partyMeetings, jointMeetings, partyTopics, jointTopics, sample] =
+      await Promise.all([
+        this.prisma.meeting.count({
+          where: {
+            ...collegeFilter,
+            meetingType: MeetingType.PARTY_COMMITTEE,
+            ...dateOr,
+          },
+        }),
+        this.prisma.meeting.count({
+          where: {
+            ...collegeFilter,
+            meetingType: MeetingType.JOINT_CONFERENCE,
+            ...dateOr,
+          },
+        }),
+        this.prisma.topic.count({
+          where: {
+            ...collegeFilter,
+            meetingType: MeetingType.PARTY_COMMITTEE,
+            createdAt: { gte: range.from, lte: range.to },
+          },
+        }),
+        this.prisma.topic.count({
+          where: {
+            ...collegeFilter,
+            meetingType: MeetingType.JOINT_CONFERENCE,
+            createdAt: { gte: range.from, lte: range.to },
+          },
+        }),
+        this.prisma.meeting.findMany({
+          where: {
+            ...collegeFilter,
+            ...(meetingTypeFilter ? { meetingType: meetingTypeFilter } : {}),
+            ...dateOr,
+          },
+          orderBy: [{ scheduledAt: 'desc' }, { createdAt: 'desc' }],
+          take: 8,
+          select: {
+            id: true,
+            title: true,
+            meetingType: true,
+            scheduledAt: true,
+            status: true,
+            college: { select: { name: true } },
+          },
+        }),
+      ]);
+
+    const meetingTotal = partyMeetings + jointMeetings;
+    const topicTotal = partyTopics + jointTopics;
+    const focusMeetings = onlyParty
+      ? partyMeetings
+      : onlyJoint
+        ? jointMeetings
+        : meetingTotal;
+    const focusTopics = onlyParty
+      ? partyTopics
+      : onlyJoint
+        ? jointTopics
+        : topicTotal;
+    const typeLabel = onlyParty
+      ? '党组织会议'
+      : onlyJoint
+        ? '党政联席会议'
+        : '双会（党组织+联席）';
+
+    const lines: string[] = [
+      askTopics
+        ? `【统计】${range.label} · ${scopeLabel} · ${typeLabel}议题`
+        : `【统计】${range.label} · ${scopeLabel} · ${typeLabel}`,
+      '',
+      askTopics
+        ? `结论：共 **${focusTopics}** 项议题。`
+        : `结论：共 **${focusMeetings}** 场会议。`,
+      '',
+      '明细：',
+      `- 党组织会议：${partyMeetings} 场；对应议题 ${partyTopics} 项`,
+      `- 党政联席会议：${jointMeetings} 场；对应议题 ${jointTopics} 项`,
+      `- 合计：会议 ${meetingTotal} 场 / 议题 ${topicTotal} 项`,
+      '',
+      `口径：会议按「召开时间（无则按创建时间）」落入「${range.label}」；议题按「创建时间」；范围：${scopeLabel}。`,
+    ];
+
+    if (sample.length) {
+      lines.push('', '相关会议：');
+      for (const m of sample) {
+        const when = m.scheduledAt
+          ? m.scheduledAt.toISOString().slice(0, 10)
+          : '待定';
+        const kind =
+          m.meetingType === MeetingType.PARTY_COMMITTEE
+            ? '党组织'
+            : '联席';
+        lines.push(
+          `- [${kind}] ${m.college?.name || ''} · ${m.title}（${when} · ${STATUS_LABEL[m.status] || m.status}）`,
+        );
+      }
+    }
+
+    lines.push('', DISCLAIMER);
+
+    const actions: AgentAction[] = [
+      this.makeAction({
+        type: 'NAVIGATE',
+        title: '打开校级会议查询',
+        description: '可按时间段进一步筛选',
+        link: '/school-meetings',
+        requiresConfirm: false,
+        executable: true,
+      }),
+      this.makeAction({
+        type: 'NAVIGATE',
+        title: '打开总览',
+        description: '查看部门对照与按月趋势',
+        link: '/admin',
+        requiresConfirm: false,
+        executable: true,
+      }),
+    ];
+
+    // 学院账号导航到学院会议页
+    if (!user.isSchoolAdmin && !user.roles?.includes(RoleCode.SCHOOL_VIEWER)) {
+      actions[0] = this.makeAction({
+        type: 'NAVIGATE',
+        title: '打开会议列表',
+        description: '查看本院会议',
+        link: '/meetings',
+        requiresConfirm: false,
+        executable: true,
+      });
+      actions[1] = this.makeAction({
+        type: 'NAVIGATE',
+        title: '打开待办',
+        description: '继续办理会务',
+        link: '/todo',
+        requiresConfirm: false,
+        executable: true,
+      });
+    }
+
+    return { reply: lines.join('\n'), actions };
+  }
+
+  /** 开放问答：用可见业务事实喂给大模型 */
+  private async answerOpenQuestion(
+    user: AuthUser,
+    message: string,
+    todos: Awaited<ReturnType<WorkspaceService['getTodos']>>,
+    flow: Awaited<ReturnType<WorkspaceService['getFlowBoard']>>,
+    topicSearchFacts?: string,
+  ): Promise<{
+    reply: string;
+    demo: boolean;
+    provider: string;
+    model: string;
+  } | null> {
+    if (!this.llm.isConfigured()) return null;
+
+    const monthFacts = await this.buildStatsAsk(user, '本月双会一共有多少会议');
+    const yearFacts = await this.buildStatsAsk(user, '本年双会一共有多少会议');
+    const facts = [
+      `用户：${user.realName}；角色：${(user.roles || []).join(',') || '无'}`,
+      `待办合计：${todos.summary.total}`,
+      ...todos.items.slice(0, 8).map(
+        (t) =>
+          `- 待办[${TODO_TYPE_LABEL[t.type] || t.type}] ${t.title}`,
+      ),
+      `流程看板·联席进行中：${flow.joint.items.length}；党组织进行中：${flow.party.items.length}`,
+      '',
+      '本月统计事实：',
+      monthFacts.reply.replace(DISCLAIMER, '').trim(),
+      '',
+      '本年统计事实：',
+      yearFacts.reply.replace(DISCLAIMER, '').trim(),
+      topicSearchFacts
+        ? `\n议题检索事实：\n${topicSearchFacts.replace(DISCLAIMER, '').trim()}`
+        : '',
+    ].join('\n');
+
+    try {
+      const result = await this.llm.chat(
+        [
+          '你是曲阜师范大学二级学院双会议系统的会议智能助理。',
+          '只根据「系统事实」回答；用 Markdown（标题/列表/加粗）组织，简洁中文。',
+          '不确定就明说，并提示去总览/议题/会议页核对。',
+          '禁止编造场次、票数、人名；禁止建议自动审批、表决或签署。',
+          '若问题在问「哪些议题/相关议题」，只列检索命中的议题，不要罗列无关待办。',
+        ].join('\n'),
+        `用户问：${message}\n\n系统事实：\n${facts}`,
+        { demoKind: 'material_summary', fallbackOnNetworkError: false },
+      );
+      if (result.demo) return null;
+      return {
+        reply: `${result.text}\n\n${DISCLAIMER}`,
+        demo: false,
+        provider: result.provider,
+        model: result.model,
+      };
     } catch {
       return null;
     }
@@ -931,46 +1423,243 @@ export class AgentService {
     };
   }
 
+  private static readonly TOPIC_STOPWORDS = new Set([
+    '学院',
+    '学校',
+    '部门',
+    '会议',
+    '议题',
+    '召开',
+    '哪些',
+    '什么',
+    '有关',
+    '相关',
+    '一共',
+    '本月',
+    '本年',
+    '今年',
+    '双会',
+    '党组织',
+    '联席',
+    '党政',
+    '请',
+    '帮我',
+    '一下',
+  ]);
+
+  private extractTopicKeyword(message: string) {
+    const related =
+      message.match(/有关\s*(.+?)\s*的(?:会议|议题)/) ||
+      message.match(/召开了?\s*(?:有关|关于)?\s*(.+?)\s*的会议/) ||
+      message.match(/和\s*(.+?)\s*有关/) ||
+      message.match(/关于\s*(.+?)(?:的会议|的议题|的|有|？|\?|$)/) ||
+      message.match(/涉及\s*(.+?)(?:的|有|？|\?|$)/) ||
+      message.match(/哪些议题.*?(?:跟|与|和)?\s*(.+?)\s*(?:有关|相关)/);
+    if (related?.[1]) {
+      return related[1]
+        .replace(/的议题|议题|相关|有关|的会议|会议/g, '')
+        .trim()
+        .slice(0, 40);
+    }
+    const cleaned = message
+      .replace(
+        /查找|搜索|搜一下|有没有|有哪些|哪些学院|哪些|相关|有关|的议题|议题|的会议|会议|召开了|召开|简报|介绍|请|帮我|一下|都|什么|跟|与|和|学院/g,
+        ' ',
+      )
+      .replace(/[？?！!，,。.\s]+/g, ' ')
+      .trim();
+    // 去掉停用词后取最长有意义片段
+    const parts = cleaned
+      .split(/\s+/)
+      .map((p) => p.trim())
+      .filter(
+        (p) =>
+          p.length >= 2 && !AgentService.TOPIC_STOPWORDS.has(p),
+      );
+    if (parts.length) {
+      return parts.sort((a, b) => b.length - a.length)[0].slice(0, 40);
+    }
+    return cleaned.slice(0, 40);
+  }
+
+  /** 关键词变体：整词 + 有意义的首尾二字（排除停用词） */
+  private topicKeywordVariants(keyword: string) {
+    const set = new Set<string>([keyword]);
+    if (keyword.length >= 4) {
+      const head = keyword.slice(0, 2);
+      const tail = keyword.slice(-2);
+      if (!AgentService.TOPIC_STOPWORDS.has(head)) set.add(head);
+      if (!AgentService.TOPIC_STOPWORDS.has(tail)) set.add(tail);
+    }
+    return [...set].filter((s) => s.length >= 2);
+  }
+
+  private topicMatchesKeyword(
+    title: string,
+    content: string | null | undefined,
+    keyword: string,
+  ) {
+    const text = `${title}\n${content || ''}`;
+    if (text.includes(keyword)) return true;
+    if (keyword.length >= 4) {
+      const head = keyword.slice(0, 2);
+      const tail = keyword.slice(-2);
+      // 首尾若是停用词（如「学院」「会议」），禁止宽松匹配，避免全库误中
+      if (
+        AgentService.TOPIC_STOPWORDS.has(head) ||
+        AgentService.TOPIC_STOPWORDS.has(tail)
+      ) {
+        return false;
+      }
+      return text.includes(head) && text.includes(tail);
+    }
+    return false;
+  }
+
   private async searchTopics(user: AuthUser, message: string) {
-    const keyword = message
-      .replace(/查找|搜索|有没有|搜一下|议题|简报|介绍/g, '')
-      .trim()
-      .slice(0, 40);
-    if (keyword.length < 2) {
+    const keyword = this.extractTopicKeyword(message);
+    if (
+      keyword.length < 2 ||
+      AgentService.TOPIC_STOPWORDS.has(keyword)
+    ) {
       return {
-        reply: '请给出议题关键词，例如：「查找实验室设备」。',
+        reply: '请给出更具体的关键词，例如：「有哪些议题和人才引进有关」。',
         actions: [] as AgentAction[],
       };
     }
-    const collegeFilter =
-      user.collegeId && !user.isSchoolAdmin
-        ? { collegeId: user.collegeId }
-        : {};
+    const collegeFilter = prismaCollegeIdFilter(user);
+    const variants = this.topicKeywordVariants(keyword);
     const rows = await this.prisma.topic.findMany({
       where: {
         ...collegeFilter,
-        title: { contains: keyword },
+        OR: variants.flatMap((v) => [
+          { title: { contains: v } },
+          { content: { contains: v } },
+        ]),
       },
       orderBy: { updatedAt: 'desc' },
-      take: 8,
+      take: 40,
       select: {
         id: true,
         title: true,
+        content: true,
         status: true,
         meetingType: true,
+        college: { select: { id: true, name: true } },
+        meetingId: true,
+        meeting: {
+          select: {
+            id: true,
+            title: true,
+            scheduledAt: true,
+            college: { select: { name: true } },
+          },
+        },
       },
     });
-    if (!rows.length) {
+    const matched = rows
+      .filter((t) => this.topicMatchesKeyword(t.title, t.content, keyword))
+      .slice(0, 8);
+
+    // 「召开了…会议 / 哪些学院…会议」只回答会议，不挂未入会的议题卡
+    const askMeetingOnly =
+      /(?:会议|召开)/.test(message) &&
+      !/(?:哪些议题|相关议题|有关的议题|议题有关|议题和)/.test(message);
+
+    if (askMeetingOnly) {
+      const meetingMap = new Map<
+        string,
+        {
+          id: string;
+          title: string;
+          collegeName: string;
+          topicTitles: string[];
+          meetingType: string;
+        }
+      >();
+      for (const t of matched) {
+        if (!t.meeting?.id) continue;
+        const prev = meetingMap.get(t.meeting.id);
+        const collegeName =
+          t.college?.name || t.meeting.college?.name || '—';
+        if (prev) {
+          prev.topicTitles.push(t.title);
+        } else {
+          meetingMap.set(t.meeting.id, {
+            id: t.meeting.id,
+            title: t.meeting.title || t.title,
+            collegeName,
+            topicTitles: [t.title],
+            meetingType: t.meetingType,
+          });
+        }
+      }
+      const meetings = [...meetingMap.values()].slice(0, 8);
+      if (!meetings.length) {
+        return {
+          reply: [
+            `## 检索结果`,
+            ``,
+            `未找到与「**${keyword}**」相关、且已入会议程的会议。`,
+            `（有相关议题但尚未排会时，不会出现在「会议」结果中。）`,
+            ``,
+            DISCLAIMER,
+          ].join('\n'),
+          actions: [] as AgentAction[],
+        };
+      }
+      const colleges = [
+        ...new Set(meetings.map((m) => m.collegeName).filter((n) => n && n !== '—')),
+      ];
       return {
-        reply: `未找到标题含「${keyword}」的议题。`,
+        reply: [
+          `## 检索结果`,
+          ``,
+          `共找到 **${meetings.length}** 场与「**${keyword}**」相关的会议` +
+            (colleges.length ? `，涉及学院：${colleges.join('、')}` : '') +
+            `：`,
+          ``,
+          ...meetings.map((m, i) => {
+            const kind =
+              m.meetingType === MeetingType.PARTY_COMMITTEE
+                ? '党组织会议'
+                : '党政联席会议';
+            return `${i + 1}. **${m.title}**（${m.collegeName} · ${kind}）\n   - 相关议题：${m.topicTitles.join('；')}`;
+          }),
+          ``,
+          DISCLAIMER,
+        ].join('\n'),
+        actions: meetings.map((m) =>
+          this.makeAction({
+            type: 'NAVIGATE',
+            title: m.title,
+            description: `${m.collegeName} · 打开会议详情`,
+            link: `/meetings/${m.id}`,
+            requiresConfirm: false,
+            executable: true,
+          }),
+        ),
+      };
+    }
+
+    if (!matched.length) {
+      return {
+        reply: [
+          `## 检索结果`,
+          ``,
+          `未找到与「**${keyword}**」相关的议题或会议（已查标题与内容）。`,
+          ``,
+          DISCLAIMER,
+        ].join('\n'),
         actions: [] as AgentAction[],
       };
     }
-    const actions = rows.map((t) =>
+
+    const actions = matched.map((t) =>
       this.makeAction({
         type: 'NAVIGATE',
         title: t.title,
-        description: STATUS_LABEL[t.status] || t.status,
+        description: `${t.college?.name || '—'} · ${STATUS_LABEL[t.status] || t.status} · 打开议题详情`,
         link: `/topics/${t.id}${
           t.meetingType === MeetingType.PARTY_COMMITTEE ? '?from=party' : ''
         }`,
@@ -978,13 +1667,36 @@ export class AgentService {
         executable: true,
       }),
     );
+
+    const colleges = [
+      ...new Set(
+        matched
+          .map((t) => t.college?.name || t.meeting?.college?.name || '')
+          .filter(Boolean),
+      ),
+    ];
+
     return {
       reply: [
-        `找到 ${rows.length} 条相关议题（关键词：${keyword}）：`,
-        ...rows.map(
-          (t, i) =>
-            `${i + 1}. ${t.title}（${STATUS_LABEL[t.status] || t.status}）`,
-        ),
+        `## 检索结果`,
+        ``,
+        `共找到 **${matched.length}** 项与「**${keyword}**」相关的议题` +
+          (colleges.length ? `，涉及学院：${colleges.join('、')}` : '') +
+          `：`,
+        ``,
+        ...matched.map((t, i) => {
+          const kind =
+            t.meetingType === MeetingType.PARTY_COMMITTEE
+              ? '党组织会议'
+              : '党政联席会议';
+          const college = t.college?.name || '—';
+          const meetingBit = t.meeting?.title
+            ? ` · 已入会：${t.meeting.title}`
+            : '';
+          return `${i + 1}. **${t.title}**（${college} · ${STATUS_LABEL[t.status] || t.status} · ${kind}${meetingBit}）`;
+        }),
+        ``,
+        DISCLAIMER,
       ].join('\n'),
       actions,
     };

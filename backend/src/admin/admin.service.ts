@@ -456,13 +456,31 @@ export class AdminService {
 
   async meetingLedger(
     user: AuthUser,
-    query?: { collegeId?: string; meetingType?: string },
+    query?: {
+      collegeId?: string;
+      meetingType?: string;
+      q?: string;
+      from?: string;
+      to?: string;
+    },
   ) {
     this.assertSchoolAdmin(user);
-    return this.prisma.meeting.findMany({
+    const from = this.parseDay(query?.from);
+    const to = this.parseDay(query?.to, true);
+    const kw = query?.q?.trim();
+    const items = await this.prisma.meeting.findMany({
       where: {
         ...this.meetingCollegeWhere(user, query?.collegeId),
         ...(query?.meetingType ? { meetingType: query.meetingType } : {}),
+        ...this.meetingDateWhere(from, to),
+        ...(kw
+          ? {
+              OR: [
+                { title: { contains: kw } },
+                { college: { name: { contains: kw } } },
+              ],
+            }
+          : {}),
       },
       include: {
         college: { select: { id: true, code: true, name: true } },
@@ -478,9 +496,244 @@ export class AdminService {
         },
         minutes: { select: { effectiveAt: true, signs: true } },
       },
+      orderBy: [{ scheduledAt: 'desc' }, { createdAt: 'desc' }],
+      take: 200,
+    });
+    return {
+      summary: {
+        total: items.length,
+        party: items.filter((m) => m.meetingType === MeetingType.PARTY_COMMITTEE)
+          .length,
+        joint: items.filter((m) => m.meetingType === MeetingType.JOINT_CONFERENCE)
+          .length,
+      },
+      items,
+    };
+  }
+
+  private parseDay(value?: string, end = false) {
+    if (!value) return undefined;
+    const raw = value.includes('T') ? value : `${value}T${end ? '23:59:59' : '00:00:00'}`;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return d;
+  }
+
+  private monthKey(d: Date) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  private monthRange(from: Date, to: Date) {
+    const keys: string[] = [];
+    const cur = new Date(from.getFullYear(), from.getMonth(), 1);
+    const last = new Date(to.getFullYear(), to.getMonth(), 1);
+    while (cur <= last) {
+      keys.push(this.monthKey(cur));
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return keys;
+  }
+
+  private meetingDateWhere(from?: Date, to?: Date) {
+    if (!from && !to) return {};
+    const range: { gte?: Date; lte?: Date } = {};
+    if (from) range.gte = from;
+    if (to) range.lte = to;
+    return {
+      OR: [
+        { scheduledAt: range },
+        { scheduledAt: null, createdAt: range },
+      ],
+    };
+  }
+
+  /** 校级统计看板：部门、议题、会议及按月趋势 */
+  async dashboardStats(
+    user: AuthUser,
+    query?: { from?: string; to?: string; collegeId?: string },
+  ) {
+    this.assertSchoolAdmin(user);
+    const from = this.parseDay(query?.from);
+    const to = this.parseDay(query?.to, true);
+    const collegeWhere = this.meetingCollegeWhere(user, query?.collegeId);
+    const topicDate = from || to
+      ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } }
+      : {};
+    const meetingDate = this.meetingDateWhere(from, to);
+
+    const [colleges, topics, meetings, holding] = await Promise.all([
+      this.prisma.college.findMany({
+        where: this.collegeEntityWhere(user),
+        select: { id: true, code: true, name: true },
+        orderBy: { code: 'asc' },
+      }),
+      this.prisma.topic.findMany({
+        where: { ...collegeWhere, ...topicDate },
+        select: {
+          collegeId: true,
+          meetingType: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.meeting.findMany({
+        where: { ...collegeWhere, ...meetingDate },
+        select: {
+          collegeId: true,
+          meetingType: true,
+          status: true,
+          scheduledAt: true,
+          createdAt: true,
+        },
+      }),
+      this.computePeriodHolding(user),
+    ]);
+
+    const topicByStatus: Record<string, number> = {};
+    let partyTopics = 0;
+    let jointTopics = 0;
+    for (const t of topics) {
+      topicByStatus[t.status] = (topicByStatus[t.status] || 0) + 1;
+      if (t.meetingType === MeetingType.PARTY_COMMITTEE) partyTopics += 1;
+      else jointTopics += 1;
+    }
+
+    const meetingByStatus: Record<string, number> = {};
+    let partyMeetings = 0;
+    let jointMeetings = 0;
+    for (const m of meetings) {
+      meetingByStatus[m.status] = (meetingByStatus[m.status] || 0) + 1;
+      if (m.meetingType === MeetingType.PARTY_COMMITTEE) partyMeetings += 1;
+      else jointMeetings += 1;
+    }
+
+    const byCollege = colleges.map((c) => {
+      const ct = topics.filter((t) => t.collegeId === c.id);
+      const cm = meetings.filter((m) => m.collegeId === c.id);
+      return {
+        collegeId: c.id,
+        code: c.code,
+        name: c.name,
+        topicCount: ct.length,
+        partyTopics: ct.filter((t) => t.meetingType === MeetingType.PARTY_COMMITTEE)
+          .length,
+        jointTopics: ct.filter((t) => t.meetingType === MeetingType.JOINT_CONFERENCE)
+          .length,
+        meetingCount: cm.length,
+        partyMeetings: cm.filter((m) => m.meetingType === MeetingType.PARTY_COMMITTEE)
+          .length,
+        jointMeetings: cm.filter(
+          (m) => m.meetingType === MeetingType.JOINT_CONFERENCE,
+        ).length,
+      };
+    });
+
+    const seriesFrom =
+      from ||
+      new Date(new Date().getFullYear(), new Date().getMonth() - 11, 1);
+    const seriesTo = to || new Date();
+    const keys = this.monthRange(seriesFrom, seriesTo);
+    const monthly = keys.map((key) => {
+      const tIn = topics.filter((t) => this.monthKey(t.createdAt) === key);
+      const mIn = meetings.filter((m) =>
+        this.monthKey(m.scheduledAt || m.createdAt) === key,
+      );
+      return {
+        month: key,
+        partyTopics: tIn.filter((t) => t.meetingType === MeetingType.PARTY_COMMITTEE)
+          .length,
+        jointTopics: tIn.filter((t) => t.meetingType === MeetingType.JOINT_CONFERENCE)
+          .length,
+        partyMeetings: mIn.filter(
+          (m) => m.meetingType === MeetingType.PARTY_COMMITTEE,
+        ).length,
+        jointMeetings: mIn.filter(
+          (m) => m.meetingType === MeetingType.JOINT_CONFERENCE,
+        ).length,
+      };
+    });
+
+    return {
+      range: {
+        from: (from || seriesFrom).toISOString(),
+        to: (to || seriesTo).toISOString(),
+      },
+      holding,
+      colleges: { count: colleges.length, items: byCollege },
+      topics: {
+        total: topics.length,
+        party: partyTopics,
+        joint: jointTopics,
+        byStatus: topicByStatus,
+      },
+      meetings: {
+        total: meetings.length,
+        party: partyMeetings,
+        joint: jointMeetings,
+        byStatus: meetingByStatus,
+      },
+      monthly,
+    };
+  }
+
+  async searchTopics(
+    user: AuthUser,
+    query?: {
+      q?: string;
+      collegeId?: string;
+      meetingType?: string;
+      status?: string;
+      from?: string;
+      to?: string;
+    },
+  ) {
+    this.assertSchoolAdmin(user);
+    const from = this.parseDay(query?.from);
+    const to = this.parseDay(query?.to, true);
+    const kw = query?.q?.trim();
+    const items = await this.prisma.topic.findMany({
+      where: {
+        ...this.meetingCollegeWhere(user, query?.collegeId),
+        ...(query?.meetingType ? { meetingType: query.meetingType } : {}),
+        ...(query?.status ? { status: query.status } : {}),
+        ...(from || to
+          ? {
+              createdAt: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {}),
+              },
+            }
+          : {}),
+        ...(kw
+          ? {
+              OR: [
+                { title: { contains: kw } },
+                { content: { contains: kw } },
+                { college: { name: { contains: kw } } },
+                { proposer: { realName: { contains: kw } } },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        college: { select: { id: true, code: true, name: true } },
+        proposer: { select: { id: true, realName: true } },
+        category: { select: { id: true, name: true, code: true } },
+        meeting: { select: { id: true, title: true, status: true } },
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
+    return {
+      summary: {
+        total: items.length,
+        party: items.filter((t) => t.meetingType === MeetingType.PARTY_COMMITTEE)
+          .length,
+        joint: items.filter((t) => t.meetingType === MeetingType.JOINT_CONFERENCE)
+          .length,
+      },
+      items,
+    };
   }
 
   async warnings(user: AuthUser) {
@@ -741,7 +994,7 @@ export class AdminService {
       colleges: collegeId
         ? colleges.filter((c) => c.collegeId === collegeId)
         : colleges,
-      meetings,
+      meetings: meetings.items,
       transfers: collegeId
         ? transfers.filter((t) => t.sourceTopic.collegeId === collegeId)
         : transfers,

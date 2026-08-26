@@ -8,7 +8,7 @@ export class AssistCreateDto {
   })
   @ValidateIf((o: AssistCreateDto) => !o.title?.trim())
   @IsString()
-  @MinLength(4)
+  @MinLength(2)
   description?: string;
 
   @ApiPropertyOptional({ example: '关于引进高层次人才的议案' })

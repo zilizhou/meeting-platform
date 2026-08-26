@@ -42,7 +42,7 @@ export const onboardingGuides: Record<GuideKey, GuideDefinition> = {
     steps: [
       { title: '先看待办', description: '需要你处理的审核和督办会集中在这里。', path: '/todo', action: '打开待办' },
       { title: '再看会议', description: '查看即将召开、进行中和已经归档的会议。', path: '/meet', action: '打开会议' },
-      { title: '从工作台发起业务', description: '申报议题、管理议题库、组织会议和查询档案都从这里开始。', path: '/work', action: '打开工作台' },
+      { title: '从议题发起业务', description: '申报议题、查看本人议题或进入议题库都从这里开始。', path: '/topics-home', action: '打开议题' },
       { title: '需要帮助时', description: '在“我的”页面可以切换熟练模式，或随时重新开始引导。', path: '/me', action: '查看使用帮助' },
     ],
   },

@@ -63,28 +63,41 @@
             <span class="chev">›</span>
           </button>
           <button
-            v-if="canAccessSchoolDashboard && !isViewerOnly"
-            class="item"
-            type="button"
-            @click="router.push('/admin')"
-          >
-            <div class="ico">校</div>
-            <div>
-              <strong>校级监管</strong>
-              <em>召开态势 · AI 简报 · 巡视导出</em>
-            </div>
-            <span class="chev">›</span>
-          </button>
-          <button
-            v-if="isViewerOnly"
+            v-if="canAccessSchoolDashboard"
             class="item"
             type="button"
             @click="router.push('/admin')"
           >
             <div class="ico">览</div>
             <div>
-              <strong>返回总览</strong>
-              <em>学期召开 · 预警 · AI 简报</em>
+              <strong>总览</strong>
+              <em>部门 · 议题 · 会议</em>
+            </div>
+            <span class="chev">›</span>
+          </button>
+          <button
+            v-if="canAccessSchoolDashboard"
+            class="item"
+            type="button"
+            @click="router.push('/school-topics')"
+          >
+            <div class="ico">题</div>
+            <div>
+              <strong>议题查询</strong>
+              <em>所管部门议题</em>
+            </div>
+            <span class="chev">›</span>
+          </button>
+          <button
+            v-if="canAccessSchoolDashboard"
+            class="item"
+            type="button"
+            @click="router.push('/school-meetings')"
+          >
+            <div class="ico">会</div>
+            <div>
+              <strong>会议查询</strong>
+              <em>按时间查阅会议</em>
             </div>
             <span class="chev">›</span>
           </button>
@@ -189,7 +202,7 @@ const canManageUsers = computed(() => {
 
 async function load() {
   try {
-    if (isViewerOnly.value) {
+    if (isViewerOnly.value || canAccessSchoolDashboard.value) {
       const n: any = await http.get('/notifications/unread-count')
       unread.value = Number(n?.count ?? n ?? 0)
       return
