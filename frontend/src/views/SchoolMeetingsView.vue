@@ -187,6 +187,17 @@ const chartMax = computed(() => {
 
 const chartRows = computed(() => {
   const map = new Map<string, CollegeBar>()
+  // 先铺开所管全部学院，无数据也显示 0
+  for (const c of colleges.value) {
+    if (!c.collegeId) continue
+    map.set(c.collegeId, {
+      collegeId: c.collegeId,
+      name: c.name,
+      party: 0,
+      joint: 0,
+      total: 0,
+    })
+  }
   for (const m of chartSource.value) {
     const id = m.college?.id || m.collegeId || ''
     if (!id) continue
@@ -200,7 +211,9 @@ const chartRows = computed(() => {
     else if (m.meetingType === 'JOINT_CONFERENCE') row.joint += 1
     row.total += 1
   }
-  const sorted = [...map.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'zh'))
+  const sorted = [...map.values()].sort(
+    (a, b) => b.total - a.total || a.name.localeCompare(b.name, 'zh'),
+  )
   if (sorted.length <= CHART_TOP) return sorted
   const head = sorted.slice(0, CHART_TOP)
   const rest = sorted.slice(CHART_TOP)
@@ -301,14 +314,18 @@ async function load() {
     collegeId.value
       ? http.get('/admin/meetings', { params: baseParams })
       : Promise.resolve(null),
-    colleges.value.length ? Promise.resolve(null) : http.get('/admin/stats'),
+    http.get('/admin/stats'),
   ])
   const payload = unwrapMeetings(list)
   items.value = payload.items
   Object.assign(summary, payload.summary)
   chartSource.value = chartList ? unwrapMeetings(chartList).items : payload.items
-  const statsPayload = stats as { colleges?: { items?: Array<{ collegeId: string; name: string }> } } | null
-  if (statsPayload?.colleges?.items) colleges.value = statsPayload.colleges.items
+  const statsPayload = stats as {
+    colleges?: { items?: Array<{ collegeId: string; name: string }> }
+  } | null
+  if (statsPayload?.colleges?.items?.length) {
+    colleges.value = statsPayload.colleges.items
+  }
 }
 
 let timer: number | undefined

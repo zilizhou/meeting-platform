@@ -65,8 +65,14 @@
       <div v-else class="month-chart">
         <div v-for="row in data?.monthly || []" :key="row.month" class="month-col">
           <div class="bars">
-            <i class="party" :style="{ height: barH(row.partyMeetings) }" />
-            <i class="joint" :style="{ height: barH(row.jointMeetings) }" />
+            <div class="bar-wrap">
+              <span class="n party">{{ row.partyMeetings }}</span>
+              <i class="party" :style="{ height: barH(row.partyMeetings) }" />
+            </div>
+            <div class="bar-wrap">
+              <span class="n joint">{{ row.jointMeetings }}</span>
+              <i class="joint" :style="{ height: barH(row.jointMeetings) }" />
+            </div>
           </div>
           <em>{{ row.month.slice(5) }}月</em>
         </div>
@@ -80,30 +86,36 @@
     <section class="panel">
       <div class="panel-head">
         <h3>各部门对照</h3>
-        <span>议题数 · 会议数</span>
+        <div class="legend college-legend">
+          <span><i class="meet" />会议数</span>
+          <span><i class="topic" />议题数</span>
+        </div>
       </div>
-      <div v-if="!collegeMax" class="ui-empty">暂无部门数据</div>
+      <div v-if="!(data?.colleges?.items || []).length" class="ui-empty">暂无部门数据</div>
       <div v-else class="college-bars">
         <div v-for="c in data?.colleges?.items || []" :key="c.collegeId" class="college-row">
           <strong>{{ c.name }}</strong>
-          <div class="track">
-            <b class="meet" :style="{ width: pct(c.meetingCount, collegeMax) }" />
-            <b class="topic" :style="{ width: pct(c.topicCount, collegeMax) }" />
+          <div class="tracks">
+            <div class="track">
+              <b
+                v-if="c.meetingCount > 0"
+                class="meet"
+                :style="{ width: pct(c.meetingCount, collegeMax) }"
+              />
+            </div>
+            <div class="track">
+              <b
+                v-if="c.topicCount > 0"
+                class="topic"
+                :style="{ width: pct(c.topicCount, collegeMax) }"
+              />
+            </div>
           </div>
-          <em>会 {{ c.meetingCount }} · 题 {{ c.topicCount }}</em>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <h3>议题状态</h3>
-        <span>当前筛选范围内</span>
-      </div>
-      <div class="status-grid">
-        <div v-for="s in statusRows" :key="s.key">
-          <strong>{{ s.count }}</strong>
-          <span>{{ s.label }}</span>
+          <em>
+            <span class="meet-n">会 {{ c.meetingCount }}</span>
+            ·
+            <span class="topic-n">题 {{ c.topicCount }}</span>
+          </em>
         </div>
       </div>
     </section>
@@ -199,26 +211,6 @@ const collegeMax = computed(() => {
   return Math.max(1, ...rows.map((c) => Math.max(c.meetingCount, c.topicCount)))
 })
 
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: '草稿',
-  PENDING_REVIEW: '待审',
-  DEFERRED: '已暂缓',
-  APPROVED: '已通过',
-  ON_AGENDA: '已入会',
-  DISCUSSED: '待再议',
-  RESOLVED: '已决议',
-  REJECTED: '未通过',
-}
-
-const statusRows = computed(() => {
-  const map = data.value?.topics?.byStatus || {}
-  return Object.keys(STATUS_LABEL).map((key) => ({
-    key,
-    label: STATUS_LABEL[key],
-    count: map[key] || 0,
-  }))
-})
-
 function pad(n: number) {
   return String(n).padStart(2, '0')
 }
@@ -263,11 +255,13 @@ function applyPreset(key: Preset) {
 
 function barH(n: number) {
   const max = monthlyMax.value || 1
-  return `${Math.max(4, Math.round((n / max) * 88))}px`
+  if (n <= 0) return '2px'
+  return `${Math.max(6, Math.round((n / max) * 72))}px`
 }
 
 function pct(n: number, max: number) {
-  return `${Math.max(4, Math.round((n / Math.max(max, 1)) * 100))}%`
+  if (n <= 0) return '0%'
+  return `${Math.max(6, Math.round((n / Math.max(max, 1)) * 100))}%`
 }
 
 async function load() {
@@ -371,25 +365,45 @@ onMounted(() => {
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  min-height: 110px;
+  min-height: 128px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 4px 0 4px;
 }
 .month-col {
   flex: 1;
-  min-width: 28px;
+  min-width: 36px;
   text-align: center;
 }
 .month-col .bars {
   display: flex;
   justify-content: center;
   align-items: flex-end;
+  gap: 4px;
+  height: 100px;
+}
+.month-col .bar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   gap: 3px;
-  height: 88px;
+  min-width: 14px;
+}
+.month-col .bar-wrap .n {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.month-col .bar-wrap .n.party {
+  color: var(--party);
+}
+.month-col .bar-wrap .n.joint {
+  color: var(--joint);
 }
 .month-col i {
   display: block;
-  width: 8px;
+  width: 10px;
   border-radius: 4px 4px 0 0;
 }
 .month-col i.party,
@@ -414,6 +428,9 @@ onMounted(() => {
   font-size: 12px;
   color: var(--muted);
 }
+.panel-head .legend {
+  margin-top: 0;
+}
 .legend i {
   display: inline-block;
   width: 8px;
@@ -421,63 +438,81 @@ onMounted(() => {
   border-radius: 2px;
   margin-right: 4px;
 }
+.legend i.meet,
+.college-row .track .meet {
+  background: var(--joint);
+}
+.legend i.topic,
+.college-row .track .topic {
+  background: var(--party);
+}
 .college-bars {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+.college-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.1fr) minmax(120px, 2.2fr) auto;
+  gap: 10px;
+  align-items: center;
+}
 .college-row strong {
-  display: block;
   font-size: 13px;
-  margin-bottom: 4px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.college-row .tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .college-row .track {
-  position: relative;
-  height: 18px;
-  background: #f3f6fa;
-  border-radius: 8px;
+  height: 8px;
+  background: #e8edf5;
+  border-radius: 999px;
   overflow: hidden;
 }
 .college-row .track b {
-  position: absolute;
-  left: 0;
-  height: 8px;
-  border-radius: 8px;
-}
-.college-row .track .meet {
-  top: 1px;
-  background: var(--joint);
-}
-.college-row .track .topic {
-  top: 9px;
-  background: var(--party);
-  opacity: 0.75;
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 0;
 }
 .college-row em {
-  display: block;
-  margin-top: 4px;
-  font-size: 11px;
   font-style: normal;
+  font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
+  justify-self: end;
 }
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+.college-row .meet-n {
+  color: var(--joint);
+  font-weight: 700;
 }
-.status-grid div {
-  background: #f7f9fc;
-  border-radius: 12px;
-  padding: 10px 8px;
-  text-align: center;
+.college-row .topic-n {
+  color: var(--party);
+  font-weight: 700;
 }
-.status-grid strong {
-  display: block;
-  font-size: 18px;
-}
-.status-grid span {
-  font-size: 11px;
-  color: var(--muted);
+@media (max-width: 560px) {
+  .college-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'name nums'
+      'bars bars';
+  }
+  .college-row strong {
+    grid-area: name;
+  }
+  .college-row .tracks {
+    grid-area: bars;
+  }
+  .college-row em {
+    grid-area: nums;
+  }
 }
 .jump {
   display: grid;

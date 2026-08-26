@@ -178,6 +178,17 @@ const chartMax = computed(() => {
 
 const chartRows = computed(() => {
   const map = new Map<string, CollegeBar>()
+  // 先铺开所管全部学院，无数据也显示 0
+  for (const c of colleges.value) {
+    if (!c.collegeId) continue
+    map.set(c.collegeId, {
+      collegeId: c.collegeId,
+      name: c.name,
+      party: 0,
+      joint: 0,
+      total: 0,
+    })
+  }
   for (const t of chartSource.value) {
     const id = t.college?.id || t.collegeId || ''
     if (!id) continue
@@ -261,7 +272,7 @@ async function load() {
     collegeId.value
       ? http.get('/admin/topics', { params: baseParams })
       : Promise.resolve(null),
-    colleges.value.length ? Promise.resolve(null) : http.get('/admin/stats'),
+    http.get('/admin/stats'),
   ])
   const payload = unwrapTopics(list)
   items.value = payload.items
@@ -270,7 +281,7 @@ async function load() {
   const statsPayload = stats as {
     colleges?: { items?: Array<{ collegeId: string; name: string }> }
   } | null
-  if (statsPayload?.colleges?.items) {
+  if (statsPayload?.colleges?.items?.length) {
     colleges.value = statsPayload.colleges.items
   }
 }
