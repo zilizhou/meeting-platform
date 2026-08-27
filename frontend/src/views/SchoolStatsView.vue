@@ -135,14 +135,14 @@
     </section>
 
     <section class="panel recent-panel">
-      <div class="recent-sticky">
+      <div class="recent-head">
         <div class="ui-filter is-equal" role="tablist" aria-label="近期列表">
           <button
             type="button"
             role="tab"
             :aria-selected="recentTab === 'topics'"
             :class="{ on: recentTab === 'topics' }"
-            @click="recentTab = 'topics'"
+            @click="switchRecentTab('topics')"
           >
             近期议题
           </button>
@@ -151,7 +151,7 @@
             role="tab"
             :aria-selected="recentTab === 'meetings'"
             :class="{ on: recentTab === 'meetings' }"
-            @click="recentTab = 'meetings'"
+            @click="switchRecentTab('meetings')"
           >
             近期会议
           </button>
@@ -165,56 +165,58 @@
         </button>
       </div>
 
-      <div v-show="recentTab === 'topics'" class="recent-list">
-        <div v-if="!recentTopics.length" class="ui-empty">所选时段暂无议题</div>
-        <article
-          v-for="t in recentTopics"
-          :key="t.id"
-          class="list-card"
-          :class="t.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
-          role="link"
-          tabindex="0"
-          @click="openTopic(t.id)"
-          @keydown.enter="openTopic(t.id)"
-        >
-          <div class="list-top">
-            <span class="ui-tag" :class="t.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'">
-              {{ t.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '党政联席会议' }}
-            </span>
-            <span class="ui-tag">{{ statusLabel(t.status) }}</span>
-          </div>
-          <h4>{{ t.title }}</h4>
-          <div class="list-meta">
-            {{ t.college?.name || '—' }} · {{ t.meeting?.title || '未关联会议' }} ·
-            {{ formatDay(t.createdAt) }}
-          </div>
-        </article>
-      </div>
+      <div ref="recentScrollEl" class="recent-scroll">
+        <div v-show="recentTab === 'topics'" class="recent-list">
+          <div v-if="!recentTopics.length" class="ui-empty">所选时段暂无议题</div>
+          <article
+            v-for="t in recentTopics"
+            :key="t.id"
+            class="list-card"
+            :class="t.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
+            role="link"
+            tabindex="0"
+            @click="openTopic(t.id)"
+            @keydown.enter="openTopic(t.id)"
+          >
+            <div class="list-top">
+              <span class="ui-tag" :class="t.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'">
+                {{ t.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '党政联席会议' }}
+              </span>
+              <span class="ui-tag">{{ statusLabel(t.status) }}</span>
+            </div>
+            <h4>{{ t.title }}</h4>
+            <div class="list-meta">
+              {{ t.college?.name || '—' }} · {{ t.meeting?.title || '未关联会议' }} ·
+              {{ formatDay(t.createdAt) }}
+            </div>
+          </article>
+        </div>
 
-      <div v-show="recentTab === 'meetings'" class="recent-list">
-        <div v-if="!recentMeetings.length" class="ui-empty">所选时段暂无会议</div>
-        <article
-          v-for="m in recentMeetings"
-          :key="m.id"
-          class="list-card"
-          :class="m.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
-          role="link"
-          tabindex="0"
-          @click="openMeeting(m.id)"
-          @keydown.enter="openMeeting(m.id)"
-        >
-          <div class="list-top">
-            <span class="ui-tag" :class="m.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'">
-              {{ m.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '党政联席会议' }}
-            </span>
-            <span class="ui-tag">{{ meetingStatusLabel(m.status) }}</span>
-          </div>
-          <h4>{{ m.title }}</h4>
-          <div class="list-meta">
-            {{ m.college?.name || '—' }} · {{ formatDay(m.scheduledAt || m.createdAt) }} ·
-            议题 {{ m.topics?.length || 0 }} 项
-          </div>
-        </article>
+        <div v-show="recentTab === 'meetings'" class="recent-list">
+          <div v-if="!recentMeetings.length" class="ui-empty">所选时段暂无会议</div>
+          <article
+            v-for="m in recentMeetings"
+            :key="m.id"
+            class="list-card"
+            :class="m.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
+            role="link"
+            tabindex="0"
+            @click="openMeeting(m.id)"
+            @keydown.enter="openMeeting(m.id)"
+          >
+            <div class="list-top">
+              <span class="ui-tag" :class="m.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'">
+                {{ m.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '党政联席会议' }}
+              </span>
+              <span class="ui-tag">{{ meetingStatusLabel(m.status) }}</span>
+            </div>
+            <h4>{{ m.title }}</h4>
+            <div class="list-meta">
+              {{ m.college?.name || '—' }} · {{ formatDay(m.scheduledAt || m.createdAt) }} ·
+              议题 {{ m.topics?.length || 0 }} 项
+            </div>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -291,6 +293,7 @@ const recentTopics = ref<TopicRow[]>([])
 const recentMeetings = ref<MeetingRow[]>([])
 const collegeOpen = ref(false)
 const recentTab = ref<'topics' | 'meetings'>('topics')
+const recentScrollEl = ref<HTMLElement | null>(null)
 const preset = ref<Preset>('year')
 const from = ref('')
 const to = ref('')
@@ -433,6 +436,11 @@ function goMeetings() {
   router.push('/school-meetings')
 }
 
+function switchRecentTab(tab: 'topics' | 'meetings') {
+  recentTab.value = tab
+  if (recentScrollEl.value) recentScrollEl.value.scrollTop = 0
+}
+
 function unwrapList<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[]
   const items = (payload as { items?: T[] } | null)?.items
@@ -558,29 +566,34 @@ onMounted(() => {
   white-space: nowrap;
 }
 .recent-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--tab-h) - var(--safe-b) - 20px);
+  overflow: hidden;
   padding-top: 12px;
+  padding-bottom: 12px;
 }
-.recent-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 8;
-  margin: -12px -16px 0;
-  padding: 12px 16px 10px;
+.recent-head {
+  flex: 0 0 auto;
   background: #fff;
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 8px 12px -10px rgba(15, 53, 95, 0.18);
+  padding-bottom: 8px;
 }
-.recent-sticky .ui-filter {
+.recent-head .ui-filter {
   margin-bottom: 8px;
 }
 .recent-more {
   display: block;
   width: 100%;
   text-align: right;
-  margin-bottom: 2px;
 }
-.recent-list {
-  padding-top: 4px;
+.recent-scroll {
+  flex: 1 1 auto;
+  min-height: 180px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding-right: 2px;
 }
 .recent-list .list-card {
   margin: 0 0 10px;
@@ -599,6 +612,11 @@ onMounted(() => {
 }
 .recent-list .list-card.party:hover {
   border-color: rgba(176, 48, 48, 0.28);
+}
+@media (min-width: 1024px) {
+  .recent-panel {
+    max-height: calc(100dvh - 48px);
+  }
 }
 .list-top {
   display: flex;
