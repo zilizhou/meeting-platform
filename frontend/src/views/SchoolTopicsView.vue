@@ -15,13 +15,13 @@
         </div>
         <div class="kpi joint">
           <strong>{{ summary.joint }}</strong>
-          <span>党政联席会议</span>
+          <span>联席会议</span>
         </div>
       </div>
     </div>
 
     <div class="filter-card">
-      <input v-model="q" type="search" placeholder="搜索标题、学院、申报人、会议" @keyup.enter="load" />
+      <input v-model="q" type="search" placeholder="搜索标题、学院、会议" @keyup.enter="load" />
       <div class="row">
         <select v-model="collegeId" @change="load">
           <option value="">全部部门</option>
@@ -108,7 +108,7 @@
       <h4>{{ t.title }}</h4>
       <div class="meta">
         {{ t.college?.name || '—' }} · {{ t.meeting?.title || '未关联会议' }} ·
-        {{ t.proposer?.realName || '—' }} · {{ formatTime(t.createdAt) }}
+        {{ formatTime(t.createdAt) }}
       </div>
     </article>
   </div>
@@ -127,7 +127,6 @@ interface TopicRow {
   createdAt: string
   collegeId?: string
   college?: { id?: string; name: string }
-  proposer?: { realName: string }
   meeting?: { id?: string; title?: string; status?: string } | null
 }
 

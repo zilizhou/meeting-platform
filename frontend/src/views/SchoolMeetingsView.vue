@@ -15,7 +15,7 @@
         </div>
         <div class="kpi teal">
           <strong>{{ summary.joint }}</strong>
-          <span>党政联席会议</span>
+          <span>联席会议</span>
         </div>
       </div>
     </div>

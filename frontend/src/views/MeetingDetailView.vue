@@ -56,25 +56,19 @@
         <span class="n">{{ meeting.topics?.length || 0 }} 项</span>
       </div>
       <p v-if="canReorderTopics" class="agenda-hint">
-        拖拽卡片可调整顺序
+        按住左侧手柄拖动可调整顺序（手机可长按拖动）
         <template v-if="isParty">；排在第一位的即为本场第一议题</template>
       </p>
 
       <el-empty v-if="!meeting.topics?.length" description="暂无入会议题" :image-size="64" />
 
-      <div v-else class="topic-list">
+      <div v-else ref="topicListEl" class="topic-list">
         <div
           v-for="(topic, idx) in agendaTopics"
           :key="topic.id"
           class="topic-card"
-          :class="{ dragging: dragFromIndex === idx, 'drag-over': dragOverIndex === idx }"
-          :draggable="canReorderTopics"
-          @dragstart="onAgendaDragStart($event, idx)"
-          @dragover.prevent="onAgendaDragOver($event, idx)"
-          @dragleave="onAgendaDragLeave(idx)"
-          @drop.prevent="onAgendaDrop(idx)"
-          @dragend="onAgendaDragEnd"
-          @click="openTopicDialog(topic.id)"
+          :data-id="topic.id"
+          @click="onTopicCardClick(topic.id)"
         >
           <div class="topic-card-top">
             <span
@@ -276,9 +270,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import Sortable from 'sortablejs'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 import { exportMeetingMinutesDoc } from '@/utils/exportMinutesDoc'
@@ -463,9 +458,10 @@ const agendaTopics = computed(() => {
   })
 })
 
-const dragFromIndex = ref<number | null>(null)
-const dragOverIndex = ref<number | null>(null)
+const topicListEl = ref<HTMLElement | null>(null)
 const reordering = ref(false)
+let topicSortable: Sortable | null = null
+let suppressTopicClickUntil = 0
 
 function orderedTopics(m: any = meeting.value) {
   const topics = [...(m?.topics || [])]
@@ -478,55 +474,58 @@ function orderedTopics(m: any = meeting.value) {
   })
 }
 
-function onAgendaDragStart(e: DragEvent, idx: number) {
-  if (!canReorderTopics.value) {
-    e.preventDefault()
-    return
-  }
-  dragFromIndex.value = idx
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', String(idx))
-  }
+function destroyTopicSortable() {
+  topicSortable?.destroy()
+  topicSortable = null
 }
 
-function onAgendaDragOver(_e: DragEvent, idx: number) {
-  if (dragFromIndex.value === null || dragFromIndex.value === idx) return
-  dragOverIndex.value = idx
+function initTopicSortable() {
+  destroyTopicSortable()
+  if (!canReorderTopics.value || !topicListEl.value) return
+  topicSortable = Sortable.create(topicListEl.value, {
+    animation: 150,
+    handle: '.drag-handle',
+    draggable: '.topic-card',
+    ghostClass: 'topic-card-ghost',
+    chosenClass: 'topic-card-chosen',
+    dragClass: 'topic-card-dragging',
+    forceFallback: true,
+    fallbackTolerance: 4,
+    delay: 180,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
+    onStart() {
+      suppressTopicClickUntil = Date.now() + 400
+    },
+    async onEnd(evt) {
+      suppressTopicClickUntil = Date.now() + 400
+      if (evt.oldIndex == null || evt.newIndex == null || evt.oldIndex === evt.newIndex) return
+      if (reordering.value || !topicSortable) return
+      const topicIds = topicSortable.toArray().filter(Boolean)
+      if (topicIds.length < 2) return
+      reordering.value = true
+      try {
+        meeting.value = await http.post(`/meetings/${route.params.id}/topics/reorder`, {
+          topicIds,
+        })
+        ElMessage.success(
+          isParty.value ? '议题顺序已更新，首位为第一议题' : '议题顺序已更新',
+        )
+      } catch (e: any) {
+        ElMessage.error(String(e))
+        await load()
+      } finally {
+        reordering.value = false
+        await nextTick()
+        initTopicSortable()
+      }
+    },
+  })
 }
 
-function onAgendaDragLeave(idx: number) {
-  if (dragOverIndex.value === idx) dragOverIndex.value = null
-}
-
-async function onAgendaDrop(toIdx: number) {
-  const fromIdx = dragFromIndex.value
-  dragOverIndex.value = null
-  dragFromIndex.value = null
-  if (fromIdx === null || fromIdx === toIdx || reordering.value) return
-  const list = [...agendaTopics.value]
-  const [moved] = list.splice(fromIdx, 1)
-  if (!moved) return
-  list.splice(toIdx, 0, moved)
-  const topicIds = list.map((t: any) => t.id)
-  reordering.value = true
-  try {
-    meeting.value = await http.post(`/meetings/${route.params.id}/topics/reorder`, {
-      topicIds,
-    })
-    ElMessage.success(
-      isParty.value ? '议题顺序已更新，首位为第一议题' : '议题顺序已更新',
-    )
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  } finally {
-    reordering.value = false
-  }
-}
-
-function onAgendaDragEnd() {
-  dragFromIndex.value = null
-  dragOverIndex.value = null
+function onTopicCardClick(topicId: string) {
+  if (Date.now() < suppressTopicClickUntil) return
+  openTopicDialog(topicId)
 }
 
 function formatTime(v?: string) {
@@ -797,10 +796,22 @@ async function saveMinutes() {
 
 onMounted(load)
 
+onBeforeUnmount(() => {
+  destroyTopicSortable()
+})
+
 watch(
   () => route.params.id,
   (id, prev) => {
     if (id && id !== prev) load()
+  },
+)
+
+watch(
+  [() => meeting.value?.topics?.map((t: any) => t.id).join(','), canReorderTopics],
+  async () => {
+    await nextTick()
+    initTopicSortable()
   },
 )
 </script>
@@ -977,26 +988,28 @@ watch(
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
-.topic-card[draggable='true'] {
-  cursor: grab;
-}
-.topic-card.dragging {
-  opacity: 0.55;
-}
-.topic-card.drag-over {
-  border-color: var(--joint);
-  box-shadow: 0 0 0 2px rgba(26, 79, 139, 0.12);
-}
-.detail.party .topic-card.drag-over {
-  border-color: var(--party);
-  box-shadow: 0 0 0 2px rgba(176, 48, 48, 0.12);
-}
 .topic-card:hover {
   border-color: rgba(26, 79, 139, 0.28);
   box-shadow: 0 6px 16px rgba(15, 53, 95, 0.06);
 }
 .detail.party .topic-card:hover {
   border-color: rgba(176, 48, 48, 0.28);
+}
+.topic-card-ghost {
+  opacity: 0.45;
+  border-style: dashed;
+}
+.topic-card-chosen {
+  border-color: var(--joint);
+  box-shadow: 0 0 0 2px rgba(26, 79, 139, 0.12);
+}
+.detail.party .topic-card-chosen {
+  border-color: var(--party);
+  box-shadow: 0 0 0 2px rgba(176, 48, 48, 0.12);
+}
+.topic-card-dragging {
+  opacity: 0.92;
+  cursor: grabbing;
 }
 .topic-card-top {
   display: flex;
@@ -1009,15 +1022,20 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   background: #f1f5f9;
   color: #64748b;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: -2px;
   cursor: grab;
   user-select: none;
+  touch-action: none;
+  -webkit-user-select: none;
+}
+.drag-handle:active {
+  cursor: grabbing;
 }
 .topic-card-title {
   margin: 0;

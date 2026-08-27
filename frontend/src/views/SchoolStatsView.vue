@@ -19,7 +19,7 @@
         </div>
         <div class="kpi mint">
           <strong>{{ data?.holding?.bothOkCount ?? '—' }}</strong>
-          <span>双会齐全学院</span>
+          <span>双会齐全</span>
         </div>
       </div>
     </div>
