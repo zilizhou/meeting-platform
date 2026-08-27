@@ -16,7 +16,7 @@
         </button>
         <button
           type="button"
-          class="num kpi warn"
+          class="num kpi coral"
           :class="{ on: kind === 'review' }"
           @click="kind = 'review'"
         >
