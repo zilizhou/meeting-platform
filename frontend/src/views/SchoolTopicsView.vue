@@ -223,9 +223,9 @@ const statuses = [
 ]
 
 const meetingTypes: Array<{ key: string; label: string }> = [
-  { key: '', label: '全部' },
-  { key: 'PARTY_COMMITTEE', label: '党委会' },
-  { key: 'JOINT_CONFERENCE', label: '党政联席会' },
+  { key: '', label: '全部议题' },
+  { key: 'PARTY_COMMITTEE', label: '党委会议题' },
+  { key: 'JOINT_CONFERENCE', label: '党政联席会议题' },
 ]
 
 function setMeetingType(key: string) {
