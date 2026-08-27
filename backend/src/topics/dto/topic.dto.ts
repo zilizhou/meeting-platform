@@ -147,6 +147,14 @@ export class ReviewTopicDto {
   @IsOptional()
   @IsIn(['SECRETARY', 'DEAN'])
   proxySide?: 'SECRETARY' | 'DEAN';
+
+  @ApiPropertyOptional({
+    enum: ['SECRETARY', 'DEAN'],
+    description: '联席会议题审题时指定一侧（学院管理员可分侧审）',
+  })
+  @IsOptional()
+  @IsIn(['SECRETARY', 'DEAN'])
+  side?: 'SECRETARY' | 'DEAN';
 }
 
 export class AddMaterialDto {

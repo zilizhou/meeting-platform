@@ -7,35 +7,39 @@
       <div class="nums">
         <button
           type="button"
-          class="num all"
+          class="num kpi gold"
           :class="{ on: kind === 'all' }"
           @click="kind = 'all'"
         >
-          <strong>{{ counts.all }}</strong><span>全部</span>
+          <strong>{{ counts.all }}</strong>
+          <span>全部</span>
         </button>
         <button
           type="button"
-          class="num party"
+          class="num kpi warn"
           :class="{ on: kind === 'review' }"
           @click="kind = 'review'"
         >
-          <strong>{{ counts.review }}</strong><span>待审题</span>
+          <strong>{{ counts.review }}</strong>
+          <span>待审题</span>
         </button>
         <button
           type="button"
-          class="num joint"
+          class="num kpi sky"
           :class="{ on: kind === 'minutes' }"
           @click="kind = 'minutes'"
         >
-          <strong>{{ counts.minutes }}</strong><span>纪要</span>
+          <strong>{{ counts.minutes }}</strong>
+          <span>纪要</span>
         </button>
         <button
           type="button"
-          class="num party"
+          class="num kpi mint"
           :class="{ on: kind === 'supervision' }"
           @click="kind = 'supervision'"
         >
-          <strong>{{ counts.supervision }}</strong><span>督办</span>
+          <strong>{{ counts.supervision }}</strong>
+          <span>督办</span>
         </button>
       </div>
     </div>

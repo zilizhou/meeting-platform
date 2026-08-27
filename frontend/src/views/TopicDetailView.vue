@@ -22,34 +22,8 @@
       </p>
     </div>
 
-    <div class="detail-actions">
-      <button class="ui-btn light" type="button" @click="load">刷新</button>
+    <div v-if="showDetailActions" class="detail-actions">
       <template v-if="isParty">
-        <button
-          v-if="roles.canSubmitReview.value"
-          class="ui-btn party"
-          type="button"
-          :disabled="!canSubmit"
-          @click="submitReview"
-        >
-          提交书记审
-        </button>
-        <button
-          v-if="roles.canReviewParty.value && topic.status === 'PENDING_REVIEW'"
-          class="ui-btn party"
-          type="button"
-          @click="review('APPROVED')"
-        >
-          {{ roles.isSecretary.value ? '书记同意' : '同意' }}
-        </button>
-        <button
-          v-if="roles.canReviewParty.value && topic.status === 'PENDING_REVIEW'"
-          class="ui-btn light"
-          type="button"
-          @click="review('REJECTED')"
-        >
-          暂缓
-        </button>
         <button
           v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
           class="ui-btn light"
@@ -77,31 +51,6 @@
         </button>
       </template>
       <template v-else>
-        <button
-          v-if="roles.canSubmitReview.value"
-          class="ui-btn"
-          type="button"
-          :disabled="!canSubmit"
-          @click="submitReview"
-        >
-          提交双审
-        </button>
-        <button
-          v-if="roles.canReviewJoint.value && topic.status === 'PENDING_REVIEW'"
-          class="ui-btn"
-          type="button"
-          @click="review('APPROVED')"
-        >
-          同意
-        </button>
-        <button
-          v-if="roles.canReviewJoint.value && topic.status === 'PENDING_REVIEW'"
-          class="ui-btn light"
-          type="button"
-          @click="review('REJECTED')"
-        >
-          暂缓
-        </button>
         <button
           v-if="roles.canProxyReview.value && topic.status === 'PENDING_REVIEW'"
           class="ui-btn light"
@@ -251,12 +200,52 @@
             <span v-if="side.comment"> · {{ side.comment }}</span>
             <span v-if="side.decidedAt"> · {{ formatTime(side.decidedAt) }}</span>
           </div>
+          <div v-if="canActOnSide(side.key)" class="review-actions">
+            <button
+              class="ui-btn"
+              :class="{ party: isParty }"
+              type="button"
+              @click="reviewSide(side.key, 'APPROVED')"
+            >
+              同意
+            </button>
+            <button
+              class="ui-btn light"
+              type="button"
+              @click="reviewSide(side.key, 'REJECTED')"
+            >
+              暂缓
+            </button>
+          </div>
         </div>
         <el-empty
           v-if="!topic.jointReviews?.length"
           :description="isParty ? '尚未提交书记审题' : '尚未提交双审'"
           :image-size="64"
-        />
+        >
+          <button
+            v-if="roles.canSubmitReview.value && canSubmit"
+            class="ui-btn"
+            :class="{ party: isParty }"
+            type="button"
+            @click="submitReview"
+          >
+            {{ isParty ? '提交书记审' : '提交双审' }}
+          </button>
+        </el-empty>
+        <div
+          v-else-if="roles.canSubmitReview.value && canSubmit"
+          class="submit-again"
+        >
+          <button
+            class="ui-btn"
+            :class="{ party: isParty }"
+            type="button"
+            @click="submitReview"
+          >
+            {{ isParty ? '重新提交书记审' : '重新提交双审' }}
+          </button>
+        </div>
         <div class="hint">
           {{
             topic.isTempMotion
@@ -623,6 +612,18 @@ const canTransfer = computed(() => {
   return t === 'APPROVED' || t === 'PRINCIPLE_APPROVED'
 })
 
+const showDetailActions = computed(() => {
+  if (!topic.value) return false
+  if (
+    roles.canProxyReview.value &&
+    topic.value.status === 'PENDING_REVIEW'
+  ) {
+    return true
+  }
+  if (isParty.value && roles.canPartyResolve.value) return true
+  return false
+})
+
 const reviewSides = computed(() => {
   const reviews = topic.value?.jointReviews || []
   const sides = isParty.value
@@ -646,6 +647,26 @@ const reviewSides = computed(() => {
     }
   })
 })
+
+function canActOnSide(sideKey: string) {
+  const t = topic.value
+  if (!t) return false
+  if (t.status !== 'PENDING_REVIEW') return false
+  const row = reviewSides.value.find((s) => s.key === sideKey)
+  if (row && (row.decision === 'APPROVED' || row.decision === 'REJECTED')) {
+    return false
+  }
+  if (isParty.value) {
+    return roles.canReviewParty.value
+  }
+  if (roles.isSecretary.value && sideKey === 'SECRETARY') return true
+  if (roles.isDean.value && sideKey === 'DEAN') return true
+  // 学院管理员可对两侧分别审
+  if (roles.canReviewJoint.value && !roles.isSecretary.value && !roles.isDean.value) {
+    return true
+  }
+  return false
+}
 
 function goBack() {
   if (route.query.from === 'school') {
@@ -747,20 +768,22 @@ async function onDownload(row: any) {
   }
 }
 
-async function submitReview() {
+async function reviewSide(sideKey: string, decision: 'APPROVED' | 'REJECTED') {
   try {
-    await http.post(`/topics/${topic.value.id}/submit-review`)
-    ElMessage.success(isParty.value ? '已提交党委书记审题' : '已提交书记、院长双审')
+    const body: Record<string, string> = { decision }
+    if (!isParty.value) body.side = sideKey
+    await http.post(`/topics/${topic.value.id}/review`, body)
+    ElMessage.success(decision === 'APPROVED' ? '已同意' : '已暂缓')
     await load()
   } catch (e: any) {
     ElMessage.error(String(e))
   }
 }
 
-async function review(decision: 'APPROVED' | 'REJECTED') {
+async function submitReview() {
   try {
-    await http.post(`/topics/${topic.value.id}/review`, { decision })
-    ElMessage.success(decision === 'APPROVED' ? '已同意' : '已暂缓')
+    await http.post(`/topics/${topic.value.id}/submit-review`)
+    ElMessage.success(isParty.value ? '已提交党委书记审题' : '已提交书记、院长双审')
     await load()
   } catch (e: any) {
     ElMessage.error(String(e))
@@ -912,7 +935,7 @@ onMounted(load)
 }
 .review-row {
   display: grid;
-  grid-template-columns: 88px 110px 1fr;
+  grid-template-columns: 88px 88px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 10px 0;
@@ -920,6 +943,19 @@ onMounted(load)
 }
 .review-name {
   font-weight: 600;
+}
+.review-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.review-actions .ui-btn {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.submit-again {
+  margin-top: 10px;
 }
 .review-meta,
 .muted,

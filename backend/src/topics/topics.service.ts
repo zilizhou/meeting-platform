@@ -842,11 +842,22 @@ export class TopicsService {
       }
       sides = [dto.proxySide];
     } else if (isSecretary || isDean) {
-      sides = [
-        isSecretary ? JointReviewSide.SECRETARY : JointReviewSide.DEAN,
-      ];
+      const own = isSecretary
+        ? JointReviewSide.SECRETARY
+        : JointReviewSide.DEAN;
+      if (dto.side && dto.side !== own) {
+        throw new ForbiddenException('只能审本人一侧');
+      }
+      sides = [own];
     } else if (isCollegeAdmin) {
-      sides = [JointReviewSide.SECRETARY, JointReviewSide.DEAN];
+      if (
+        dto.side === JointReviewSide.SECRETARY ||
+        dto.side === JointReviewSide.DEAN
+      ) {
+        sides = [dto.side];
+      } else {
+        sides = [JointReviewSide.SECRETARY, JointReviewSide.DEAN];
+      }
     } else {
       throw new ForbiddenException('仅党委书记、院长或学院管理员可联审');
     }

@@ -573,6 +573,24 @@ body,
 .ui-hero .nums .num.kpi.sky.on span {
   color: #06202c;
 }
+.ui-hero .nums .num.kpi.mint.on {
+  background: #6ec4a8;
+  color: #06241c;
+  box-shadow: 0 4px 14px rgba(110, 196, 168, 0.45);
+}
+.ui-hero .nums .num.kpi.mint.on strong,
+.ui-hero .nums .num.kpi.mint.on span {
+  color: #06241c;
+}
+.ui-hero .nums .num.kpi.coral.on {
+  background: #e8825a;
+  color: #2c1208;
+  box-shadow: 0 4px 14px rgba(232, 130, 90, 0.45);
+}
+.ui-hero .nums .num.kpi.coral.on strong,
+.ui-hero .nums .num.kpi.coral.on span {
+  color: #2c1208;
+}
 
 /* 党委红轨 hero 上的「全部」仍用琥珀，其余默认走 party */
 .ui-hero.party .nums .num:not(.all):not(.joint):not(.neutral).on {
