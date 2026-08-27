@@ -104,7 +104,7 @@ export class ResolveDto {
   @IsString()
   ownerId?: string;
 
-  /** 党组织会议会中决议后是否转联席会 */
+  /** 党委会会中决议后是否转联席会 */
   @ApiPropertyOptional({ default: false })
   @IsOptional()
   @IsBoolean()
@@ -128,6 +128,13 @@ export class MinutesDto {
   @ApiProperty()
   @IsString()
   content!: string;
+}
+
+export class SetFirstTopicDto {
+  @ApiProperty({ description: '本场党委会中被指定为第一议题的议题 ID' })
+  @IsString()
+  @MinLength(1)
+  topicId!: string;
 }
 
 export class LeaveDto {

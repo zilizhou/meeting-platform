@@ -14,7 +14,7 @@
           <div class="brand-hero">
             <p class="product" lang="zh-CN">明德同枢</p>
             <h1>曲阜师范大学二级学院双会<span class="keep">管理系统</span></h1>
-            <p class="tagline">党组织会议 · 党政联席会议</p>
+            <p class="tagline">党委会 · 党政联席会议</p>
             <p class="value">制度硬校验 · 全流程留痕 · AI 辅助不代签</p>
           </div>
         </div>

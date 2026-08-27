@@ -89,7 +89,7 @@ const router = createRouter({
           component: () => import('@/views/PartyImportView.vue'),
         },
         {
-          /** 党组织会议列表已并入会议首页 */
+          /** 党委会列表已并入会议首页 */
           path: 'party-meetings',
           redirect: { path: '/meet', query: { tab: 'party' } },
         },

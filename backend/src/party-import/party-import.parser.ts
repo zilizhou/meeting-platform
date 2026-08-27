@@ -100,7 +100,7 @@ function cleanText(text: string) {
 export function parseCollegeHint(...texts: string[]) {
   for (const t of texts) {
     const m = t.match(
-      /([\u4e00-\u9fa5A-Za-z0-9]{2,20}学院).{0,20}(党委会议|党组织会议|党委会议题|党政联席)/,
+      /([\u4e00-\u9fa5A-Za-z0-9]{2,20}学院).{0,20}(党委会议|党委会|党组织会议|党委会议题|党政联席)/,
     );
     if (m) return m[1];
   }
@@ -364,7 +364,7 @@ export function guessMeetingTitle(
     : '';
   const college = collegeHint || '学院';
   const kind =
-    meetingType === 'JOINT_CONFERENCE' ? '党政联席会议' : '党组织会议';
+    meetingType === 'JOINT_CONFERENCE' ? '党政联席会议' : '党委会';
   if (periodNo) return `${college}${kind}（${periodNo}）`;
   return `${college}${kind}${date ? `（${date}）` : ''}`;
 }

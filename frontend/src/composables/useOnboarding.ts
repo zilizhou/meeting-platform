@@ -64,7 +64,7 @@ export const onboardingGuides: Record<GuideKey, GuideDefinition> = {
   },
   'organize-meeting': {
     title: '组织会议', summary: '完成排期、议程和参会准备。', steps: [
-      { title: '进入会议管理', description: '选择党组织会议或党政联席会议轨道。', path: '/meet', action: '打开会议管理' },
+      { title: '进入会议管理', description: '选择党委会或党政联席会议轨道。', path: '/meet', action: '打开会议管理' },
       { title: '创建并排期', description: '填写时间地点、主持人和参会范围，把已审核议题加入议程。' },
       { title: '会前核查', description: '确认入会议题和上会材料已齐备。' },
     ],

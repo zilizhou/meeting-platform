@@ -51,7 +51,7 @@ async function bootstrap() {
   if (enableSwagger) {
     const config = new DocumentBuilder()
       .setTitle('曲师大双会管理系统 API')
-      .setDescription('党组织会议 / 党政联席会议一体化管理')
+      .setDescription('党委会 / 党政联席会议一体化管理')
       .setVersion('0.1.0')
       .addBearerAuth()
       .build();

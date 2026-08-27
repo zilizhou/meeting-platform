@@ -175,7 +175,7 @@ export class PartyImportService {
         : 0;
     if (meetingType === 'PARTY_COMMITTEE' && missingFirstTopic > 0) {
       batchWarnings.push(
-        `有 ${missingFirstTopic} 场勾选会议未识别到「第一议题」；可在议题标题旁勾选标记，或按标题关键词自动识别。历史归档仍可导入。`,
+        `有 ${missingFirstTopic} 场勾选会议未识别到第一议题；不影响导入，导入后可在会议详情中设置。`,
       );
     }
 
@@ -358,7 +358,7 @@ export class PartyImportService {
       !topics.some((t) => t.isFirstTopic)
     ) {
       warnings.push(
-        '未识别「第一议题（政治理论学习）」；请勾选对应议题，或改标题含「第一议题/政治理论学习」等关键词',
+        '未识别第一议题；不影响导入，导入后可在会议详情中设置',
       );
     }
 
@@ -647,7 +647,11 @@ export class PartyImportService {
         const pick = explicit >= 0 ? explicit : auto;
         if (pick >= 0) topicsForWrite[pick].isFirstTopic = true;
       }
+      topicsForWrite.sort(
+        (a, b) => Number(Boolean(b.isFirstTopic)) - Number(Boolean(a.isFirstTopic)),
+      );
 
+      let selectedFirstTopicId: string | null = null;
       for (const [idx, topicDraft] of topicsForWrite.entries()) {
         const useFirstTopic =
           Boolean(topicDraft.isFirstTopic) && Boolean(firstTopicCategory?.id);
@@ -662,14 +666,14 @@ export class PartyImportService {
               topicDraft.minutesSection?.trim() || '',
               '',
               '——',
-              `来源：历史${meetingType === 'JOINT_CONFERENCE' ? '党政联席' : '党组织'}会议导入`,
+              `来源：历史${meetingType === 'JOINT_CONFERENCE' ? '党政联席会议' : '党委会'}导入`,
               location ? `会议地点：${location}` : '',
             ]
               .filter(Boolean)
               .join('\n'),
             proposerId,
             status: TopicStatus.RESOLVED,
-            sortOrder: topicDraft.sortOrder || idx + 1,
+            sortOrder: idx,
             materials: {
               create:
                 idx === 0
@@ -704,6 +708,7 @@ export class PartyImportService {
           },
           include: { materials: true },
         });
+        if (topicDraft.isFirstTopic) selectedFirstTopicId = topic.id;
 
         if (idx === 0 && topic.materials.length) {
           for (const mat of topic.materials) {
@@ -733,6 +738,13 @@ export class PartyImportService {
             });
           }
         }
+      }
+
+      if (selectedFirstTopicId) {
+        await tx.meeting.update({
+          where: { id: createdMeeting.id },
+          data: { firstTopicId: selectedFirstTopicId },
+        });
       }
 
       return {

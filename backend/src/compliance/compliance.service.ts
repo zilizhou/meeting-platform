@@ -80,7 +80,7 @@ export class ComplianceService {
     });
   }
 
-  /** 规则：需党组织会议前置的议题必须关联决议 */
+  /** 规则：需党委会前置的议题必须关联决议 */
   async checkPartyPrecheck(topicId: string) {
     const topic = await this.prisma.topic.findUnique({ where: { id: topicId } });
     if (!topic) {
@@ -106,7 +106,7 @@ export class ComplianceService {
         topicId,
         ruleCode: 'RULE_PRECHECK_REQUIRED',
         passed: false,
-        message: '该议题须党组织会议先行把关，请关联党组织会议决议',
+        message: '该议题须党委会先行把关，请关联党委会决议',
       });
     }
     const resolution = await this.prisma.resolution.findUnique({
@@ -126,7 +126,7 @@ export class ComplianceService {
       passed: valid,
       message: valid
         ? '前置把关校验通过'
-        : '关联的党组织会议决议无效（须为本院党组织会议同意/原则同意决议）',
+        : '关联的党委会决议无效（须为本院党委会同意/原则同意决议）',
       payload: {
         relatedPartyResolutionId: topic.relatedPartyResolutionId,
         found: !!resolution,
@@ -166,7 +166,7 @@ export class ComplianceService {
 
   /**
    * 规则：临时动议须书记、院长双签同意后方可入会
-   * （联席会；党组织会议临时动议由书记审题覆盖）
+   * （联席会；党委会临时动议由书记审题覆盖）
    */
   async checkTempMotion(topicId: string) {
     const topic = await this.prisma.topic.findUnique({
@@ -200,8 +200,8 @@ export class ComplianceService {
         ruleCode: 'RULE_TEMP_MOTION',
         passed,
         message: passed
-          ? '党组织会议临时动议已获书记同意'
-          : '党组织会议临时动议须经书记审题同意',
+          ? '党委会临时动议已获书记同意'
+          : '党委会临时动议须经书记审题同意',
         payload: { secretary: secretary?.decision },
       });
     }

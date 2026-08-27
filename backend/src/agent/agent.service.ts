@@ -28,7 +28,7 @@ const DISCLAIMER =
 
 const TODO_TYPE_LABEL: Record<string, string> = {
   JOINT_REVIEW: '联席审题',
-  PARTY_REVIEW: '党组织审题',
+  PARTY_REVIEW: '党委会审题',
   MINUTES: '整理纪要',
   MINUTES_SIGN: '整理纪要',
   SUPERVISION: '督办反馈',
@@ -549,7 +549,7 @@ export class AgentService {
     if (/会议简报|这场会|会中情况|签到情况|表决情况|会议概况/.test(message)) {
       return 'MEETING_BRIEF';
     }
-    // 数量/统计类：本月有多少党组织会议、议题一共几项等
+    // 数量/统计类：本月有多少党委会、议题一共几项等
     if (
       /(多少|几场|几次|几项|几个|一共|共有|有几|数量|统计)/.test(message) &&
       /(会议|议题|党组织|联席|双会|召开)/.test(message)
@@ -773,10 +773,10 @@ export class AgentService {
         ? jointTopics
         : topicTotal;
     const typeLabel = onlyParty
-      ? '党组织会议'
+      ? '党委会'
       : onlyJoint
         ? '党政联席会议'
-        : '双会（党组织+联席）';
+        : '双会（党委会+联席）';
 
     const lines: string[] = [
       askTopics
@@ -788,7 +788,7 @@ export class AgentService {
         : `结论：共 **${focusMeetings}** 场会议。`,
       '',
       '明细：',
-      `- 党组织会议：${partyMeetings} 场；对应议题 ${partyTopics} 项`,
+      `- 党委会：${partyMeetings} 场；对应议题 ${partyTopics} 项`,
       `- 党政联席会议：${jointMeetings} 场；对应议题 ${jointTopics} 项`,
       `- 合计：会议 ${meetingTotal} 场 / 议题 ${topicTotal} 项`,
       '',
@@ -803,7 +803,7 @@ export class AgentService {
           : '待定';
         const kind =
           m.meetingType === MeetingType.PARTY_COMMITTEE
-            ? '党组织'
+            ? '党委会'
             : '联席';
         lines.push(
           `- [${kind}] ${m.college?.name || ''} · ${m.title}（${when} · ${STATUS_LABEL[m.status] || m.status}）`,
@@ -879,7 +879,7 @@ export class AgentService {
         (t) =>
           `- 待办[${TODO_TYPE_LABEL[t.type] || t.type}] ${t.title}`,
       ),
-      `流程看板·联席进行中：${flow.joint.items.length}；党组织进行中：${flow.party.items.length}`,
+      `流程看板·联席进行中：${flow.joint.items.length}；党委会进行中：${flow.party.items.length}`,
       '',
       '本月统计事实：',
       monthFacts.reply.replace(DISCLAIMER, '').trim(),
@@ -958,7 +958,7 @@ export class AgentService {
       ...upcoming.map(
         (m) =>
           `   - ${m.title}（${STATUS_LABEL[m.status] || m.status} · ${
-            m.meetingType === MeetingType.PARTY_COMMITTEE ? '党组织会议' : '联席会'
+            m.meetingType === MeetingType.PARTY_COMMITTEE ? '党委会' : '联席会'
           }）`,
       ),
       `4. 督办逾期相关 ${overdue} 项`,
@@ -1027,7 +1027,7 @@ export class AgentService {
       !topic.relatedPartyResolutionId &&
       topic.meetingType === MeetingType.JOINT_CONFERENCE
     ) {
-      risks.push('已勾选党组织会议前置，但未关联党委决议');
+      risks.push('已勾选党委会前置，但未关联党委决议');
     }
 
     const reviewLines = topic.jointReviews.length
@@ -1041,7 +1041,7 @@ export class AgentService {
     const link = `/topics/${topic.id}${party ? '?from=party' : ''}`;
     const lines = [
       `【议题简报】${topic.title}`,
-      `类型：${party ? '党组织会议' : '联席会'} · 状态：${STATUS_LABEL[topic.status] || topic.status}`,
+      `类型：${party ? '党委会' : '联席会'} · 状态：${STATUS_LABEL[topic.status] || topic.status}`,
       `分类：${topic.category?.name || '未分类'} · 提案人：${topic.proposer?.realName || '—'}`,
       `标记：${[
         topic.isMajor ? '重大' : null,
@@ -1149,7 +1149,7 @@ export class AgentService {
 
     const lines = [
       `【会议简报】${meeting.title}`,
-      `状态：${STATUS_LABEL[meeting.status] || meeting.status} · ${party ? '党组织会议' : '联席会'}`,
+      `状态：${STATUS_LABEL[meeting.status] || meeting.status} · ${party ? '党委会' : '联席会'}`,
       `法定人数：${meeting.canResolve ? '已达标' : '未达标'}（到会 ${meeting.actualAttend}/${meeting.shouldAttend}${meeting.isMajor ? '，重大按2/3' : ''}）`,
       `签到：正式 ${checked.length}/${formal.length}，请假 ${left.length}`,
       '',
@@ -1300,7 +1300,7 @@ export class AgentService {
       }
     }
 
-    const party = brief.reply.includes('党组织会议');
+    const party = brief.reply.includes('党委会');
     const action = this.makeAction({
       type: 'DRAFT_ONLY',
       title: '打开议题提交审题（本人操作）',
@@ -1622,7 +1622,7 @@ export class AgentService {
           ...meetings.map((m, i) => {
             const kind =
               m.meetingType === MeetingType.PARTY_COMMITTEE
-                ? '党组织会议'
+                ? '党委会'
                 : '党政联席会议';
             return `${i + 1}. **${m.title}**（${m.collegeName} · ${kind}）\n   - 相关议题：${m.topicTitles.join('；')}`;
           }),
@@ -1687,7 +1687,7 @@ export class AgentService {
         ...matched.map((t, i) => {
           const kind =
             t.meetingType === MeetingType.PARTY_COMMITTEE
-              ? '党组织会议'
+              ? '党委会'
               : '党政联席会议';
           const college = t.college?.name || '—';
           const meetingBit = t.meeting?.title
@@ -1768,7 +1768,7 @@ export class AgentService {
       '',
       `一、待办合计 ${todos.summary.total} 项`,
       `- 联席双审 ${todos.summary.jointReview}`,
-      `- 党组织审题 ${todos.summary.partyReview}`,
+      `- 党委会审题 ${todos.summary.partyReview}`,
       `- 纪要 ${todos.summary.minutesSign}`,
       `- 督办 ${todos.summary.supervision}`,
     ];

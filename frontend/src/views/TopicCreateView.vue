@@ -8,29 +8,17 @@
 
     <div class="panel">
       <div class="step-label">用于哪类会议</div>
-      <p class="hint">可勾选一类或两类。勾选两类时，同一事项会分别写入党组织会议与党政联席会议议题库。</p>
+      <p class="hint">可勾选一类或两类。勾选两类时，同一事项会分别写入党委会与党政联席会议议题库。</p>
       <div class="checks">
         <label class="check">
           <input v-model="forParty" type="checkbox" />
-          党组织会议
+          党委会
         </label>
         <label class="check">
           <input v-model="forJoint" type="checkbox" />
           党政联席会议
         </label>
       </div>
-    </div>
-
-    <div v-if="forParty" class="rule-banner party">
-      <strong>第一议题硬规则</strong>
-      党组织会议必须有一项「第一议题」。请在本页勾选；创建会议时还须再次选定该项入议程。
-      <label class="check first-topic-banner">
-        <input v-model="isFirstTopic" type="checkbox" />
-        本议题为第一议题（政治理论学习）
-      </label>
-      <p v-if="isFirstTopic" class="hint ok" style="margin: 8px 0 0">
-        已标记为第一议题，提交后会写入议题库对应分类。
-      </p>
     </div>
 
     <div v-if="needCollegePick" class="panel">
@@ -77,33 +65,70 @@
       <div class="step-label">2 · 人工核对与修改</div>
       <p class="hint">请仔细阅读并修改下方内容，确认无误后再提交到议题库。AI 不自动创建、不替代审签。</p>
       <div v-if="assistNarrative" class="assist-note">
-        <strong>生成说明</strong>
-        <pre>{{ assistNarrative }}</pre>
+        <button
+          class="assist-note-toggle"
+          type="button"
+          :aria-expanded="assistExpanded"
+          @click="assistExpanded = !assistExpanded"
+        >
+          <strong>生成说明</strong>
+          <span>{{ assistExpanded ? '收起' : '展开' }} {{ assistExpanded ? '⌃' : '⌄' }}</span>
+        </button>
+        <div
+          v-if="assistExpanded"
+          class="markdown-preview assist-markdown"
+          v-html="renderMarkdown(assistNarrative)"
+        />
       </div>
 
       <label>
         <span>议题标题</span>
         <input v-model="form.title" placeholder="议题标题（至少 2 字）" />
       </label>
-      <label>
-        <span>议题内容</span>
-        <textarea v-model="form.content" rows="12" placeholder="背景、依据与拟议事项" />
-      </label>
-
-      <div v-if="forParty" class="checks" style="margin-bottom: 12px">
-        <label class="check">
-          <input v-model="isFirstTopic" type="checkbox" />
-          本议题为第一议题（政治理论学习）
-        </label>
+      <div class="content-field">
+        <div class="content-field-head">
+          <span>议题内容</span>
+          <div class="preview-switch" role="tablist" aria-label="议题内容查看方式">
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="contentMode === 'edit'"
+              :class="{ on: contentMode === 'edit' }"
+              @click="contentMode = 'edit'"
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="contentMode === 'preview'"
+              :class="{ on: contentMode === 'preview' }"
+              @click="contentMode = 'preview'"
+            >
+              Markdown 预览
+            </button>
+          </div>
+        </div>
+        <textarea
+          v-if="contentMode === 'edit'"
+          v-model="form.content"
+          rows="12"
+          placeholder="背景、依据与拟议事项（支持 Markdown）"
+        />
+        <div
+          v-else-if="form.content.trim()"
+          class="markdown-preview content-preview"
+          v-html="renderMarkdown(form.content)"
+        />
+        <div v-else class="content-preview-empty">暂无内容，请切换到“编辑”后填写。</div>
       </div>
-      <p v-if="forParty && isFirstTopic" class="hint ok">已标记为第一议题，创建党组织会议时须勾选该项。</p>
 
       <label v-if="forParty">
-        <span>{{ forJoint ? '党组织会议分类' : '议题分类' }}</span>
+        <span>{{ forJoint ? '党委会分类' : '议题分类' }}</span>
         <select v-model="form.partyCategoryId">
           <option value="">请选择</option>
           <option v-for="c in partyCategories" :key="c.id" :value="c.id">
-            {{ c.code === 'FIRST_TOPIC' ? `第一议题 · ${c.name}` : c.name }}
+            {{ c.name }}
           </option>
         </select>
       </label>
@@ -125,7 +150,7 @@
           <input v-model="form.isEmergency" type="checkbox" /> 紧急临机
         </label>
         <label v-if="forJoint" class="check">
-          <input v-model="form.needPartyPrecheck" type="checkbox" /> 需党组织会议前置
+          <input v-model="form.needPartyPrecheck" type="checkbox" /> 需党委会前置
         </label>
       </div>
 
@@ -160,6 +185,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
+import { renderMarkdown } from '@/utils/markdown'
 import { useAuthStore } from '@/stores/auth'
 
 interface CategoryItem {
@@ -202,12 +228,12 @@ const heroEyebrow = computed(() => {
   return forParty.value ? '党委红轨' : '联席蓝轨'
 })
 const heroDesc = computed(() => {
-  if (!anySelected.value) return '请先勾选本议题用于哪类会议，可同时用于党组织会议和党政联席会议。'
+  if (!anySelected.value) return '请先勾选本议题用于哪类会议，可同时用于党委会和党政联席会议。'
   if (bothSelected.value) {
-    return '同一事项将分别写入两类会议议题库。党组织会议须有「第一议题」方可开会；联席会议题按双审规则办理。'
+    return '同一事项将分别写入两类会议议题库。党委会议题由书记审题；联席会议题按双审规则办理。'
   }
   if (forParty.value) {
-    return '党组织会议须有「第一议题（政治理论学习）」入议程后方可开会。可先勾选下方第一议题，再描述事项；AI 辅助可选。'
+    return '先描述党委会议题并选择分类；创建会议后，可从已入会议题中设置第一议题。'
   }
   return '先用自然语言描述事项，也可直接填写标题与内容；核对后提交进入议题库。'
 })
@@ -227,6 +253,8 @@ const assistLoading = ref(false)
 const assistHint = ref('')
 const assistFailed = ref(false)
 const assistNarrative = ref('')
+const assistExpanded = ref(false)
+const contentMode = ref<'edit' | 'preview'>('edit')
 const resultEl = ref<HTMLElement | null>(null)
 const saving = ref(false)
 const description = ref('')
@@ -241,25 +269,6 @@ const form = reactive({
   isEmergency: false,
   needPartyPrecheck: false,
   relatedPartyResolutionId: '',
-})
-
-const firstTopicCategory = computed(() =>
-  partyCategories.value.find((c) => c.code === 'FIRST_TOPIC'),
-)
-const isFirstTopicCategory = computed(() => {
-  const cat = partyCategories.value.find((c) => c.id === form.partyCategoryId)
-  return cat?.code === 'FIRST_TOPIC'
-})
-const isFirstTopic = computed({
-  get: () => isFirstTopicCategory.value,
-  set: (checked: boolean) => {
-    if (checked) {
-      if (firstTopicCategory.value) form.partyCategoryId = firstTopicCategory.value.id
-      else ElMessage.warning('系统未配置第一议题分类，请联系管理员')
-    } else if (isFirstTopicCategory.value) {
-      form.partyCategoryId = ''
-    }
-  },
 })
 
 function onJointCategoryChange() {
@@ -327,6 +336,8 @@ function applyAssistResult(res: any, meetingType: MeetingKind) {
     if (res?.suggestions?.needPartyPrecheck) form.needPartyPrecheck = true
   }
   assistNarrative.value = String(res?.narrative || res?.outputText || '').trim()
+  assistExpanded.value = false
+  if (content) contentMode.value = 'preview'
 }
 
 async function runAssist() {
@@ -340,7 +351,7 @@ async function runAssist() {
   }
   if (!anySelected.value) {
     forJoint.value = true
-    assistHint.value = '未勾选会议类型，已默认按党政联席会议生成，可再勾选党组织会议。'
+    assistHint.value = '未勾选会议类型，已默认按党政联席会议生成，可再勾选党委会。'
   }
   assistLoading.value = true
   assistHint.value = assistHint.value || '正在调用大模型起草标题与正文，大约需要几秒…'
@@ -398,6 +409,8 @@ function resetDraft() {
   assistHint.value = ''
   assistFailed.value = false
   assistNarrative.value = ''
+  assistExpanded.value = false
+  contentMode.value = 'edit'
   form.title = ''
   form.content = ''
   form.partyCategoryId = ''
@@ -427,9 +440,7 @@ async function submitToLibrary() {
     return
   }
   if (forParty.value && !form.partyCategoryId) {
-    ElMessage.warning(
-      isFirstTopic.value ? '请勾选「本议题为第一议题」，或选择党组织会议分类' : '请选择党组织会议分类',
-    )
+    ElMessage.warning('请选择党委会分类')
     return
   }
   if (forJoint.value && !form.jointCategoryId) {
@@ -437,7 +448,7 @@ async function submitToLibrary() {
     return
   }
   if (forJoint.value && form.needPartyPrecheck && !form.relatedPartyResolutionId) {
-    ElMessage.warning('需党组织会议前置时请关联党委决议')
+    ElMessage.warning('需党委会前置时请关联党委决议')
     return
   }
   saving.value = true
@@ -545,15 +556,126 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 1.5;
 }
-.assist-note strong {
-  display: block;
-  margin-bottom: 4px;
-}
-.assist-note pre {
-  margin: 0;
-  white-space: pre-wrap;
+.assist-note-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
   font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.assist-note-toggle strong {
+  font-size: 14px;
+}
+.assist-note-toggle span {
+  color: var(--joint);
+  font-size: 12px;
+  font-weight: 700;
+}
+.assist-markdown {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #d7e4f2;
+}
+.content-field {
+  margin-bottom: 12px;
+}
+.content-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.content-field-head > span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.preview-switch {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: #e8edf3;
+}
+.preview-switch button {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.preview-switch button.on {
+  background: #fff;
+  color: var(--joint);
+  box-shadow: 0 1px 4px rgba(15, 53, 95, 0.12);
+}
+.content-preview,
+.content-preview-empty {
+  min-height: 286px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7f9fc;
+}
+.content-preview-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+.markdown-preview {
   color: #334155;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.markdown-preview :deep(h1),
+.markdown-preview :deep(h2),
+.markdown-preview :deep(h3),
+.markdown-preview :deep(h4) {
+  margin: 1em 0 0.45em;
+  color: var(--text);
+  line-height: 1.35;
+}
+.markdown-preview :deep(h1:first-child),
+.markdown-preview :deep(h2:first-child),
+.markdown-preview :deep(h3:first-child),
+.markdown-preview :deep(p:first-child) {
+  margin-top: 0;
+}
+.markdown-preview :deep(p) {
+  margin: 0.55em 0;
+}
+.markdown-preview :deep(ul),
+.markdown-preview :deep(ol) {
+  margin: 0.55em 0;
+  padding-left: 1.7em;
+}
+.markdown-preview :deep(li + li) {
+  margin-top: 0.25em;
+}
+.markdown-preview :deep(strong) {
+  color: #1e293b;
+}
+.markdown-preview :deep(blockquote) {
+  margin: 0.7em 0;
+  padding: 0.2em 0 0.2em 0.9em;
+  border-left: 3px solid #9eb8d6;
+  color: var(--muted);
+}
+.markdown-preview :deep(code) {
+  padding: 0.12em 0.35em;
+  border-radius: 5px;
+  background: #e8eef6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
 }
 .create-page.embedded {
   margin-top: 0;

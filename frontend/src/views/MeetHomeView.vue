@@ -4,7 +4,7 @@
       <div class="eyebrow"><b></b> 会议现场 · 分轨办理</div>
       <h2>会议</h2>
       <p>
-        当前：{{ activeTab === 'party' ? '党组织会议' : '党政联席会议' }}
+        当前：{{ activeTab === 'party' ? '党委会' : '党政联席会议' }}
         <template v-if="holding"> · {{ holding.label }}应开
           {{ currentHold?.required ?? '—' }} 次，已开 {{ currentHold?.count ?? '—' }} 次
         </template>
@@ -43,13 +43,9 @@
       </div>
     </div>
 
-    <div v-if="activeTab === 'party'" class="rule-banner party">
-      <strong>第一议题硬规则</strong>
-      党组织会议须将「第一议题（政治理论学习）」纳入议程，否则不能创建本场会议。
-    </div>
     <div v-if="holding" class="rule-banner" :class="{ warn: currentHold && !currentHold.held }">
       <strong>{{ holding.label }}频次</strong>
-      {{ activeTab === 'party' ? '党组织会议' : '党政联席会议' }}应开
+      {{ activeTab === 'party' ? '党委会' : '党政联席会议' }}应开
       {{ currentHold?.required }} 次，当前已排期/召开 {{ currentHold?.count }} 次。
       {{ currentHold?.held ? '已达规定频次。' : '尚未达标。' }}
     </div>
@@ -63,7 +59,7 @@
         :class="{ on: activeTab === 'party' }"
         @click="setTab('party')"
       >
-        党组织会议
+        党委会
       </button>
       <button
         type="button"
@@ -179,12 +175,6 @@
                 {{ g.label }}第 {{ m.monthIndex }} 场
               </span>
               <span class="ui-tag" :class="cardTrack">{{ statusLabel(m.status) }}</span>
-              <span
-                v-if="activeTab === 'party' && !meetingHasFirstTopic(m)"
-                class="ui-tag warn"
-              >
-                缺第一议题
-              </span>
               <span v-if="m.isMajor" class="ui-tag warn">重大</span>
             </div>
             <h4>{{ m.title }}</h4>
@@ -208,7 +198,7 @@
 
     <el-dialog
       v-model="createVisible"
-      :title="createMode === 'party' ? '创建学院党组织会议' : '创建党政联席会议'"
+      :title="createMode === 'party' ? '创建学院党委会' : '创建党政联席会议'"
       width="720px"
       align-center
       destroy-on-close
@@ -246,45 +236,14 @@
       </div>
 
       <div class="create-block create-block--topics">
-        <div v-if="createMode === 'party'" class="first-topic-pick">
-          <div class="create-label">
-            第一议题
-            <span class="create-count">必选</span>
-          </div>
-          <p class="create-hint">
-            党组织会议必须选定一项已标记为「第一议题」的议题，否则不能创建。
-          </p>
-          <el-select
-            v-model="form.firstTopicId"
-            filterable
-            clearable
-            style="width: 100%"
-            placeholder="请选择本场会议的第一议题"
-          >
-            <el-option
-              v-for="t in firstTopicOptions"
-              :key="t.id"
-              :label="t.title"
-              :value="t.id"
-            />
-          </el-select>
-          <p v-if="!firstTopicOptions.length" class="create-hint">
-            暂无可用的第一议题。
-            <button class="ui-link" type="button" @click="goTopicCreate">去征集并勾选第一议题</button>
-          </p>
-        </div>
-
         <div class="create-label">
-          {{ createMode === 'party' ? '其他入会议题' : '入会议题' }}
+          入会议题
           <span class="create-count">
-            <template v-if="createMode === 'party'">可选</template>
-            <template v-else>必选</template>
-            · 可选 {{ availableTopics.length }} · 已选 {{ form.topicIds.length }}
+            必选 · 可选 {{ availableTopics.length }} · 已选 {{ form.topicIds.length }}
           </span>
         </div>
         <p class="create-hint">
-          <template v-if="createMode === 'party'">可再勾选其他议题一并入会。</template>
-          <template v-else>至少勾选 1 项议题方可创建。</template>
+          至少勾选 1 项议题方可创建。党委会创建后，可在会议详情中设置第一议题。
           已入其他会议的议题不可再选。
         </p>
 
@@ -316,7 +275,6 @@
                 </span>
                 <span class="col-title">
                   <em>{{ t.title }}</em>
-                  <small v-if="t.category?.code === 'FIRST_TOPIC'">第一议题</small>
                   <small v-if="t.locked">已入会 · {{ t.meeting?.title || '其他会议' }}</small>
                   <small v-else-if="t.status !== 'APPROVED'">未审 · 选中即通过</small>
                 </span>
@@ -397,7 +355,6 @@ const form = reactive({
   periodNo: '',
   scheduledAt: '',
   isMajor: false,
-  firstTopicId: '',
   topicIds: [] as string[],
 })
 
@@ -435,10 +392,10 @@ const currentArchivedCount = computed(() =>
 const emptyText = computed(() => {
   if (statusFilter.value === 'archived') {
     return activeTab.value === 'party'
-      ? '暂无党组织归档会议'
+      ? '暂无已归档党委会'
       : '暂无党政联席归档会议'
   }
-  return activeTab.value === 'party' ? '暂无党组织会议' : '暂无党政联席会议'
+  return activeTab.value === 'party' ? '暂无党委会' : '暂无党政联席会议'
 })
 
 const currentList = computed(() => {
@@ -457,10 +414,6 @@ const currentHold = computed(() => {
   return activeTab.value === 'party' ? holding.value.party : holding.value.joint
 })
 
-function meetingHasFirstTopic(m: MeetingItem) {
-  return (m.topics || []).some((t) => t.category?.code === 'FIRST_TOPIC')
-}
-
 function isTopicLocked(t: any) {
   return (
     !!t.meetingId ||
@@ -478,27 +431,17 @@ const availableTopics = computed(() =>
   }),
 )
 
-const firstTopicOptions = computed(() =>
-  topics.value.filter(
-    (t) => t.category?.code === 'FIRST_TOPIC' && !isTopicLocked(t) && t.status !== 'REJECTED',
-  ),
-)
-
 const pickerTopics = computed(() =>
   topics.value
     .filter((t) => {
       if (t.status === 'REJECTED') return false
-      if (createMode.value === 'party' && t.category?.code === 'FIRST_TOPIC') return false
       return true
     })
     .map((t) => ({ ...t, locked: isTopicLocked(t) }))
     .sort((a, b) => Number(a.locked) - Number(b.locked)),
 )
 
-const canSubmitCreate = computed(() => {
-  if (createMode.value === 'party') return Boolean(form.firstTopicId)
-  return form.topicIds.length > 0
-})
+const canSubmitCreate = computed(() => form.topicIds.length > 0)
 
 function statusLabel(s: string) {
   return STATUS[s] || s
@@ -532,7 +475,7 @@ function syncQuery() {
 
 function applyFromQuery() {
   const tab = String(route.query.tab || '')
-  // 兼容旧链接：/meet?tab=archived → 党组织 · 已归档
+  // 兼容旧链接：/meet?tab=archived → 党委会 · 已归档
   if (tab === 'archived') {
     activeTab.value = 'party'
     statusFilter.value = 'archived'
@@ -621,11 +564,10 @@ async function openCreateParty() {
   setTab('party')
   setStatus('active')
   const college = roles.collegeName.value || '本院'
-  form.title = `${college}党组织会议`
+  form.title = `${college}党委会`
   form.periodNo = nextPeriodNo(partyAll.value)
   form.scheduledAt = defaultScheduledAt()
   form.isMajor = false
-  form.firstTopicId = ''
   form.topicIds = []
   createVisible.value = true
   await loadCreateTopics('PARTY_COMMITTEE')
@@ -640,7 +582,6 @@ async function openCreateJoint() {
   form.periodNo = nextPeriodNo(jointAll.value)
   form.scheduledAt = defaultScheduledAt()
   form.isMajor = false
-  form.firstTopicId = ''
   form.topicIds = []
   createVisible.value = true
   await loadCreateTopics('JOINT_CONFERENCE')
@@ -671,16 +612,7 @@ async function submitCreate() {
   }
   const meetingType =
     createMode.value === 'party' ? 'PARTY_COMMITTEE' : 'JOINT_CONFERENCE'
-  const topicIds =
-    meetingType === 'PARTY_COMMITTEE'
-      ? [form.firstTopicId, ...form.topicIds.filter((id) => id !== form.firstTopicId)].filter(
-          Boolean,
-        )
-      : [...form.topicIds]
-  if (meetingType === 'PARTY_COMMITTEE' && !form.firstTopicId) {
-    ElMessage.warning('请选择本场会议的第一议题')
-    return
-  }
+  const topicIds = [...form.topicIds]
   if (!topicIds.length) {
     ElMessage.warning('请至少选择一项入会议题')
     return
@@ -696,7 +628,7 @@ async function submitCreate() {
       meetingType,
     })
     ElMessage.success(
-      `${createMode.value === 'party' ? '党组织' : '联席'}会议已创建，已入会 ${topicIds.length} 项议题`,
+      `${createMode.value === 'party' ? '党委会' : '联席会议'}已创建，已入会 ${topicIds.length} 项议题`,
     )
     createVisible.value = false
     await load()

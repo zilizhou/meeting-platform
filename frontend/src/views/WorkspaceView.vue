@@ -220,7 +220,7 @@ const jointBoard = reactive<FlowBoard>({
 })
 const partyBoard = reactive<FlowBoard>({
   key: 'party',
-  title: '学院党组织会议流程',
+  title: '学院党委会流程',
   steps: [],
   stageStats: [],
   items: [],

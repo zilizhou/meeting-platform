@@ -43,7 +43,7 @@ const JOINT_TEMPLATES: Record<string, MaterialTemplateItem[]> = {
     { name: '合法合规性审查意见（视情况）', requiredKey: 'legal', isRequired: false },
   ],
   PARTY_TRANSFER: [
-    { name: '党组织会议决议材料', requiredKey: 'party_resolution', isRequired: true },
+    { name: '党委会决议材料', requiredKey: 'party_resolution', isRequired: true },
     { name: '落实方案/情况说明', requiredKey: 'survey', isRequired: true },
   ],
 };

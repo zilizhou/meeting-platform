@@ -107,13 +107,13 @@ export const PARTY_REVIEWER_ROLES = [
 /** 党委审题 / 形成决议（仅书记） */
 export const SECRETARY_ROLES = [RoleCode.SECRETARY] as const;
 
-/** 党组织会议主持 / 散会（书记或副书记代主持） */
+/** 党委会主持 / 散会（书记或副书记代主持） */
 export const PARTY_HOST_ROLES = [
   RoleCode.SECRETARY,
   RoleCode.VICE_SECRETARY,
 ] as const;
 
-/** 党组织会议纪要签署（书记或副书记） */
+/** 党委会纪要签署（书记或副书记） */
 export const PARTY_MINUTES_SIGN_ROLES = [
   RoleCode.SECRETARY,
   RoleCode.VICE_SECRETARY,

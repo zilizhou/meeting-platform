@@ -23,7 +23,6 @@ import {
   TopicStatus,
 } from '../common/constants';
 import { assertAnyRole, isCollegeVisible, prismaCollegeIdFilter, STAFF_ROLES } from '../common/roles';
-import { assertPartyMeetingCanOpen, FIRST_TOPIC_CODE } from '../common/first-topic';
 import {
   currentPeriodRange,
   type FrequencyPeriod,
@@ -87,7 +86,7 @@ export class MeetingsService {
     if (!formalRoster.length) {
       throw new BadRequestException(
         meetingType === MeetingType.PARTY_COMMITTEE
-          ? '请先维护党组织会议正式成员名单'
+          ? '请先维护党委会正式成员名单'
           : '请先维护党政联席会正式成员名单',
       );
     }
@@ -140,8 +139,6 @@ export class MeetingsService {
       }
     }
 
-    assertPartyMeetingCanOpen(meetingType, topicsToAttach);
-
     const isMajor = dto.isMajor || false;
     const meeting = await this.prisma.meeting.create({
       data: {
@@ -166,12 +163,9 @@ export class MeetingsService {
     });
 
     if (topicIds.length) {
-      const ordered = [...topicsToAttach].sort((a, b) => {
-        const aFirst = a.category?.code === FIRST_TOPIC_CODE ? 0 : 1;
-        const bFirst = b.category?.code === FIRST_TOPIC_CODE ? 0 : 1;
-        if (aFirst !== bFirst) return aFirst - bFirst;
-        return topicIds.indexOf(a.id) - topicIds.indexOf(b.id);
-      });
+      const ordered = [...topicsToAttach].sort(
+        (a, b) => topicIds.indexOf(a.id) - topicIds.indexOf(b.id),
+      );
       for (let i = 0; i < ordered.length; i++) {
         await this.prisma.topic.update({
           where: { id: ordered[i].id },
@@ -224,6 +218,7 @@ export class MeetingsService {
             category: { select: { code: true, name: true } },
             resolution: { select: { id: true } },
           },
+          orderBy: { sortOrder: 'asc' },
         },
         minutes: { select: { id: true, effectiveAt: true } },
         _count: { select: { attendances: true } },
@@ -350,7 +345,6 @@ export class MeetingsService {
     if (meeting.status === MeetingStatus.IN_PROGRESS) {
       return meeting;
     }
-    assertPartyMeetingCanOpen(meeting.meetingType, meeting.topics);
     const updated = await this.prisma.meeting.update({
       where: { id },
       data: { status: MeetingStatus.IN_PROGRESS },
@@ -362,6 +356,45 @@ export class MeetingsService {
       resourceId: id,
     });
     return updated;
+  }
+
+  /** 从本场已入会议题中指定第一议题，并把它调整到议程首位。 */
+  async setFirstTopic(user: AuthUser, id: string, topicId: string) {
+    const meeting = await this.detail(user, id);
+    if (meeting.meetingType !== MeetingType.PARTY_COMMITTEE) {
+      throw new BadRequestException('仅党委会可设置第一议题');
+    }
+    if (meeting.status === MeetingStatus.ARCHIVED) {
+      throw new BadRequestException('会议已归档，不能调整第一议题');
+    }
+    if (!meeting.topics.some((topic) => topic.id === topicId)) {
+      throw new BadRequestException('只能从本场已入会议题中设置第一议题');
+    }
+
+    const ordered = [
+      ...meeting.topics.filter((topic) => topic.id === topicId),
+      ...meeting.topics.filter((topic) => topic.id !== topicId),
+    ];
+    await this.prisma.$transaction([
+      this.prisma.meeting.update({
+        where: { id },
+        data: { firstTopicId: topicId },
+      }),
+      ...ordered.map((topic, sortOrder) =>
+        this.prisma.topic.update({
+          where: { id: topic.id },
+          data: { sortOrder },
+        }),
+      ),
+    ]);
+    await this.audit.log({
+      user,
+      action: 'SET_FIRST_TOPIC',
+      resource: 'Meeting',
+      resourceId: id,
+      detail: { topicId },
+    });
+    return this.detail(user, id);
   }
 
   /** 标记本场已召开：已排期/进行中 → 已结束（待登记决议与纪要） */
@@ -383,10 +416,6 @@ export class MeetingsService {
     ) {
       throw new BadRequestException('当前状态不能标记已召开');
     }
-    if (meeting.meetingType === MeetingType.PARTY_COMMITTEE) {
-      assertPartyMeetingCanOpen(meeting.meetingType, meeting.topics);
-    }
-
     await this.prisma.meeting.update({
       where: { id },
       data: { status: MeetingStatus.ENDED },
@@ -405,7 +434,6 @@ export class MeetingsService {
     this.assertInSession(meeting, '签到', true);
     // 会前签到即视为开会：已排期 → 进行中
     if (meeting.status === MeetingStatus.SCHEDULED) {
-      assertPartyMeetingCanOpen(meeting.meetingType, meeting.topics);
       await this.prisma.meeting.update({
         where: { id: meetingId },
         data: { status: MeetingStatus.IN_PROGRESS },
@@ -816,7 +844,7 @@ export class MeetingsService {
       });
     }
 
-    // 党组织会议会中决议可直接转联席会
+    // 党委会会中决议可直接转联席会
     if (
       meeting.meetingType === MeetingType.PARTY_COMMITTEE &&
       dto.transferToJoint &&
@@ -839,7 +867,7 @@ export class MeetingsService {
             collegeId: meeting.collegeId,
             meetingType: MeetingType.JOINT_CONFERENCE,
             title: `【党委转办】${topic.title}`,
-            content: `源自党组织会议决议。${dto.content || ''}`,
+            content: `源自党委会决议。${dto.content || ''}`,
             categoryId: transferCategory?.id,
             proposerId: user.sub,
             status: TopicStatus.DRAFT,
@@ -849,12 +877,12 @@ export class MeetingsService {
             materials: {
               create: [
                 {
-                  name: '党组织会议决议摘要/依据',
+                  name: '党委会决议摘要/依据',
                   requiredKey: 'party_resolution',
                   isRequired: false,
                   uploaded: true,
                   filePath: `party-resolution://${resolution.id}`,
-                  originalName: '党组织会议决议关联',
+                  originalName: '党委会决议关联',
                 },
                 {
                   name: '调研报告/落实方案',

@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="ui-hero is-official">
+    <div class="ui-hero is-official stats-hero">
       <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
       <h2>总览</h2>
       <p>所管学院的议题、会议数量与时间分布。数字以系统为准。</p>
@@ -45,7 +45,7 @@
 
     <div class="stat-grid">
       <article class="stat-card party">
-        <h3>党组织会议</h3>
+        <h3>党委会</h3>
         <p class="big">{{ data?.meetings?.party ?? 0 }} <em>场</em></p>
         <div class="sub">议题 {{ data?.topics?.party ?? 0 }} 项</div>
       </article>
@@ -59,7 +59,7 @@
     <section class="panel">
       <div class="panel-head">
         <h3>按月召开</h3>
-        <span>党组织会议 / 党政联席会议</span>
+        <span>党委会 / 党政联席会议</span>
       </div>
       <div v-if="!monthlyMax" class="ui-empty">所选时段暂无召开数据</div>
       <div v-else class="month-chart">
@@ -78,7 +78,7 @@
         </div>
       </div>
       <div class="legend">
-        <span><i class="party" />党组织会议</span>
+        <span><i class="party" />党委会</span>
         <span><i class="joint" />党政联席会议</span>
       </div>
     </section>
@@ -504,6 +504,25 @@ onMounted(() => {
   }
   .college-row em {
     grid-area: nums;
+  }
+}
+
+@media (max-width: 767px) {
+  .stats-hero .nums {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .stats-hero .nums .kpi {
+    display: flex;
+    min-width: 0;
+    min-height: 86px;
+    padding: 10px 12px 12px;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .stats-hero .nums .kpi span {
+    line-height: 1.3;
   }
 }
 .jump {

@@ -78,7 +78,7 @@ export class TopicsService {
     );
   }
 
-  /** 校验关联的党组织会议决议：存在、本院、党组织会议、同意类结果 */
+  /** 校验关联的党委会决议：存在、本院、党委会、同意类结果 */
   private async assertValidPartyResolution(
     collegeId: string,
     resolutionId: string,
@@ -88,13 +88,13 @@ export class TopicsService {
       include: { topic: true },
     });
     if (!resolution) {
-      throw new BadRequestException('关联的党组织会议决议不存在');
+      throw new BadRequestException('关联的党委会决议不存在');
     }
     if (resolution.topic.collegeId !== collegeId) {
-      throw new ForbiddenException('不能关联其他学院的党组织会议决议');
+      throw new ForbiddenException('不能关联其他学院的党委会决议');
     }
     if (resolution.topic.meetingType !== MeetingType.PARTY_COMMITTEE) {
-      throw new BadRequestException('关联决议必须来自党组织会议');
+      throw new BadRequestException('关联决议必须来自党委会');
     }
     if (
       resolution.resultType !== 'APPROVED' &&
@@ -120,7 +120,7 @@ export class TopicsService {
 
     if (meetingType === MeetingType.JOINT_CONFERENCE) {
       if (dto.needPartyPrecheck && !dto.relatedPartyResolutionId) {
-        throw new BadRequestException('需党组织会议前置的议题必须关联党组织会议决议');
+        throw new BadRequestException('需党委会前置的议题必须关联党委会决议');
       }
     }
 
@@ -147,7 +147,7 @@ export class TopicsService {
       needPartyPrecheck &&
       !dto.relatedPartyResolutionId
     ) {
-      throw new BadRequestException('需党组织会议前置的议题必须关联党组织会议决议');
+      throw new BadRequestException('需党委会前置的议题必须关联党委会决议');
     }
 
     if (dto.relatedPartyResolutionId) {
@@ -277,7 +277,7 @@ export class TopicsService {
       needPartyPrecheck &&
       !relatedId
     ) {
-      throw new BadRequestException('需党组织会议前置的议题必须关联党组织会议决议');
+      throw new BadRequestException('需党委会前置的议题必须关联党委会决议');
     }
     if (dto.relatedPartyResolutionId) {
       await this.assertValidPartyResolution(
@@ -682,7 +682,7 @@ export class TopicsService {
     };
   }
 
-  /** 提交审题：联席会走书记+院长双审；党组织会议走书记初审 */
+  /** 提交审题：联席会走书记+院长双审；党委会走书记初审 */
   async submitForReview(user: AuthUser, topicId: string) {
     const topic = await this.detail(user, topicId);
     if (topic.meetingType === MeetingType.JOINT_CONFERENCE && topic.needPartyPrecheck) {
@@ -727,7 +727,7 @@ export class TopicsService {
         userId: secretary.id,
         collegeId: topic.collegeId,
         type: 'PARTY_REVIEW',
-        title: `党组织会议议题待审：${topic.title}`,
+        title: `党委会议题待审：${topic.title}`,
         content: '请登录系统完成书记审题',
         link: `/topics/${topicId}?from=party`,
       });
@@ -830,7 +830,7 @@ export class TopicsService {
     let sides: string[];
     if (topic.meetingType === MeetingType.PARTY_COMMITTEE) {
       if (!isProxy && !isSecretary && !isCollegeAdmin) {
-        throw new ForbiddenException('仅党委书记或学院管理员可审党组织会议议题');
+        throw new ForbiddenException('仅党委书记或学院管理员可审党委会议题');
       }
       sides = [JointReviewSide.SECRETARY];
     } else if (isProxy) {
@@ -937,7 +937,7 @@ export class TopicsService {
   }
 
   /**
-   * 党组织会议形成决议；可选自动转联席会（生成联席会议题草稿并建立流转链路）
+   * 党委会形成决议；可选自动转联席会（生成联席会议题草稿并建立流转链路）
    */
   async partyResolve(
     user: AuthUser,
@@ -946,10 +946,10 @@ export class TopicsService {
   ) {
     const topic = await this.detail(user, topicId);
     if (topic.meetingType !== MeetingType.PARTY_COMMITTEE) {
-      throw new BadRequestException('仅党组织会议议题可使用本接口形成决议');
+      throw new BadRequestException('仅党委会议题可使用本接口形成决议');
     }
     if (!user.roles.includes(RoleCode.SECRETARY) && !user.isSchoolAdmin) {
-      throw new ForbiddenException('仅党委书记可形成党组织会议决议');
+      throw new ForbiddenException('仅党委书记可形成党委会决议');
     }
     if (topic.status !== TopicStatus.APPROVED && topic.status !== TopicStatus.ON_AGENDA) {
       throw new BadRequestException('须经党委书记审题通过后方可形成决议');
@@ -1006,7 +1006,7 @@ export class TopicsService {
         collegeId: topic.collegeId,
         type: 'SUPERVISION',
         title: `督办待办：${topic.title}`,
-        content: '党组织会议决议已形成，请及时反馈落实情况',
+        content: '党委会决议已形成，请及时反馈落实情况',
         link: '/supervisions',
       });
     }
@@ -1031,7 +1031,7 @@ export class TopicsService {
     return this.detail(user, topicId);
   }
 
-  /** 将已决议的党组织会议议题转为联席会议题（前置把关链路） */
+  /** 将已决议的党委会议题转为联席会议题（前置把关链路） */
   async transferPartyToJoint(
     user: AuthUser,
     sourceTopicId: string,
@@ -1040,11 +1040,11 @@ export class TopicsService {
   ) {
     const source = await this.detail(user, sourceTopicId);
     if (source.meetingType !== MeetingType.PARTY_COMMITTEE) {
-      throw new BadRequestException('仅党组织会议议题可转联席会');
+      throw new BadRequestException('仅党委会议题可转联席会');
     }
     const resolution = source.resolution;
     if (!resolution && !resolutionId) {
-      throw new BadRequestException('请先形成党组织会议决议再转联席会');
+      throw new BadRequestException('请先形成党委会决议再转联席会');
     }
     const resId = resolution?.id || resolutionId!;
 
@@ -1068,7 +1068,7 @@ export class TopicsService {
         collegeId: source.collegeId,
         meetingType: MeetingType.JOINT_CONFERENCE,
         title: `【党委转办】${source.title}`,
-        content: `源自党组织会议决议。${note || resolution?.content || ''}`,
+        content: `源自党委会决议。${note || resolution?.content || ''}`,
         categoryId: transferCategory?.id,
         proposerId: user.sub,
         status: TopicStatus.DRAFT,
@@ -1078,12 +1078,12 @@ export class TopicsService {
         materials: {
           create: [
             {
-              name: '党组织会议决议摘要/依据',
+              name: '党委会决议摘要/依据',
               requiredKey: 'party_resolution',
               isRequired: false,
               uploaded: true,
               filePath: `party-resolution://${resId}`,
-              originalName: '党组织会议决议关联',
+              originalName: '党委会决议关联',
             },
             {
               name: '调研报告/落实方案',

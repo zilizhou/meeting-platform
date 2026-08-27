@@ -6,7 +6,7 @@
       </div>
       <h2>历史会议导入</h2>
       <p>
-        上传议题表、会议记录、会议纪要。党组织按单场解析；党政联席支持合订本一次导入多场。
+        上传议题表、会议记录、会议纪要。党委会按单场解析；党政联席支持合订本一次导入多场。
         未对齐齐全的场次默认不勾选（规则 B）。纪要按现行规则挂为线下附件归档，不做线上代签。
       </p>
     </div>
@@ -20,7 +20,7 @@
           :class="{ on: meetingType === 'PARTY_COMMITTEE' }"
           @click="meetingType = 'PARTY_COMMITTEE'"
         >
-          党组织会议
+          党委会
         </button>
         <button
           type="button"
@@ -147,7 +147,7 @@
 
           <div class="block-title">
             议题
-            <span v-if="isParty" class="hint">党组织会议请标记「第一议题」</span>
+            <span v-if="isParty" class="hint">党委会请标记「第一议题」</span>
           </div>
           <div v-for="(t, ti) in m.topics" :key="ti" class="topic-card">
             <div class="topic-head">

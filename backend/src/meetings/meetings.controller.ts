@@ -14,6 +14,7 @@ import {
   MinutesDto,
   AbsentOpinionDto,
   ResolveDto,
+  SetFirstTopicDto,
   VoteDto,
 } from './dto/meeting.dto';
 
@@ -75,6 +76,21 @@ export class MeetingsController {
   )
   end(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.meetings.end(user, id);
+  }
+
+  @Post(':id/first-topic')
+  @Roles(
+    RoleCode.MEETING_SECRETARY,
+    RoleCode.COLLEGE_ADMIN,
+    RoleCode.SECRETARY,
+    RoleCode.VICE_SECRETARY,
+  )
+  setFirstTopic(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: SetFirstTopicDto,
+  ) {
+    return this.meetings.setFirstTopic(user, id, dto.topicId);
   }
 
   @Post(':id/checkin')

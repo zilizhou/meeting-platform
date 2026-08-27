@@ -36,22 +36,22 @@ model College {
 }
 
 model User {
-  id                  String    @id @default(cuid())
-  username            String    @unique
-  passwordHash        String
-  realName            String
-  title               String?
-  collegeId           String?
-  isSchoolAdmin       Boolean   @default(false)
-  enabled             Boolean   @default(true)
+  id                 String    @id @default(cuid())
+  username           String    @unique
+  passwordHash       String
+  realName           String
+  title              String?
+  collegeId          String?
+  isSchoolAdmin      Boolean   @default(false)
+  enabled            Boolean   @default(true)
   /// 首次登录或管理员重置后须改密
-  mustChangePassword  Boolean   @default(false)
+  mustChangePassword Boolean   @default(false)
   /// 改密/禁用/登出时递增，用于使旧 JWT 失效
-  tokenVersion        Int       @default(0)
-  failedLoginCount    Int       @default(0)
-  lockedUntil         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  tokenVersion       Int       @default(0)
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   college              College?              @relation(fields: [collegeId], references: [id])
   // 校级查阅分管学院；空列表表示可看全校
@@ -138,6 +138,7 @@ model CategoryDict {
 
 model Meeting {
   id           String    @id @default(cuid())
+  firstTopicId String?
   collegeId    String
   meetingType  String
   title        String
@@ -418,19 +419,19 @@ model Notification {
 
 /// AI 生成记录（摘要/纪要草稿等），仅作辅读与审计，不直接改业务终态
 model AiGeneration {
-  id           String   @id @default(cuid())
-  collegeId    String?
-  topicId      String?
-  meetingId    String?
-  userId       String?
-  kind         String
-  provider     String
-  model        String?
-  promptVersion String  @default("v1")
-  inputDigest  String?
-  outputText   String
-  metaJson     String?
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  collegeId     String?
+  topicId       String?
+  meetingId     String?
+  userId        String?
+  kind          String
+  provider      String
+  model         String?
+  promptVersion String   @default("v1")
+  inputDigest   String?
+  outputText    String
+  metaJson      String?
+  createdAt     DateTime @default(now())
 
   @@index([topicId, kind, createdAt])
   @@index([collegeId, createdAt])
@@ -449,4 +450,3 @@ model MeetingFrequencyRule {
 
   @@unique([collegeId, meetingType])
 }
-

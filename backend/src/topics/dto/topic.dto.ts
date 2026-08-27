@@ -65,7 +65,7 @@ export class CreateTopicDto {
   @IsBoolean()
   isEmergency?: boolean;
 
-  /** 党组织会议决议后是否标记需转联席会 */
+  /** 党委会决议后是否标记需转联席会 */
   @ApiPropertyOptional({ default: false })
   @IsOptional()
   @IsBoolean()

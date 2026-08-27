@@ -149,7 +149,7 @@ export class WorkspaceService {
         items: jointActive.slice(0, 12),
       },
       party: {
-        title: '学院党组织会议流程',
+        title: '学院党委会流程',
         steps: partySteps,
         stageStats: countByStage(partyActive, partySteps),
         items: partyActive.slice(0, 12),

@@ -11,7 +11,7 @@
           :class="{ on: activeTab === 'party' }"
           @click="activeTab = 'party'"
         >
-          <strong>{{ partyEntryCount }}</strong><span>党组织会议</span>
+          <strong>{{ partyEntryCount }}</strong><span>党委会</span>
         </button>
         <button
           type="button"
@@ -38,7 +38,7 @@
       :class="{ warn: !holding.party?.held || !holding.joint?.held }"
     >
       <strong>{{ holding.label }}召开进度</strong>
-      党组织会议 {{ holding.party?.count }}/{{ holding.party?.required }}
+      党委会 {{ holding.party?.count }}/{{ holding.party?.required }}
       {{ holding.party?.held ? '已达标' : '未达标' }}
       · 党政联席会议 {{ holding.joint?.count }}/{{ holding.joint?.required }}
       {{ holding.joint?.held ? '已达标' : '未达标' }}。
@@ -65,7 +65,7 @@
         :class="{ on: activeTab === 'party' }"
         @click="activeTab = 'party'"
       >
-        党组织会议
+        党委会
       </button>
       <button
         type="button"
@@ -104,7 +104,7 @@
       <button class="w-entry party" type="button" @click="router.push('/party-topics')">
         <div class="ico">库</div>
         <strong>议题库</strong>
-        <em>第一议题 · 审题</em>
+        <em>分类管理 · 书记审题</em>
       </button>
       <button
         class="w-entry party"
@@ -113,7 +113,7 @@
       >
         <div class="ico">会</div>
         <strong>会议管理</strong>
-        <em>须有第一议题方可开会</em>
+        <em>入会议题 · 设置第一议题</em>
       </button>
       <button
         class="w-entry party"
@@ -325,7 +325,7 @@ const jointEntryCount = computed(() => 4 + (canImportParty.value ? 1 : 0))
 const generalEntryCount = computed(() => 3 + (canManageRoster.value ? 1 : 0))
 
 const sectionTitle = computed(() => {
-  if (activeTab.value === 'party') return '党组织会议办事'
+  if (activeTab.value === 'party') return '党委会办事'
   if (activeTab.value === 'joint') return '党政联席会议办事'
   return '综合事务'
 })

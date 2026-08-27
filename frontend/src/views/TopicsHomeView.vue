@@ -93,7 +93,7 @@
         >
           <div class="top">
             <span class="ui-tag" :class="isParty(t) ? 'party' : 'joint'">
-              {{ isParty(t) ? '党组织会议' : '党政联席会议' }}
+              {{ isParty(t) ? '党委会' : '党政联席会议' }}
             </span>
             <span class="ui-tag">{{ statusLabel(t.status) }}</span>
           </div>
@@ -141,7 +141,7 @@
         >
           <div class="top">
             <span class="ui-tag" :class="isParty(t) ? 'party' : 'joint'">
-              {{ isParty(t) ? '党组织会议' : '党政联席会议' }}
+              {{ isParty(t) ? '党委会' : '党政联席会议' }}
             </span>
             <span class="ui-tag">{{ statusLabel(t.status) }}</span>
           </div>

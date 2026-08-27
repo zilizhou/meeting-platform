@@ -204,7 +204,7 @@
           @change="loadCategories"
         >
           <el-option label="联席会" value="JOINT_CONFERENCE" />
-          <el-option label="党组织会议" value="PARTY_COMMITTEE" />
+          <el-option label="党委会" value="PARTY_COMMITTEE" />
           <el-option label="全部" value="" />
         </el-select>
         <el-select v-model="catScope" style="width: 140px" @change="loadCategories">
@@ -220,7 +220,7 @@
         <el-table-column prop="name" label="名称" min-width="160" />
         <el-table-column label="会议类型" width="120">
           <template #default="{ row }">
-            {{ row.meetingType === 'PARTY_COMMITTEE' ? '党组织会议' : '联席会' }}
+            {{ row.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '联席会' }}
           </template>
         </el-table-column>
         <el-table-column label="范围" width="140">
@@ -397,7 +397,7 @@
         <el-form-item v-if="!catEditingId" label="会议类型">
           <el-select v-model="catForm.meetingType" style="width: 100%">
             <el-option label="联席会" value="JOINT_CONFERENCE" />
-            <el-option label="党组织会议" value="PARTY_COMMITTEE" />
+            <el-option label="党委会" value="PARTY_COMMITTEE" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="!catEditingId" label="编码">

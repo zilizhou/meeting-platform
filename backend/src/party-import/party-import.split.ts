@@ -97,7 +97,7 @@ export function splitAgendaSegments(
   }
   const parts = splitByRegexKeep(
     text,
-    /[^\n]*学院党委会议题表|[^\n]*党组织会议议题表/g,
+    /[^\n]*学院党委会议题表|[^\n]*党委会议题表/g,
   );
   if (parts.length > 1) return parts.map((t) => toSegment(t));
   return [toSegment(text)];

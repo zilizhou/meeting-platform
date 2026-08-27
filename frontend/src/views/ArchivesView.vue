@@ -10,7 +10,7 @@
       />
       <el-select v-model="meetingType" clearable placeholder="会议类型" style="width: 140px" @change="load">
         <el-option label="联席会" value="JOINT_CONFERENCE" />
-        <el-option label="党组织会议" value="PARTY_COMMITTEE" />
+        <el-option label="党委会" value="PARTY_COMMITTEE" />
       </el-select>
       <el-select v-model="status" clearable placeholder="状态" style="width: 120px" @change="load">
         <el-option label="已决议" value="RESOLVED" />
@@ -34,7 +34,7 @@
       <el-table-column prop="title" label="会议" min-width="220" />
       <el-table-column label="类型" width="100">
         <template #default="{ row }">
-          {{ row.meetingType === 'PARTY_COMMITTEE' ? '党组织会议' : '联席会' }}
+          {{ row.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '联席会' }}
         </template>
       </el-table-column>
       <el-table-column label="学院" width="140">

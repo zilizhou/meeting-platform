@@ -8,21 +8,13 @@
       </div>
       <div class="hero-tags">
         <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
-          {{ isParty ? '党组织会议' : '党政联席会' }}
+          {{ isParty ? '党委会' : '党政联席会' }}
         </span>
         <span class="ui-tag hero-status">{{ statusLabel(meeting.status) }}</span>
         <span v-if="meeting.isMajor" class="ui-tag warn">重大事项</span>
       </div>
       <h2>{{ meeting.title }}</h2>
       <p>期次 {{ meeting.periodNo || '—' }} · 时间 {{ formatTime(meeting.scheduledAt) || '待定' }}</p>
-      <el-alert
-        v-if="missingFirstTopic"
-        type="error"
-        :closable="false"
-        show-icon
-        style="margin-top: 12px"
-        title="本场党组织会议未纳入第一议题（政治理论学习），不能标记已召开。"
-      />
       <div class="nums">
         <div class="kpi" :class="isParty ? 'party' : 'joint'">
           <strong>{{ meeting.topics?.length || 0 }}</strong>
@@ -44,7 +36,6 @@
         class="ui-btn"
         :class="{ party: isParty }"
         type="button"
-        :disabled="missingFirstTopic"
         @click="markHeld"
       >
         标记已召开
@@ -81,7 +72,7 @@
             <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
               {{ statusLabel(topic.status) }}
             </span>
-            <span v-if="topic.category?.code === 'FIRST_TOPIC'" class="ui-tag party">
+            <span v-if="meeting.firstTopicId === topic.id" class="ui-tag party">
               第一议题
             </span>
           </div>
@@ -95,6 +86,14 @@
               @click="openTopicDialog(topic.id)"
             >
               查看详情
+            </button>
+            <button
+              v-if="canSetFirstTopic && meeting.firstTopicId !== topic.id"
+              class="ui-btn light"
+              type="button"
+              @click="setFirstTopic(topic)"
+            >
+              设为第一议题
             </button>
           </div>
         </div>
@@ -189,7 +188,7 @@
           <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
             {{ statusLabel(dialogTopic.status) }}
           </span>
-          <span v-if="dialogTopic.category?.code === 'FIRST_TOPIC'" class="ui-tag party">
+          <span v-if="meeting.firstTopicId === dialogTopic.id" class="ui-tag party">
             第一议题
           </span>
           <span v-if="dialogTopic.isMajor" class="ui-tag warn">重大</span>
@@ -212,11 +211,11 @@
         <div class="dialog-section">
           <div class="dialog-label">基本信息</div>
           <div class="info-list">
-            <div><em>会议类型</em><span>{{ isParty ? '党组织会议' : '党政联席会' }}</span></div>
+            <div><em>会议类型</em><span>{{ isParty ? '党委会' : '党政联席会' }}</span></div>
             <div><em>重大事项</em><span>{{ dialogTopic.isMajor ? '是' : '否' }}</span></div>
             <div><em>临时动议</em><span>{{ dialogTopic.isTempMotion ? '是' : '否' }}</span></div>
             <div v-if="!isParty">
-              <em>党组织会议前置</em>
+              <em>党委会前置</em>
               <span>{{ dialogTopic.needPartyPrecheck ? '需要' : '不需要' }}</span>
             </div>
           </div>
@@ -435,11 +434,23 @@ const minutesMeta = computed(() => {
 const minutesFileName = computed(() =>
   displayUploadFilename(meeting.value?.minutes?.originalName),
 )
-const missingFirstTopic = computed(() => {
-  if (!isParty.value) return false
-  const topics = meeting.value?.topics || []
-  return !topics.some((t: any) => t.category?.code === 'FIRST_TOPIC')
-})
+const canSetFirstTopic = computed(
+  () =>
+    isParty.value &&
+    roles.canCreateMeeting.value &&
+    meeting.value?.status !== 'ARCHIVED',
+)
+
+function orderedTopics(m: any = meeting.value) {
+  const topics = [...(m?.topics || [])]
+  const firstTopicId = m?.firstTopicId
+  if (!firstTopicId) return topics
+  return topics.sort((a: any, b: any) => {
+    if (a.id === firstTopicId) return -1
+    if (b.id === firstTopicId) return 1
+    return 0
+  })
+}
 
 function formatTime(v?: string) {
   if (!v) return ''
@@ -547,7 +558,7 @@ function buildMinutesOutline(m: any = meeting.value) {
     '',
     '入会议题：',
   ]
-  const topics = m.topics || []
+  const topics = orderedTopics(m)
   if (!topics.length) {
     lines.push('（暂无入会议题）')
   } else {
@@ -597,6 +608,26 @@ async function applyTextToMinutes(text: string, source: 'agenda' | 'ai') {
 
 async function fillMinutesFromAgenda() {
   await applyTextToMinutes(buildMinutesOutline(), 'agenda')
+}
+
+async function setFirstTopic(topic: any) {
+  try {
+    await ElMessageBox.confirm(
+      `确认将“${topic.title}”设为本场会议的第一议题？`,
+      '设置第一议题',
+      { type: 'warning', confirmButtonText: '确认设置', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  try {
+    meeting.value = await http.post(`/meetings/${route.params.id}/first-topic`, {
+      topicId: topic.id,
+    })
+    ElMessage.success('第一议题已设置，并已调整到议程首位')
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  }
 }
 
 async function generateMinutesDraft() {

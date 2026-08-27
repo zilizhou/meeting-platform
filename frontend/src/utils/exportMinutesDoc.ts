@@ -33,7 +33,7 @@ export function exportMeetingMinutesDoc(meeting: any) {
   if (!meeting) return
 
   const isParty = meeting.meetingType === 'PARTY_COMMITTEE'
-  const meetingLabel = isParty ? '党组织会议' : '党政联席会议'
+  const meetingLabel = isParty ? '党委会' : '党政联席会议'
   const college = meeting.college?.name || ''
   const title = `${college}${meetingLabel}纪要`
   const period = meeting.periodNo ? `（${esc(meeting.periodNo)}）` : ''

@@ -7,7 +7,7 @@
         {{
           mineMode
             ? '仅显示您作为申报人提交的议题，可跟踪审核与入会进度。'
-            : '党组织会议与党政联席会议议题集中办理：补材料、审题与入会准备。'
+            : '党委会与党政联席会议议题集中办理：补材料、审题与入会准备。'
         }}
       </p>
       <div class="nums">
@@ -41,7 +41,7 @@
     <div v-if="!mineMode" class="rule-banner">
       <strong>可见范围 · 审题</strong>
       书记、副书记、院长、副院长、学院管理员、会议秘书可看全量议题；其他人仅看与自己相关的议题。
-      学院管理员可直接审题。党组织会议须有「第一议题」方可开会；联席会议题由书记、院长双审。
+      学院管理员可直接审题。党委会议题由书记审题；联席会议题由书记、院长双审。
       <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
     </div>
 
@@ -87,7 +87,7 @@
     <article v-for="t in filteredTopics" :key="t.id" class="ui-card" :class="isPartyTopic(t) ? 'party' : 'joint'">
       <div class="top">
         <span class="ui-tag" :class="isPartyTopic(t) ? 'party' : 'joint'">
-          {{ isPartyTopic(t) ? '党组织会议' : '党政联席会议' }}
+          {{ isPartyTopic(t) ? '党委会' : '党政联席会议' }}
         </span>
         <span class="ui-tag" :class="statusInfo(t).tag">{{ statusInfo(t).label }}</span>
         <span v-if="t.category?.code === 'FIRST_TOPIC'" class="ui-tag party">第一议题</span>

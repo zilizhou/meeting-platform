@@ -2,12 +2,12 @@
   <div>
     <div class="ui-hero party">
       <div class="eyebrow"><b></b> 党委红轨 · {{ mineMode ? '我的议题' : '议题库' }}</div>
-      <h2>{{ mineMode ? '我的党组织会议议题' : '党组织会议议题库' }}</h2>
+      <h2>{{ mineMode ? '我的党委会议题' : '党委会议题库' }}</h2>
       <p>
         {{
           mineMode
-            ? '仅显示您作为申报人提交的党组织会议议题，可跟踪审题与入会进度。'
-            : '学院党组织会议历次议题的集中管理入口。须有「第一议题」入会后方可开会；学院管理员可直接审题。'
+            ? '仅显示您作为申报人提交的党委会议题，可跟踪审题与入会进度。'
+            : '学院党委会历次议题的集中管理入口。学院管理员可直接审题；入会后可在会议详情设置第一议题。'
         }}
       </p>
       <div class="nums">
@@ -38,15 +38,8 @@
       </div>
     </div>
 
-    <div v-if="!mineMode" class="rule-banner party">
-      <strong>第一议题 · 审题</strong>
-      党组织会议必须把「第一议题（政治理论学习）」纳入议程，否则不能开会。
-      学院管理员可直接同意/暂缓。
-      <template v-if="!roles.canSeeFullTopicLibrary.value"> 当前仅显示与您相关的议题。</template>
-    </div>
-    <div v-if="!mineMode && !hasReadyFirstTopic" class="rule-banner warn">
-      <strong>尚未备妥第一议题</strong>
-      议题库里还没有已审过的第一议题。请先征集并完成书记审题，否则无法创建/召开党组织会议。
+    <div v-if="!mineMode && !roles.canSeeFullTopicLibrary.value" class="rule-banner party">
+      当前仅显示与您相关的议题。
     </div>
 
     <div class="ui-filter-wrap">
@@ -167,7 +160,7 @@
       </div>
     </article>
 
-    <el-dialog v-model="editVisible" title="编辑党组织会议议题" width="560px">
+    <el-dialog v-model="editVisible" title="编辑党委会议题" width="560px">
       <el-form label-width="110px">
         <el-form-item label="标题">
           <el-input v-model="editForm.title" />
@@ -315,14 +308,6 @@ const filteredTopics = computed(() => {
   if (!def || !def.statuses.length) return scopedTopics.value
   return scopedTopics.value.filter((t) => def.statuses.includes(t.status))
 })
-
-const hasReadyFirstTopic = computed(() =>
-  topics.value.some(
-    (t) =>
-      t.category?.code === 'FIRST_TOPIC' &&
-      ['APPROVED', 'ON_AGENDA', 'RESOLVED'].includes(t.status),
-  ),
-)
 
 const proxyTitle = computed(() =>
   proxyForm.decision === 'REJECTED' ? '代审退回' : '代审通过',

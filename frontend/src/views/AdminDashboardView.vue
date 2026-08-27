@@ -38,7 +38,7 @@
         </div>
         <div class="kpi party">
           <strong>{{ month?.missingPartyCount ?? '—' }}</strong>
-          <span>缺党组织会</span>
+          <span>缺党委会</span>
         </div>
         <div class="kpi teal">
           <strong>{{ month?.missingJointCount ?? '—' }}</strong>
@@ -86,7 +86,7 @@
     </section>
     <div v-if="!isViewerOnly" class="freq-card">
       <div class="freq-row">
-        <strong>党组织会议</strong>
+        <strong>党委会</strong>
         <el-select v-model="freqForm.partyPeriod" style="width: 140px">
           <el-option label="按学期" value="SEMESTER" />
           <el-option label="按自然月" value="MONTH" />
@@ -176,7 +176,7 @@
     </section>
 
     <div v-if="!missingRows.length" class="ok-banner">
-      {{ monthLabel }}各学院党组织会议、党政联席会议均已按规定频次召开/排期
+      {{ monthLabel }}各学院党委会、党政联席会议均已按规定频次召开/排期
     </div>
     <div v-else class="miss-list">
       <button
@@ -245,7 +245,7 @@
     </section>
     <el-table :data="filteredColleges" stripe class="college-table">
       <el-table-column prop="name" label="学院" min-width="140" />
-      <el-table-column label="党组织会" width="100">
+      <el-table-column label="党委会" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="row.monthPartyHeld ? 'success' : 'danger'">
             {{ row.monthPartyHeld ? '已开' : '未开' }}
@@ -327,7 +327,7 @@
           <el-table-column label="学院" width="140">
             <template #default="{ row }">{{ row.sourceTopic?.college?.name }}</template>
           </el-table-column>
-          <el-table-column label="党组织会议源议题" min-width="200">
+          <el-table-column label="党委会源议题" min-width="200">
             <template #default="{ row }">
               <el-button
                 link
@@ -366,7 +366,7 @@
         <div class="stats" v-if="overview">
           <div class="stat"><b>{{ overview.collegeCount }}</b><span>学院数</span></div>
           <div class="stat"><b>{{ overview.jointMeetingCount }}</b><span>联席会议累计</span></div>
-          <div class="stat"><b>{{ overview.partyMeetingCount }}</b><span>党组织会累计</span></div>
+          <div class="stat"><b>{{ overview.partyMeetingCount }}</b><span>党委会累计</span></div>
           <div class="stat"><b>{{ overview.transferCount }}</b><span>转办链路</span></div>
           <div class="stat"><b>{{ pct(overview.supervisionDoneRate) }}</b><span>督办办结率</span></div>
           <div class="stat"><b>{{ pct(overview.compliancePassRate) }}</b><span>合规通过率</span></div>
@@ -484,7 +484,7 @@ const missingRows = computed(() => {
       key: `p-${c.collegeId}`,
       collegeId: c.collegeId,
       name: c.name,
-      label: '未按规定召开党组织会议',
+      label: '未按规定召开党委会',
       kind: 'party',
     })),
     ...filter(m.missingJoint).map((c: any) => ({

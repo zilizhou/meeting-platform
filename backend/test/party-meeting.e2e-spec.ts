@@ -42,24 +42,44 @@ describe('党委会正式开会（E2E）', () => {
     expect(String(res.body.message)).toMatch(/类型不匹配|不能入/);
   });
 
-  it('党组织会议无第一议题不能创建会议', async () => {
+  it('党委会不再限制第一议题，并可在入会议题中指定', async () => {
     const build = await ctx.prisma.categoryDict.findFirst({
       where: { meetingType: 'PARTY_COMMITTEE', code: 'PARTY_BUILD' },
     });
     expect(build).toBeTruthy();
-    const topicId = await createApprovedPartyTopic(ctx, '党建专项无第一议题', {
+    const topicId = await createApprovedPartyTopic(ctx, '党建专项议题', {
       categoryId: build!.id,
     });
-    const res = await request(ctx.app.getHttpServer())
+    const secondTopicId = await createApprovedPartyTopic(ctx, '理论学习议题', {
+      categoryId: build!.id,
+    });
+    const created = await request(ctx.app.getHttpServer())
       .post('/api/meetings')
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
       .send({
-        title: '缺第一议题的党委会',
+        title: '可会内设置第一议题的党委会',
         meetingType: 'PARTY_COMMITTEE',
-        topicIds: [topicId],
+        topicIds: [topicId, secondTopicId],
       })
-      .expect(400);
-    expect(String(res.body.message)).toMatch(/第一议题/);
+      .expect(201);
+    expect(created.body.firstTopicId).toBeNull();
+
+    const updated = await request(ctx.app.getHttpServer())
+      .post(`/api/meetings/${created.body.id}/first-topic`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ topicId: secondTopicId })
+      .expect(201);
+    expect(updated.body.firstTopicId).toBe(secondTopicId);
+    expect(updated.body.topics[0].id).toBe(secondTopicId);
+
+    const draft = await request(ctx.app.getHttpServer())
+      .post(`/api/ai/meetings/${created.body.id}/minutes-draft`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .expect(201);
+    const draftText = String(draft.body.outputText || '');
+    expect(draftText.indexOf('理论学习议题')).toBeLessThan(
+      draftText.indexOf('党建专项议题'),
+    );
   });
 
   it('党委会开会：签到表决决议，书记单签纪要生效，可转联席会', async () => {

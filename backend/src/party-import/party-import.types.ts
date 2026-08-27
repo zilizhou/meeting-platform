@@ -13,7 +13,7 @@ export interface PartyImportTopicDraft {
   title: string;
   resolutionSummary: string;
   minutesSection: string;
-  /** 党组织会议：是否识别为「第一议题（政治理论学习）」 */
+  /** 党委会：是否识别为「第一议题（政治理论学习）」 */
   isFirstTopic?: boolean;
 }
 

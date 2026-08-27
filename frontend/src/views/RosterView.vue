@@ -3,7 +3,7 @@
     <div class="toolbar">
       <el-radio-group v-model="meetingType" @change="load">
         <el-radio-button value="JOINT_CONFERENCE">联席会名单</el-radio-button>
-        <el-radio-button value="PARTY_COMMITTEE">党组织会议名单</el-radio-button>
+        <el-radio-button value="PARTY_COMMITTEE">党委会名单</el-radio-button>
       </el-radio-group>
       <div class="actions">
         <el-button type="primary" @click="openAdd">添加成员</el-button>

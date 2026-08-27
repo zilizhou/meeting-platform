@@ -138,7 +138,7 @@ export class AiService {
 
     const meetingLabel =
       topic.meetingType === MeetingType.PARTY_COMMITTEE
-        ? '党组织会议'
+        ? '党委会'
         : '党政联席会';
 
     const userPrompt = [
@@ -158,7 +158,7 @@ export class AiService {
       .join('\n');
 
     const systemPrompt = [
-      '你是高校二级学院党组织会议/党政联席会议务辅读助手。',
+      '你是高校二级学院党委会/党政联席会议务辅读助手。',
       '根据议题与材料摘录，生成供书记/院长/委员会前阅读的「一页纸摘要」。',
       '要求：',
       '1. 使用中文，分节：背景与诉求、关键影响、材料齐备与缺项、审题关注点、声明。',
@@ -254,10 +254,15 @@ export class AiService {
 
     const meetingLabel =
       meeting.meetingType === MeetingType.PARTY_COMMITTEE
-        ? '党组织会议'
+        ? '党委会'
         : '党政联席会';
 
-    const topicBlocks = meeting.topics.map((t, idx) => {
+    const orderedTopics = [...meeting.topics].sort((a, b) => {
+      if (a.id === meeting.firstTopicId) return -1;
+      if (b.id === meeting.firstTopicId) return 1;
+      return a.sortOrder - b.sortOrder;
+    });
+    const topicBlocks = orderedTopics.map((t, idx) => {
       const res = t.resolution;
       return [
         `【议题${idx + 1}：${t.title}】`,
@@ -295,6 +300,7 @@ export class AiService {
       '3. 不要编写现场签到、举手表决等过程细节。',
       '4. 文末注明：本稿为 AI 辅助初稿，须秘书核对后保存。系统不办理线上签署生效。',
       '5. 不要输出「建议通过/建议否决」等替代会议结论的语句。',
+      '6. 已指定的第一议题必须写在所有议题的第一位，不得调整到其他位置。',
     ].join('\n');
 
     const result = await this.llm.chat(systemPrompt, userPrompt, {
@@ -302,8 +308,8 @@ export class AiService {
     });
 
     const meta = {
-      topicCount: meeting.topics.length,
-      hasResolution: meeting.topics.some((t) => !!t.resolution),
+      topicCount: orderedTopics.length,
+      hasResolution: orderedTopics.some((t) => !!t.resolution),
       demo: result.demo,
       meetingType: meeting.meetingType,
     };
@@ -516,12 +522,12 @@ export class AiService {
       ) {
         suggestions.needPartyPrecheck = true;
         suggestions.reasons.push(
-          '描述涉及办学方向、队伍建设或师生利益等，建议勾选「党组织会议前置」并关联党委决议',
+          '描述涉及办学方向、队伍建设或师生利益等，建议勾选「党委会前置」并关联党委决议',
         );
       }
       if (suggestedCategory?.code === 'PARTY_TRANSFER' || suggestedCategory?.needPrecheck) {
         suggestions.needPartyPrecheck = true;
-        suggestions.reasons.push('所选/推荐分类通常需要党组织会议前置材料');
+        suggestions.reasons.push('所选/推荐分类通常需要党委会前置材料');
       }
     }
 
@@ -661,7 +667,7 @@ export class AiService {
           '（4）预期影响与落实安排——影响面、责任分工与时限（未知处用"（需人工补充）"）。',
           '严禁编造描述中未出现的人名、金额、文件编号。',
         ].join('\n'),
-        `会议类型：${meetingType === 'PARTY_COMMITTEE' ? '党组织会议' : '党政联席会议'}\n用户描述：\n${description}`,
+        `会议类型：${meetingType === 'PARTY_COMMITTEE' ? '党委会' : '党政联席会议'}\n用户描述：\n${description}`,
         { demoKind: 'material_summary' },
       );
       if (result.demo) {
@@ -761,14 +767,14 @@ export class AiService {
       },
       {
         key: 'precheck',
-        label: '党组织会议前置',
+        label: '党委会前置',
         ok:
           topic.meetingType !== MeetingType.JOINT_CONFERENCE ||
           !topic.needPartyPrecheck ||
           Boolean(topic.relatedPartyResolutionId || topic.transferFrom),
         detail:
           topic.meetingType !== MeetingType.JOINT_CONFERENCE
-            ? '党组织会议议题不适用'
+            ? '党委会议题不适用'
             : !topic.needPartyPrecheck
               ? '未要求前置'
               : topic.relatedPartyResolutionId || topic.transferFrom
@@ -822,7 +828,7 @@ export class AiService {
 
     const briefLines = [
       `议题：${topic.title}`,
-      `类型：${topic.meetingType === MeetingType.PARTY_COMMITTEE ? '党组织会议' : '联席会'} · 分类：${topic.category?.name || '未分类'}`,
+      `类型：${topic.meetingType === MeetingType.PARTY_COMMITTEE ? '党委会' : '联席会'} · 分类：${topic.category?.name || '未分类'}`,
       `提案人：${topic.proposer?.realName || '—'}`,
       `状态：${topic.status}`,
       '',

@@ -8,7 +8,7 @@
       </div>
       <div class="hero-tags">
         <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
-          {{ isParty ? '党组织会议' : '党政联席会' }}
+          {{ isParty ? '党委会' : '党政联席会' }}
         </span>
         <span class="ui-tag">{{ statusLabel(topic.status) }}</span>
         <span v-if="topic.isMajor" class="ui-tag warn">重大事项</span>
@@ -75,7 +75,7 @@
       type="info"
       :closable="false"
       style="margin-bottom: 16px"
-      :title="`本议题由党组织会议转办：${topic.transferFrom.sourceTopic?.title || ''}`"
+      :title="`本议题由党委会转办：${topic.transferFrom.sourceTopic?.title || ''}`"
     />
     <el-alert
       v-if="topic.transferTo"
@@ -102,7 +102,7 @@
           <el-descriptions-item label="标题" :span="2">{{ topic.title }}</el-descriptions-item>
           <el-descriptions-item label="会议类型">
             <el-tag size="small" :type="isParty ? 'warning' : 'primary'">
-              {{ isParty ? '党组织会议' : '党政联席会' }}
+              {{ isParty ? '党委会' : '党政联席会' }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="状态">
@@ -135,7 +135,7 @@
               {{ topic.isEmergency ? '是（事后补确认）' : '否' }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item v-if="!isParty" label="党组织会议前置">
+          <el-descriptions-item v-if="!isParty" label="党委会前置">
             {{ topic.needPartyPrecheck ? '需要' : '不需要' }}
           </el-descriptions-item>
           <el-descriptions-item v-if="!isParty" label="关联决议">
@@ -443,7 +443,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="resolveVisible" title="形成党组织会议决议" width="520px">
+    <el-dialog v-model="resolveVisible" title="形成党委会决议" width="520px">
       <el-form label-width="110px">
         <el-form-item label="决议类型">
           <el-select v-model="resolveForm.resultType" style="width: 100%">
@@ -839,7 +839,7 @@ async function partyResolve() {
   try {
     await http.post(`/topics/${topic.value.id}/party-resolve`, resolveForm)
     ElMessage.success(
-      resolveForm.transferToJoint ? '决议已形成，并已转联席会' : '党组织会议决议已形成',
+      resolveForm.transferToJoint ? '决议已形成，并已转联席会' : '党委会决议已形成',
     )
     resolveVisible.value = false
     await load()

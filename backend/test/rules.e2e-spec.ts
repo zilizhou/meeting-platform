@@ -59,7 +59,7 @@ describe('议事规则硬校验（E2E）', () => {
     expect(res.body.status).toBe('DEFERRED');
   });
 
-  it('需党组织会议前置但未关联决议 → 创建失败', async () => {
+  it('需党委会前置但未关联决议 → 创建失败', async () => {
     const res = await request(ctx.app.getHttpServer())
       .post('/api/topics')
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
@@ -69,7 +69,7 @@ describe('议事规则硬校验（E2E）', () => {
       })
       .expect(400);
 
-    expect(String(res.body.message)).toContain('党组织会议');
+    expect(String(res.body.message)).toContain('党委会');
   });
 
   it('无需签到即可登记会后决议', async () => {

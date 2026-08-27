@@ -138,6 +138,7 @@ model CategoryDict {
 
 model Meeting {
   id           String    @id @default(cuid())
+  firstTopicId String?
   collegeId    String
   meetingType  String
   title        String
@@ -449,4 +450,3 @@ model MeetingFrequencyRule {
 
   @@unique([collegeId, meetingType])
 }
-

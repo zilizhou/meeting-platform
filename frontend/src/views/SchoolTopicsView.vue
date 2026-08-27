@@ -11,7 +11,7 @@
         </div>
         <div class="kpi party">
           <strong>{{ summary.party }}</strong>
-          <span>党组织会议</span>
+          <span>党委会</span>
         </div>
         <div class="kpi joint">
           <strong>{{ summary.joint }}</strong>
@@ -31,7 +31,7 @@
         </select>
         <select v-model="meetingType" @change="load">
           <option value="">全部类型</option>
-          <option value="PARTY_COMMITTEE">党组织会议</option>
+          <option value="PARTY_COMMITTEE">党委会</option>
           <option value="JOINT_CONFERENCE">党政联席会议</option>
         </select>
         <select v-model="status" @change="load">
@@ -54,7 +54,7 @@
           <p>点击学院可筛选下方列表；再点一次取消筛选</p>
         </div>
         <div class="legend">
-          <span><i class="party" />党组织</span>
+          <span><i class="party" />党委会</span>
           <span><i class="joint" />联席</span>
         </div>
       </div>
@@ -101,7 +101,7 @@
     >
       <div class="top">
         <span class="ui-tag" :class="t.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'">
-          {{ t.meetingType === 'PARTY_COMMITTEE' ? '党组织会议' : '党政联席会议' }}
+          {{ t.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '党政联席会议' }}
         </span>
         <span class="ui-tag">{{ statusLabel(t.status) }}</span>
       </div>

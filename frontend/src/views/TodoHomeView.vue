@@ -49,7 +49,7 @@
       class="rule-banner warn"
     >
       <strong>{{ holding.label }}召开进度未达标</strong>
-      党组织会议 {{ holding.party?.count }}/{{ holding.party?.required }}
+      党委会 {{ holding.party?.count }}/{{ holding.party?.required }}
       · 党政联席会议 {{ holding.joint?.count }}/{{ holding.joint?.required }}。
     </div>
 
@@ -71,7 +71,7 @@
         :class="{ on: track === 'party' }"
         @click="track = 'party'"
       >
-        党组织
+        党委会
       </button>
       <button
         type="button"
@@ -178,7 +178,7 @@ const holding = ref<any>(null)
 
 const TYPE_LABEL: Record<string, string> = {
   JOINT_REVIEW: '联席审题',
-  PARTY_REVIEW: '党组织审题',
+  PARTY_REVIEW: '党委会审题',
   MINUTES: '整理纪要',
   MINUTES_SIGN: '整理纪要',
   SUPERVISION: '督办',
@@ -233,14 +233,14 @@ function trackOf(item: TodoItem) {
 }
 
 function trackLabel(item: TodoItem) {
-  if (item.meetingType === 'PARTY_COMMITTEE') return '党组织'
+  if (item.meetingType === 'PARTY_COMMITTEE') return '党委会'
   if (item.meetingType === 'JOINT_CONFERENCE') return '党政联席'
   return '综合'
 }
 
 function displayTitle(item: TodoItem) {
   return item.title.replace(
-    /^(联席会议题待审|党组织会议议题待审|督办待办|待整理纪要)[：:]\s*/,
+    /^(联席会议题待审|党委会议题待审|督办待办|待整理纪要)[：:]\s*/,
     '',
   )
 }
