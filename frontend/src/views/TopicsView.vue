@@ -100,7 +100,6 @@
       </div>
 
       <h4 class="card-title" @click="$router.push(topicPath(t))">{{ t.title }}</h4>
-      <p v-if="t.content" class="content-line">{{ t.content }}</p>
 
       <div class="meta">
         分类：{{ t.category?.name || '未分类' }} · 提交人：{{ t.proposer?.realName || '—' }} ·
@@ -577,16 +576,6 @@ onMounted(load)
 }
 .card-title:hover {
   color: var(--text);
-}
-.content-line {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: #475569;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .foot-links {
   display: flex;

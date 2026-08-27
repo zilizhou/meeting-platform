@@ -13,6 +13,7 @@ import {
   LeaveDto,
   MinutesDto,
   AbsentOpinionDto,
+  ReorderTopicsDto,
   ResolveDto,
   SetFirstTopicDto,
   VoteDto,
@@ -91,6 +92,21 @@ export class MeetingsController {
     @Body() dto: SetFirstTopicDto,
   ) {
     return this.meetings.setFirstTopic(user, id, dto.topicId);
+  }
+
+  @Post(':id/topics/reorder')
+  @Roles(
+    RoleCode.MEETING_SECRETARY,
+    RoleCode.COLLEGE_ADMIN,
+    RoleCode.SECRETARY,
+    RoleCode.VICE_SECRETARY,
+  )
+  reorderTopics(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: ReorderTopicsDto,
+  ) {
+    return this.meetings.reorderTopics(user, id, dto.topicIds);
   }
 
   @Post(':id/checkin')

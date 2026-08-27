@@ -55,29 +55,48 @@
         <h3><i :class="{ party: isParty }"></i>入会议题</h3>
         <span class="n">{{ meeting.topics?.length || 0 }} 项</span>
       </div>
+      <p v-if="canReorderTopics" class="agenda-hint">
+        拖拽卡片可调整顺序
+        <template v-if="isParty">；排在第一位的即为本场第一议题</template>
+      </p>
 
       <el-empty v-if="!meeting.topics?.length" description="暂无入会议题" :image-size="64" />
 
       <div v-else class="topic-list">
         <div
-          v-for="(topic, idx) in meeting.topics"
+          v-for="(topic, idx) in agendaTopics"
           :key="topic.id"
           class="topic-card"
+          :class="{ dragging: dragFromIndex === idx, 'drag-over': dragOverIndex === idx }"
+          :draggable="canReorderTopics"
+          @dragstart="onAgendaDragStart($event, idx)"
+          @dragover.prevent="onAgendaDragOver($event, idx)"
+          @dragleave="onAgendaDragLeave(idx)"
+          @drop.prevent="onAgendaDrop(idx)"
+          @dragend="onAgendaDragEnd"
           @click="openTopicDialog(topic.id)"
         >
           <div class="topic-card-top">
+            <span
+              v-if="canReorderTopics"
+              class="drag-handle"
+              title="拖拽排序"
+              @click.stop
+            >⋮⋮</span>
             <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
               议题{{ Number(idx) + 1 }}
             </span>
             <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
               {{ statusLabel(topic.status) }}
             </span>
-            <span v-if="meeting.firstTopicId === topic.id" class="ui-tag party">
+            <span
+              v-if="isParty && (meeting.firstTopicId ? meeting.firstTopicId === topic.id : idx === 0)"
+              class="ui-tag party"
+            >
               第一议题
             </span>
           </div>
           <h4 class="topic-card-title">{{ topic.title }}</h4>
-          <p v-if="topic.content" class="topic-card-stats">{{ topic.content }}</p>
           <div class="topic-card-foot" @click.stop>
             <button
               class="ui-btn"
@@ -86,14 +105,6 @@
               @click="openTopicDialog(topic.id)"
             >
               查看详情
-            </button>
-            <button
-              v-if="canSetFirstTopic && meeting.firstTopicId !== topic.id"
-              class="ui-btn light"
-              type="button"
-              @click="setFirstTopic(topic)"
-            >
-              设为第一议题
             </button>
           </div>
         </div>
@@ -434,12 +445,27 @@ const minutesMeta = computed(() => {
 const minutesFileName = computed(() =>
   displayUploadFilename(meeting.value?.minutes?.originalName),
 )
-const canSetFirstTopic = computed(
+const canReorderTopics = computed(
   () =>
-    isParty.value &&
     roles.canCreateMeeting.value &&
-    meeting.value?.status !== 'ARCHIVED',
+    meeting.value?.status !== 'ARCHIVED' &&
+    (meeting.value?.topics?.length || 0) > 1,
 )
+
+const agendaTopics = computed(() => {
+  const topics = [...(meeting.value?.topics || [])]
+  const firstTopicId = meeting.value?.firstTopicId
+  if (!firstTopicId) return topics
+  return topics.sort((a: any, b: any) => {
+    if (a.id === firstTopicId) return -1
+    if (b.id === firstTopicId) return 1
+    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+  })
+})
+
+const dragFromIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+const reordering = ref(false)
 
 function orderedTopics(m: any = meeting.value) {
   const topics = [...(m?.topics || [])]
@@ -448,8 +474,59 @@ function orderedTopics(m: any = meeting.value) {
   return topics.sort((a: any, b: any) => {
     if (a.id === firstTopicId) return -1
     if (b.id === firstTopicId) return 1
-    return 0
+    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
   })
+}
+
+function onAgendaDragStart(e: DragEvent, idx: number) {
+  if (!canReorderTopics.value) {
+    e.preventDefault()
+    return
+  }
+  dragFromIndex.value = idx
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(idx))
+  }
+}
+
+function onAgendaDragOver(_e: DragEvent, idx: number) {
+  if (dragFromIndex.value === null || dragFromIndex.value === idx) return
+  dragOverIndex.value = idx
+}
+
+function onAgendaDragLeave(idx: number) {
+  if (dragOverIndex.value === idx) dragOverIndex.value = null
+}
+
+async function onAgendaDrop(toIdx: number) {
+  const fromIdx = dragFromIndex.value
+  dragOverIndex.value = null
+  dragFromIndex.value = null
+  if (fromIdx === null || fromIdx === toIdx || reordering.value) return
+  const list = [...agendaTopics.value]
+  const [moved] = list.splice(fromIdx, 1)
+  if (!moved) return
+  list.splice(toIdx, 0, moved)
+  const topicIds = list.map((t: any) => t.id)
+  reordering.value = true
+  try {
+    meeting.value = await http.post(`/meetings/${route.params.id}/topics/reorder`, {
+      topicIds,
+    })
+    ElMessage.success(
+      isParty.value ? '议题顺序已更新，首位为第一议题' : '议题顺序已更新',
+    )
+  } catch (e: any) {
+    ElMessage.error(String(e))
+  } finally {
+    reordering.value = false
+  }
+}
+
+function onAgendaDragEnd() {
+  dragFromIndex.value = null
+  dragOverIndex.value = null
 }
 
 function formatTime(v?: string) {
@@ -608,26 +685,6 @@ async function applyTextToMinutes(text: string, source: 'agenda' | 'ai') {
 
 async function fillMinutesFromAgenda() {
   await applyTextToMinutes(buildMinutesOutline(), 'agenda')
-}
-
-async function setFirstTopic(topic: any) {
-  try {
-    await ElMessageBox.confirm(
-      `确认将“${topic.title}”设为本场会议的第一议题？`,
-      '设置第一议题',
-      { type: 'warning', confirmButtonText: '确认设置', cancelButtonText: '取消' },
-    )
-  } catch {
-    return
-  }
-  try {
-    meeting.value = await http.post(`/meetings/${route.params.id}/first-topic`, {
-      topicId: topic.id,
-    })
-    ElMessage.success('第一议题已设置，并已调整到议程首位')
-  } catch (e: any) {
-    ElMessage.error(String(e))
-  }
 }
 
 async function generateMinutesDraft() {
@@ -905,6 +962,12 @@ watch(
   gap: 10px;
   margin-top: 4px;
 }
+.agenda-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
 .topic-card {
   margin: 0;
   padding: 14px;
@@ -912,7 +975,21 @@ watch(
   border-radius: 14px;
   background: #fff;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.topic-card[draggable='true'] {
+  cursor: grab;
+}
+.topic-card.dragging {
+  opacity: 0.55;
+}
+.topic-card.drag-over {
+  border-color: var(--joint);
+  box-shadow: 0 0 0 2px rgba(26, 79, 139, 0.12);
+}
+.detail.party .topic-card.drag-over {
+  border-color: var(--party);
+  box-shadow: 0 0 0 2px rgba(176, 48, 48, 0.12);
 }
 .topic-card:hover {
   border-color: rgba(26, 79, 139, 0.28);
@@ -926,6 +1003,21 @@ watch(
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
+  align-items: center;
+}
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  letter-spacing: -2px;
+  cursor: grab;
+  user-select: none;
 }
 .topic-card-title {
   margin: 0;
@@ -933,17 +1025,6 @@ watch(
   font-weight: 700;
   line-height: 1.45;
   color: var(--text);
-}
-.topic-card-stats {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-clamp: 2;
-  overflow: hidden;
-  margin-top: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
 }
 .topic-card-foot {
   display: flex;

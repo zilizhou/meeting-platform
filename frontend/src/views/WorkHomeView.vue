@@ -113,7 +113,7 @@
       >
         <div class="ico">会</div>
         <strong>会议管理</strong>
-        <em>入会议题 · 设置第一议题</em>
+        <em>入会议题 · 拖拽排第一议题</em>
       </button>
       <button
         class="w-entry party"

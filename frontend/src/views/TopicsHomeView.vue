@@ -98,7 +98,6 @@
             <span class="ui-tag">{{ statusLabel(t.status) }}</span>
           </div>
           <h4>{{ t.title }}</h4>
-          <p v-if="t.content" class="clip">{{ t.content }}</p>
           <div class="meta">{{ t.category?.name || '未分类' }} · {{ formatDay(t.createdAt) }}</div>
         </article>
       </template>
@@ -146,7 +145,6 @@
             <span class="ui-tag">{{ statusLabel(t.status) }}</span>
           </div>
           <h4>{{ t.title }}</h4>
-          <p v-if="t.content" class="clip">{{ t.content }}</p>
           <div class="meta">
             {{ t.proposer?.realName || '—' }} · {{ t.category?.name || '未分类' }} ·
             {{ formatDay(t.createdAt) }}
@@ -167,7 +165,6 @@ import TopicCreateView from '@/views/TopicCreateView.vue'
 interface TopicRow {
   id: string
   title: string
-  content?: string
   status: string
   meetingType: string
   createdAt: string
@@ -288,15 +285,6 @@ onMounted(() => {
 }
 .ui-card h4 {
   margin: 8px 0 0;
-}
-.clip {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: #475569;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .meta {
   margin-top: 8px;

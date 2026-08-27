@@ -43,6 +43,22 @@ export class CreateMeetingDto {
   @ArrayMinSize(1, { message: '创建会议至少选择一项议题' })
   @IsString({ each: true })
   topicIds!: string[];
+
+  @ApiPropertyOptional({
+    description: '党委会可选：指定本场第一议题（须在 topicIds 中）',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  firstTopicId?: string;
+}
+
+export class ReorderTopicsDto {
+  @ApiProperty({ type: [String], description: '入会议题完整顺序（首位即第一议题）' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  topicIds!: string[];
 }
 
 export class DiscussDto {

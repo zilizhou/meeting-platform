@@ -64,6 +64,27 @@ describe('党委会正式开会（E2E）', () => {
       .expect(201);
     expect(created.body.firstTopicId).toBeNull();
 
+    const withFirst = await request(ctx.app.getHttpServer())
+      .post('/api/meetings')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({
+        title: '创建时指定第一议题的党委会',
+        meetingType: 'PARTY_COMMITTEE',
+        topicIds: [topicId, secondTopicId],
+        firstTopicId: secondTopicId,
+      })
+      .expect(201);
+    expect(withFirst.body.firstTopicId).toBe(secondTopicId);
+    expect(withFirst.body.topics[0].id).toBe(secondTopicId);
+
+    const reordered = await request(ctx.app.getHttpServer())
+      .post(`/api/meetings/${withFirst.body.id}/topics/reorder`)
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ topicIds: [topicId, secondTopicId] })
+      .expect(201);
+    expect(reordered.body.firstTopicId).toBe(topicId);
+    expect(reordered.body.topics[0].id).toBe(topicId);
+
     const updated = await request(ctx.app.getHttpServer())
       .post(`/api/meetings/${created.body.id}/first-topic`)
       .set('Authorization', `Bearer ${ctx.users.office.token}`)

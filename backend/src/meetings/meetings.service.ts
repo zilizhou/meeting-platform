@@ -163,9 +163,20 @@ export class MeetingsService {
     });
 
     if (topicIds.length) {
-      const ordered = [...topicsToAttach].sort(
+      let ordered = [...topicsToAttach].sort(
         (a, b) => topicIds.indexOf(a.id) - topicIds.indexOf(b.id),
       );
+      let firstTopicId: string | null = null;
+      if (meetingType === MeetingType.PARTY_COMMITTEE && dto.firstTopicId) {
+        if (!topicIds.includes(dto.firstTopicId)) {
+          throw new BadRequestException('第一议题必须是本场入会议题之一');
+        }
+        firstTopicId = dto.firstTopicId;
+        ordered = [
+          ...ordered.filter((t) => t.id === firstTopicId),
+          ...ordered.filter((t) => t.id !== firstTopicId),
+        ];
+      }
       for (let i = 0; i < ordered.length; i++) {
         await this.prisma.topic.update({
           where: { id: ordered[i].id },
@@ -174,6 +185,12 @@ export class MeetingsService {
             status: TopicStatus.ON_AGENDA,
             sortOrder: i,
           },
+        });
+      }
+      if (firstTopicId) {
+        await this.prisma.meeting.update({
+          where: { id: meeting.id },
+          data: { firstTopicId },
         });
       }
     }
@@ -393,6 +410,45 @@ export class MeetingsService {
       resource: 'Meeting',
       resourceId: id,
       detail: { topicId },
+    });
+    return this.detail(user, id);
+  }
+
+  /** 调整入会议题顺序；党委会首位自动记为第一议题。 */
+  async reorderTopics(user: AuthUser, id: string, topicIds: string[]) {
+    const meeting = await this.detail(user, id);
+    if (meeting.status === MeetingStatus.ARCHIVED) {
+      throw new BadRequestException('会议已归档，不能调整议题顺序');
+    }
+    const currentIds = meeting.topics.map((t) => t.id);
+    if (
+      topicIds.length !== currentIds.length ||
+      [...topicIds].sort().join() !== [...currentIds].sort().join()
+    ) {
+      throw new BadRequestException('议题顺序须覆盖本场全部入会议题且不得增删');
+    }
+
+    const isParty = meeting.meetingType === MeetingType.PARTY_COMMITTEE;
+    const firstTopicId = isParty ? topicIds[0] : meeting.firstTopicId;
+
+    await this.prisma.$transaction([
+      this.prisma.meeting.update({
+        where: { id },
+        data: { firstTopicId: firstTopicId || null },
+      }),
+      ...topicIds.map((topicId, sortOrder) =>
+        this.prisma.topic.update({
+          where: { id: topicId },
+          data: { sortOrder },
+        }),
+      ),
+    ]);
+    await this.audit.log({
+      user,
+      action: 'REORDER_TOPICS',
+      resource: 'Meeting',
+      resourceId: id,
+      detail: { topicIds, firstTopicId },
     });
     return this.detail(user, id);
   }

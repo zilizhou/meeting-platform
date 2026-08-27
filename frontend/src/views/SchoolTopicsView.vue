@@ -21,7 +21,7 @@
     </div>
 
     <div class="filter-card">
-      <input v-model="q" type="search" placeholder="搜索标题、内容、学院、申报人" @keyup.enter="load" />
+      <input v-model="q" type="search" placeholder="搜索标题、学院、申报人、会议" @keyup.enter="load" />
       <div class="row">
         <select v-model="collegeId" @change="load">
           <option value="">全部部门</option>
@@ -106,10 +106,9 @@
         <span class="ui-tag">{{ statusLabel(t.status) }}</span>
       </div>
       <h4>{{ t.title }}</h4>
-      <p v-if="t.content" class="clip">{{ t.content }}</p>
       <div class="meta">
-        {{ t.college?.name || '—' }} · {{ t.proposer?.realName || '—' }} ·
-        {{ formatTime(t.createdAt) }}
+        {{ t.college?.name || '—' }} · {{ t.meeting?.title || '未关联会议' }} ·
+        {{ t.proposer?.realName || '—' }} · {{ formatTime(t.createdAt) }}
       </div>
     </article>
   </div>
@@ -123,13 +122,13 @@ import http from '@/api/http'
 interface TopicRow {
   id: string
   title: string
-  content?: string
   status: string
   meetingType: string
   createdAt: string
   collegeId?: string
   college?: { id?: string; name: string }
   proposer?: { realName: string }
+  meeting?: { id?: string; title?: string; status?: string } | null
 }
 
 interface CollegeBar {
@@ -469,21 +468,14 @@ onMounted(load)
 }
 .ui-card h4 {
   margin: 8px 0 0;
-}
-.clip {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: #475569;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.35;
 }
 .meta {
   margin-top: 8px;
   font-size: 12px;
   color: var(--muted);
-  text-align: right;
+  line-height: 1.45;
 }
 
 @media (max-width: 560px) {

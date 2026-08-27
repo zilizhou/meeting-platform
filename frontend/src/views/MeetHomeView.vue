@@ -243,16 +243,20 @@
           </span>
         </div>
         <p class="create-hint">
-          至少勾选 1 项议题方可创建。党委会创建后，可在会议详情中设置第一议题。
+          至少勾选 1 项议题方可创建。
+          <template v-if="createMode === 'party'">
+            党委会可为已选议题指定「第一议题」，创建后排在议程首位；也可稍后在会议详情中拖拽调整。
+          </template>
           已入其他会议的议题不可再选。
         </p>
 
-        <div class="topic-table" :class="{ party: createMode === 'party' }">
+        <div class="topic-table" :class="{ party: createMode === 'party', 'has-first': createMode === 'party' }">
           <div class="topic-table-head">
             <span class="col-check" aria-hidden="true"></span>
             <span class="col-title">议题标题</span>
             <span class="col-user">提交人</span>
             <span class="col-time">提交时间</span>
+            <span v-if="createMode === 'party'" class="col-first">第一议题</span>
           </div>
 
           <div v-if="topicsLoading" class="topic-table-empty">加载议题中…</div>
@@ -280,6 +284,22 @@
                 </span>
                 <span class="col-user">{{ t.proposer?.realName || '—' }}</span>
                 <span class="col-time">{{ formatShortTime(t.createdAt) }}</span>
+                <span
+                  v-if="createMode === 'party'"
+                  class="col-first"
+                  @click.stop
+                >
+                  <button
+                    v-if="form.topicIds.includes(t.id) && !t.locked"
+                    type="button"
+                    class="first-pick"
+                    :class="{ on: form.firstTopicId === t.id }"
+                    @click="setCreateFirstTopic(t.id)"
+                  >
+                    {{ form.firstTopicId === t.id ? '已选' : '设为第一' }}
+                  </button>
+                  <span v-else class="first-na">—</span>
+                </span>
               </div>
             </el-checkbox-group>
           </template>
@@ -356,6 +376,7 @@ const form = reactive({
   scheduledAt: '',
   isMajor: false,
   topicIds: [] as string[],
+  firstTopicId: '' as string,
 })
 
 const STATUS: Record<string, string> = {
@@ -569,6 +590,7 @@ async function openCreateParty() {
   form.scheduledAt = defaultScheduledAt()
   form.isMajor = false
   form.topicIds = []
+  form.firstTopicId = ''
   createVisible.value = true
   await loadCreateTopics('PARTY_COMMITTEE')
 }
@@ -583,6 +605,7 @@ async function openCreateJoint() {
   form.scheduledAt = defaultScheduledAt()
   form.isMajor = false
   form.topicIds = []
+  form.firstTopicId = ''
   createVisible.value = true
   await loadCreateTopics('JOINT_CONFERENCE')
 }
@@ -590,8 +613,17 @@ async function openCreateJoint() {
 function toggleTopic(t: { id: string; locked?: boolean }) {
   if (t.locked) return
   const i = form.topicIds.indexOf(t.id)
-  if (i >= 0) form.topicIds.splice(i, 1)
-  else form.topicIds.push(t.id)
+  if (i >= 0) {
+    form.topicIds.splice(i, 1)
+    if (form.firstTopicId === t.id) form.firstTopicId = ''
+  } else {
+    form.topicIds.push(t.id)
+  }
+}
+
+function setCreateFirstTopic(id: string) {
+  if (!form.topicIds.includes(id)) return
+  form.firstTopicId = form.firstTopicId === id ? '' : id
 }
 
 function goTopicCreate() {
@@ -626,6 +658,9 @@ async function submitCreate() {
       isMajor: form.isMajor,
       topicIds,
       meetingType,
+      ...(meetingType === 'PARTY_COMMITTEE' && form.firstTopicId
+        ? { firstTopicId: form.firstTopicId }
+        : {}),
     })
     ElMessage.success(
       `${createMode.value === 'party' ? '党委会' : '联席会议'}已创建，已入会 ${topicIds.length} 项议题`,
@@ -648,6 +683,15 @@ async function maybeOpenCreateFromQuery() {
   if (openJoint) await openCreateJoint()
   else await openCreateParty()
 }
+
+watch(
+  () => [...form.topicIds],
+  (ids) => {
+    if (form.firstTopicId && !ids.includes(form.firstTopicId)) {
+      form.firstTopicId = ''
+    }
+  },
+)
 
 watch(
   () => [route.query.tab, route.query.status, route.query.create],
@@ -803,6 +847,42 @@ onMounted(() => {
   align-items: center;
   padding: 0 12px;
 }
+.topic-table.has-first .topic-table-head,
+.topic-table.has-first .topic-table-row {
+  grid-template-columns: 36px minmax(0, 1.35fr) 72px 80px 78px;
+}
+.col-first {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.first-pick {
+  appearance: none;
+  border: 1px solid #d7dee8;
+  background: #fff;
+  border-radius: 999px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.first-pick:hover {
+  border-color: var(--party);
+  color: var(--party);
+}
+.first-pick.on {
+  border-color: var(--party);
+  background: rgba(176, 48, 48, 0.1);
+  color: var(--party);
+}
+.first-na {
+  color: #c5ceda;
+}
 .topic-table-head {
   height: 36px;
   background: #f5f7fa;
@@ -911,6 +991,9 @@ onMounted(() => {
     grid-template-columns: 28px 1fr;
     gap: 2px 8px;
   }
+  .topic-table.has-first .topic-table-row {
+    grid-template-columns: 28px 1fr auto;
+  }
   .col-check {
     grid-row: 1 / span 2;
   }
@@ -924,6 +1007,10 @@ onMounted(() => {
   }
   .col-user::after {
     content: ' · ';
+  }
+  .col-first {
+    grid-column: 3;
+    grid-row: 1 / span 2;
   }
 }
 </style>

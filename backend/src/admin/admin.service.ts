@@ -711,6 +711,7 @@ export class AdminService {
                 { content: { contains: kw } },
                 { college: { name: { contains: kw } } },
                 { proposer: { realName: { contains: kw } } },
+                { meeting: { title: { contains: kw } } },
               ],
             }
           : {}),
