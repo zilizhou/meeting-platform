@@ -56,7 +56,7 @@
         <span class="n">{{ meeting.topics?.length || 0 }} 项</span>
       </div>
       <p v-if="canReorderTopics" class="agenda-hint">
-        按住左侧手柄拖动可调整顺序（手机可长按拖动）
+        按住右上角手柄拖动可调整顺序（手机可长按拖动）
         <template v-if="isParty">；排在第一位的即为本场第一议题</template>
       </p>
 
@@ -71,12 +71,6 @@
           @click="onTopicCardClick(topic.id)"
         >
           <div class="topic-card-top">
-            <span
-              v-if="canReorderTopics"
-              class="drag-handle"
-              title="拖拽排序"
-              @click.stop
-            >⋮⋮</span>
             <span class="ui-tag" :class="isParty ? 'party' : 'joint'">
               议题{{ Number(idx) + 1 }}
             </span>
@@ -89,6 +83,12 @@
             >
               第一议题
             </span>
+            <span
+              v-if="canReorderTopics"
+              class="drag-handle"
+              title="拖拽排序"
+              @click.stop
+            >⋮⋮</span>
           </div>
           <h4 class="topic-card-title">{{ topic.title }}</h4>
           <div class="topic-card-foot" @click.stop>
@@ -1024,6 +1024,8 @@ watch(
   justify-content: center;
   width: 28px;
   height: 28px;
+  margin-left: auto;
+  flex-shrink: 0;
   border-radius: 8px;
   background: #f1f5f9;
   color: #64748b;
