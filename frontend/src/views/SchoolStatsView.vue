@@ -447,7 +447,7 @@ async function load() {
       http.get('/admin/topics', { params }),
       http.get('/admin/meetings', { params }),
     ])
-    data.value = stats as StatsPayload
+    data.value = stats as unknown as StatsPayload
     recentTopics.value = unwrapList<TopicRow>(topics).slice(0, RECENT_LIMIT)
     recentMeetings.value = unwrapList<MeetingRow>(meetings).slice(0, RECENT_LIMIT)
   } catch {
