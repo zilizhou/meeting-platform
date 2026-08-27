@@ -22,11 +22,13 @@
 
     <div class="filter-card">
       <input v-model="q" type="search" placeholder="搜索会议标题、学院名称" @keyup.enter="load" />
-      <div class="chips">
+      <div class="ui-filter is-equal meeting-presets" role="tablist" aria-label="会议时间范围">
         <button
           v-for="p in presets"
           :key="p.key"
           type="button"
+          role="tab"
+          :aria-selected="preset === p.key"
           :class="{ on: preset === p.key }"
           @click="applyPreset(p.key)"
         >
@@ -113,6 +115,15 @@
         <span class="ui-tag">{{ statusLabel(m.status) }}</span>
       </div>
       <h4>{{ m.title }}</h4>
+      <div class="topic-list" :class="{ empty: !m.topics?.length }">
+        <span class="topic-label">会议议题</span>
+        <ol v-if="m.topics?.length">
+          <li v-for="topic in m.topics" :key="topic.id" :title="topic.title">
+            {{ topic.title }}
+          </li>
+        </ol>
+        <span v-else class="topic-empty">暂无议题</span>
+      </div>
       <div class="meta">
         {{ m.college?.name || '—' }} · {{ formatTime(m.scheduledAt || m.createdAt) }} ·
         议题 {{ m.topics?.length || 0 }} 项
@@ -135,7 +146,7 @@ interface MeetingRow {
   createdAt: string
   collegeId?: string
   college?: { id?: string; name: string }
-  topics?: unknown[]
+  topics?: Array<{ id: string; title: string }>
 }
 
 interface CollegeBar {
@@ -146,7 +157,7 @@ interface CollegeBar {
   total: number
 }
 
-type Preset = 'year' | 'month' | '12m' | 'all'
+type Preset = 'year' | 'quarter' | 'month' | 'all'
 
 const CHART_TOP = 10
 
@@ -165,8 +176,8 @@ const summary = reactive({ total: 0, party: 0, joint: 0 })
 
 const presets: Array<{ key: Preset; label: string }> = [
   { key: 'year', label: '本年' },
+  { key: 'quarter', label: '本季' },
   { key: 'month', label: '本月' },
-  { key: '12m', label: '近12个月' },
   { key: 'all', label: '全部' },
 ]
 
@@ -260,7 +271,10 @@ function applyPreset(key: Preset) {
   }
   to.value = isoDay(now)
   if (key === 'year') from.value = `${now.getFullYear()}-01-01`
-  else if (key === '12m') from.value = isoDay(new Date(now.getFullYear(), now.getMonth() - 11, 1))
+  else if (key === 'quarter') {
+    const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
+    from.value = isoDay(new Date(now.getFullYear(), quarterStartMonth, 1))
+  }
   else from.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`
   load()
 }
@@ -353,24 +367,8 @@ onMounted(() => applyPreset('year'))
   font: inherit;
   background: #f7f9fc;
 }
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.meeting-presets {
   margin: 10px 0;
-}
-.chips button {
-  border: 1px solid var(--line);
-  background: #fff;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font: inherit;
-  font-size: 13px;
-}
-.chips button.on {
-  background: var(--joint);
-  color: #fff;
-  border-color: var(--joint);
 }
 .row {
   display: flex;
@@ -530,6 +528,44 @@ onMounted(() => applyPreset('year'))
 .ui-card h4 {
   margin: 8px 0 0;
 }
+.topic-list {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(241, 245, 249, 0.82);
+  color: #334155;
+}
+.topic-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.topic-list ol {
+  min-width: 0;
+  margin: 0;
+  padding-left: 20px;
+}
+.topic-list li {
+  max-width: 100%;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.topic-list li + li {
+  margin-top: 3px;
+}
+.topic-list.empty {
+  color: var(--muted);
+}
+.topic-empty {
+  font-size: 12px;
+  line-height: 1.6;
+}
 .meta {
   margin-top: 8px;
   font-size: 12px;
@@ -538,6 +574,12 @@ onMounted(() => applyPreset('year'))
 }
 
 @media (max-width: 560px) {
+  .topic-list {
+    display: block;
+  }
+  .topic-list ol {
+    margin-top: 3px;
+  }
   .college-row {
     grid-template-columns: 1fr auto;
     grid-template-areas:

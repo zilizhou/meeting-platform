@@ -174,7 +174,7 @@ interface StatsPayload {
   holding?: { label?: string; bothOkCount?: number }
 }
 
-type Preset = 'year' | 'month' | '12m' | 'all' | 'custom'
+type Preset = 'year' | 'month' | 'all' | 'custom'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -186,7 +186,6 @@ const to = ref('')
 const presets: Array<{ key: Preset; label: string }> = [
   { key: 'year', label: '本年' },
   { key: 'month', label: '本月' },
-  { key: '12m', label: '近12个月' },
   { key: 'all', label: '全部' },
   { key: 'custom', label: '自定义' },
 ]
@@ -228,13 +227,6 @@ function applyPreset(key: Preset) {
   const now = new Date()
   if (key === 'year') {
     from.value = `${now.getFullYear()}-01-01`
-    to.value = today()
-    load()
-    return
-  }
-  if (key === '12m') {
-    const start = new Date(now.getFullYear(), now.getMonth() - 11, 1)
-    from.value = isoDay(start)
     to.value = today()
     load()
     return
