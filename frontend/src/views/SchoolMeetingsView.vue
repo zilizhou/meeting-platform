@@ -21,53 +21,103 @@
     </div>
 
     <div class="filter-card">
-      <input v-model="q" type="search" placeholder="搜索会议标题、学院名称" @keyup.enter="load" />
-      <div class="ui-filter is-equal meeting-presets" role="tablist" aria-label="会议时间范围">
+      <div class="filter-main">
+        <div class="filter-searches">
+          <input
+            v-model="q"
+            type="search"
+            placeholder="搜索会议标题、学院名称"
+            @keyup.enter="load"
+          />
+          <input
+            v-model="topicQ"
+            type="search"
+            placeholder="搜索议题标题"
+            @keyup.enter="load"
+          />
+        </div>
         <button
-          v-for="p in presets"
-          :key="p.key"
+          class="filter-toggle"
           type="button"
-          role="tab"
-          :aria-selected="preset === p.key"
-          :class="{ on: preset === p.key }"
-          @click="applyPreset(p.key)"
+          :class="{ on: filterOpen || activeFilterCount > 0 }"
+          :aria-expanded="filterOpen"
+          @click="filterOpen = !filterOpen"
         >
-          {{ p.label }}
+          筛选
+          <span v-if="activeFilterCount" class="filter-badge">{{ activeFilterCount }}</span>
         </button>
       </div>
-      <div class="row">
-        <input v-model="from" type="date" @change="onCustomDate" />
-        <span>至</span>
-        <input v-model="to" type="date" @change="onCustomDate" />
+
+      <div v-if="!filterOpen && activeFilterChips.length" class="filter-chips">
+        <button
+          v-for="chip in activeFilterChips"
+          :key="chip.key"
+          type="button"
+          class="filter-chip"
+          @click="clearFilter(chip.key)"
+        >
+          {{ chip.label }}
+          <span aria-hidden="true">×</span>
+        </button>
       </div>
-      <div class="row">
-        <select v-model="collegeId" @change="load">
-          <option value="">全部部门</option>
-          <option v-for="c in colleges" :key="c.collegeId" :value="c.collegeId">
-            {{ c.name }}
-          </option>
-        </select>
-        <select v-model="meetingType" @change="load">
-          <option value="">全部类型</option>
-          <option value="PARTY_COMMITTEE">党委会</option>
-          <option value="JOINT_CONFERENCE">党政联席会议</option>
-        </select>
-        <button class="ui-btn" type="button" @click="load">查询</button>
+
+      <div v-show="filterOpen" class="filter-advanced">
+        <div class="ui-filter is-equal meeting-presets" role="tablist" aria-label="会议时间范围">
+          <button
+            v-for="p in presets"
+            :key="p.key"
+            type="button"
+            role="tab"
+            :aria-selected="preset === p.key"
+            :class="{ on: preset === p.key }"
+            @click="applyPreset(p.key)"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+        <div class="row">
+          <input v-model="from" type="date" @change="onCustomDate" />
+          <span>至</span>
+          <input v-model="to" type="date" @change="onCustomDate" />
+        </div>
+        <div class="row">
+          <select v-model="collegeId" @change="load">
+            <option value="">全部部门</option>
+            <option v-for="c in colleges" :key="c.collegeId" :value="c.collegeId">
+              {{ c.name }}
+            </option>
+          </select>
+          <select v-model="meetingType" @change="load">
+            <option value="">全部类型</option>
+            <option value="PARTY_COMMITTEE">党委会</option>
+            <option value="JOINT_CONFERENCE">党政联席会议</option>
+          </select>
+          <button class="ui-btn" type="button" @click="load">查询</button>
+        </div>
       </div>
     </div>
 
-    <section v-if="chartRows.length" class="chart-panel">
-      <div class="chart-head">
-        <div>
+    <section v-if="chartRows.length" class="chart-panel" :class="{ collapsed: !chartOpen }">
+      <button
+        class="chart-toggle"
+        type="button"
+        :aria-expanded="chartOpen"
+        @click="chartOpen = !chartOpen"
+      >
+        <div class="chart-toggle-text">
           <h3>各部门会议对照</h3>
-          <p>点击学院可筛选下方列表；再点一次取消筛选</p>
+          <p v-if="chartOpen">点击学院可筛选下方列表；再点一次取消筛选</p>
+          <p v-else>共 {{ chartCollegeCount }} 个部门 · 点击展开</p>
         </div>
-        <div class="legend">
-          <span><i class="party" />党委会</span>
-          <span><i class="joint" />联席</span>
+        <div class="chart-toggle-side">
+          <span v-if="chartOpen" class="legend">
+            <span><i class="party" />党委会</span>
+            <span><i class="joint" />联席</span>
+          </span>
+          <span class="chevron" :class="{ open: chartOpen }" aria-hidden="true">▾</span>
         </div>
-      </div>
-      <div class="college-bars">
+      </button>
+      <div v-show="chartOpen" class="college-bars">
         <button
           v-for="row in chartRows"
           :key="row.collegeId"
@@ -158,16 +208,20 @@ interface CollegeBar {
 }
 
 type Preset = 'year' | 'quarter' | 'month' | 'all'
+type FilterKey = 'collegeId' | 'meetingType' | 'date' | 'preset'
 
 const CHART_TOP = 10
 
 const router = useRouter()
 const q = ref('')
+const topicQ = ref('')
 const collegeId = ref('')
 const meetingType = ref('')
 const from = ref('')
 const to = ref('')
 const preset = ref<Preset>('year')
+const filterOpen = ref(false)
+const chartOpen = ref(false)
 const items = ref<MeetingRow[]>([])
 /** 图表数据源：不受部门筛选影响，便于对照 */
 const chartSource = ref<MeetingRow[]>([])
@@ -198,7 +252,6 @@ const chartMax = computed(() => {
 
 const chartRows = computed(() => {
   const map = new Map<string, CollegeBar>()
-  // 先铺开所管全部学院，无数据也显示 0
   for (const c of colleges.value) {
     if (!c.collegeId) continue
     map.set(c.collegeId, {
@@ -237,6 +290,35 @@ const chartRows = computed(() => {
   })
   return head
 })
+
+const chartCollegeCount = computed(() =>
+  Math.max(colleges.value.length, chartRows.value.filter((r) => r.collegeId !== '__other__').length),
+)
+
+const activeFilterChips = computed(() => {
+  const chips: Array<{ key: FilterKey; label: string }> = []
+  if (preset.value === 'quarter' || preset.value === 'month') {
+    const label = presets.find((p) => p.key === preset.value)?.label
+    if (label) chips.push({ key: 'preset', label })
+  } else if (preset.value === 'all' && (from.value || to.value)) {
+    chips.push({
+      key: 'date',
+      label: `${from.value || '…'} 至 ${to.value || '…'}`,
+    })
+  }
+  if (collegeId.value) {
+    const name = colleges.value.find((c) => c.collegeId === collegeId.value)?.name || '已选部门'
+    chips.push({ key: 'collegeId', label: name })
+  }
+  if (meetingType.value === 'PARTY_COMMITTEE') {
+    chips.push({ key: 'meetingType', label: '党委会' })
+  } else if (meetingType.value === 'JOINT_CONFERENCE') {
+    chips.push({ key: 'meetingType', label: '联席会议' })
+  }
+  return chips
+})
+
+const activeFilterCount = computed(() => activeFilterChips.value.length)
 
 function statusLabel(s: string) {
   return STATUS_MAP[s] || s
@@ -284,9 +366,20 @@ function onCustomDate() {
   load()
 }
 
+function clearFilter(key: FilterKey) {
+  if (key === 'collegeId') collegeId.value = ''
+  if (key === 'meetingType') meetingType.value = ''
+  if (key === 'date' || key === 'preset') {
+    applyPreset('all')
+    return
+  }
+  load()
+}
+
 function toggleCollege(id: string) {
   if (id === '__other__') return
   collegeId.value = collegeId.value === id ? '' : id
+  chartOpen.value = true
   load()
 }
 
@@ -317,6 +410,7 @@ function unwrapMeetings(list: unknown) {
 async function load() {
   const baseParams = {
     q: q.value || undefined,
+    topicQ: topicQ.value || undefined,
     meetingType: meetingType.value || undefined,
     from: from.value || undefined,
     to: to.value || undefined,
@@ -343,12 +437,19 @@ async function load() {
 }
 
 let timer: number | undefined
-watch(q, () => {
+function scheduleLoad() {
   if (timer) window.clearTimeout(timer)
   timer = window.setTimeout(load, 320)
-})
+}
+watch(q, scheduleLoad)
+watch(topicQ, scheduleLoad)
 
-onMounted(() => applyPreset('year'))
+onMounted(() => {
+  if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+    filterOpen.value = true
+  }
+  applyPreset('year')
+})
 </script>
 
 <style scoped>
@@ -359,7 +460,19 @@ onMounted(() => applyPreset('year'))
   margin-bottom: 12px;
   box-shadow: var(--shadow);
 }
-.filter-card input[type='search'] {
+.filter-main {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.filter-searches {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.filter-searches input[type='search'] {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -367,14 +480,85 @@ onMounted(() => applyPreset('year'))
   font: inherit;
   background: #f7f9fc;
 }
+@media (min-width: 640px) {
+  .filter-searches {
+    flex-direction: row;
+  }
+}
+.filter-toggle {
+  flex: 0 0 auto;
+  align-self: stretch;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.filter-toggle.on {
+  border-color: rgba(26, 79, 139, 0.35);
+  background: #eef4fb;
+  color: var(--joint);
+}
+.filter-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--joint);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #eef2f7;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.filter-chip span {
+  opacity: 0.55;
+  font-size: 14px;
+  line-height: 1;
+}
+.filter-advanced {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eef2f7;
+}
 .meeting-presets {
-  margin: 10px 0;
+  margin: 0 0 8px;
 }
 .row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+.row + .row {
   margin-top: 8px;
 }
 .row select,
@@ -391,33 +575,67 @@ onMounted(() => applyPreset('year'))
 .chart-panel {
   background: #fff;
   border-radius: 16px;
-  padding: 14px 14px 12px;
+  padding: 10px 14px 12px;
   margin-bottom: 12px;
   box-shadow: var(--shadow);
 }
-.chart-head {
+.chart-panel.collapsed {
+  padding-bottom: 10px;
+}
+.chart-toggle {
   display: flex;
+  width: 100%;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
 }
-.chart-head h3 {
+.chart-toggle-text {
+  min-width: 0;
+}
+.chart-toggle h3 {
   margin: 0;
   font-size: 15px;
 }
-.chart-head p {
+.chart-toggle p {
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--muted);
+}
+.chart-toggle-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.chevron {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 12px;
+  transition: transform 0.18s ease;
+}
+.chevron.open {
+  transform: rotate(180deg);
 }
 .legend {
   display: flex;
   gap: 14px;
   font-size: 12px;
   color: var(--muted);
-  padding-top: 2px;
 }
 .legend i {
   display: inline-block;
@@ -436,6 +654,7 @@ onMounted(() => applyPreset('year'))
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 12px;
 }
 .college-row {
   display: grid;
@@ -594,6 +813,9 @@ onMounted(() => applyPreset('year'))
   }
   .college-row em {
     grid-area: nums;
+  }
+  .chart-toggle-side .legend {
+    display: none;
   }
 }
 </style>

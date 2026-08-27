@@ -21,44 +21,86 @@
     </div>
 
     <div class="filter-card">
-      <input v-model="q" type="search" placeholder="搜索标题、学院、会议" @keyup.enter="load" />
-      <div class="row">
-        <select v-model="collegeId" @change="load">
-          <option value="">全部部门</option>
-          <option v-for="c in colleges" :key="c.collegeId" :value="c.collegeId">
-            {{ c.name }}
-          </option>
-        </select>
-        <select v-model="meetingType" @change="load">
-          <option value="">全部类型</option>
-          <option value="PARTY_COMMITTEE">党委会</option>
-          <option value="JOINT_CONFERENCE">党政联席会议</option>
-        </select>
-        <select v-model="status" @change="load">
-          <option value="">全部状态</option>
-          <option v-for="s in statuses" :key="s.value" :value="s.value">{{ s.label }}</option>
-        </select>
+      <div class="filter-main">
+        <input
+          v-model="q"
+          type="search"
+          placeholder="搜索标题、学院、会议"
+          @keyup.enter="load"
+        />
+        <button
+          class="filter-toggle"
+          type="button"
+          :class="{ on: filterOpen || activeFilterCount > 0 }"
+          :aria-expanded="filterOpen"
+          @click="filterOpen = !filterOpen"
+        >
+          筛选
+          <span v-if="activeFilterCount" class="filter-badge">{{ activeFilterCount }}</span>
+        </button>
       </div>
-      <div class="row">
-        <input v-model="from" type="date" @change="load" />
-        <span>至</span>
-        <input v-model="to" type="date" @change="load" />
-        <button class="ui-btn" type="button" @click="load">查询</button>
+
+      <div v-if="!filterOpen && activeFilterChips.length" class="filter-chips">
+        <button
+          v-for="chip in activeFilterChips"
+          :key="chip.key"
+          type="button"
+          class="filter-chip"
+          @click="clearFilter(chip.key)"
+        >
+          {{ chip.label }}
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+
+      <div v-show="filterOpen" class="filter-advanced">
+        <div class="row">
+          <select v-model="collegeId" @change="load">
+            <option value="">全部部门</option>
+            <option v-for="c in colleges" :key="c.collegeId" :value="c.collegeId">
+              {{ c.name }}
+            </option>
+          </select>
+          <select v-model="meetingType" @change="load">
+            <option value="">全部类型</option>
+            <option value="PARTY_COMMITTEE">党委会</option>
+            <option value="JOINT_CONFERENCE">党政联席会议</option>
+          </select>
+          <select v-model="status" @change="load">
+            <option value="">全部状态</option>
+            <option v-for="s in statuses" :key="s.value" :value="s.value">{{ s.label }}</option>
+          </select>
+        </div>
+        <div class="row">
+          <input v-model="from" type="date" @change="load" />
+          <span>至</span>
+          <input v-model="to" type="date" @change="load" />
+          <button class="ui-btn" type="button" @click="load">查询</button>
+        </div>
       </div>
     </div>
 
-    <section v-if="chartRows.length" class="chart-panel">
-      <div class="chart-head">
-        <div>
+    <section v-if="chartRows.length" class="chart-panel" :class="{ collapsed: !chartOpen }">
+      <button
+        class="chart-toggle"
+        type="button"
+        :aria-expanded="chartOpen"
+        @click="chartOpen = !chartOpen"
+      >
+        <div class="chart-toggle-text">
           <h3>各部门议题对照</h3>
-          <p>点击学院可筛选下方列表；再点一次取消筛选</p>
+          <p v-if="chartOpen">点击学院可筛选下方列表；再点一次取消筛选</p>
+          <p v-else>共 {{ chartCollegeCount }} 个部门 · 点击展开</p>
         </div>
-        <div class="legend">
-          <span><i class="party" />党委会</span>
-          <span><i class="joint" />联席</span>
+        <div class="chart-toggle-side">
+          <span v-if="chartOpen" class="legend">
+            <span><i class="party" />党委会</span>
+            <span><i class="joint" />联席</span>
+          </span>
+          <span class="chevron" :class="{ open: chartOpen }" aria-hidden="true">▾</span>
         </div>
-      </div>
-      <div class="college-bars">
+      </button>
+      <div v-show="chartOpen" class="college-bars">
         <button
           v-for="row in chartRows"
           :key="row.collegeId"
@@ -138,6 +180,8 @@ interface CollegeBar {
   total: number
 }
 
+type FilterKey = 'collegeId' | 'meetingType' | 'status' | 'date'
+
 const CHART_TOP = 10
 
 const router = useRouter()
@@ -147,6 +191,8 @@ const meetingType = ref('')
 const status = ref('')
 const from = ref('')
 const to = ref('')
+const filterOpen = ref(false)
+const chartOpen = ref(false)
 const items = ref<TopicRow[]>([])
 /** 图表数据源：不受部门筛选影响，便于对照 */
 const chartSource = ref<TopicRow[]>([])
@@ -176,7 +222,6 @@ const chartMax = computed(() => {
 
 const chartRows = computed(() => {
   const map = new Map<string, CollegeBar>()
-  // 先铺开所管全部学院，无数据也显示 0
   for (const c of colleges.value) {
     if (!c.collegeId) continue
     map.set(c.collegeId, {
@@ -216,6 +261,35 @@ const chartRows = computed(() => {
   return head
 })
 
+const chartCollegeCount = computed(() =>
+  Math.max(colleges.value.length, chartRows.value.filter((r) => r.collegeId !== '__other__').length),
+)
+
+const activeFilterChips = computed(() => {
+  const chips: Array<{ key: FilterKey; label: string }> = []
+  if (collegeId.value) {
+    const name = colleges.value.find((c) => c.collegeId === collegeId.value)?.name || '已选部门'
+    chips.push({ key: 'collegeId', label: name })
+  }
+  if (meetingType.value === 'PARTY_COMMITTEE') {
+    chips.push({ key: 'meetingType', label: '党委会' })
+  } else if (meetingType.value === 'JOINT_CONFERENCE') {
+    chips.push({ key: 'meetingType', label: '联席会议' })
+  }
+  if (status.value) {
+    chips.push({ key: 'status', label: statusLabel(status.value) })
+  }
+  if (from.value || to.value) {
+    chips.push({
+      key: 'date',
+      label: `${from.value || '…'} 至 ${to.value || '…'}`,
+    })
+  }
+  return chips
+})
+
+const activeFilterCount = computed(() => activeFilterChips.value.length)
+
 function statusLabel(s: string) {
   return STATUS_MAP[s] || s
 }
@@ -231,9 +305,21 @@ function barPct(n: number) {
   return `${Math.max(n > 0 ? 6 : 0, Math.round((n / chartMax.value) * 100))}%`
 }
 
+function clearFilter(key: FilterKey) {
+  if (key === 'collegeId') collegeId.value = ''
+  if (key === 'meetingType') meetingType.value = ''
+  if (key === 'status') status.value = ''
+  if (key === 'date') {
+    from.value = ''
+    to.value = ''
+  }
+  load()
+}
+
 function toggleCollege(id: string) {
   if (id === '__other__') return
   collegeId.value = collegeId.value === id ? '' : id
+  chartOpen.value = true
   load()
 }
 
@@ -290,7 +376,12 @@ watch(q, () => {
   timer = window.setTimeout(load, 320)
 })
 
-onMounted(load)
+onMounted(() => {
+  if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+    filterOpen.value = true
+  }
+  load()
+})
 </script>
 
 <style scoped>
@@ -301,20 +392,89 @@ onMounted(load)
   margin-bottom: 12px;
   box-shadow: var(--shadow);
 }
-.filter-card input[type='search'] {
-  width: 100%;
+.filter-main {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.filter-main input[type='search'] {
+  flex: 1;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px 12px;
   font: inherit;
   background: #f7f9fc;
-  margin-bottom: 10px;
+}
+.filter-toggle {
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.filter-toggle.on {
+  border-color: rgba(26, 79, 139, 0.35);
+  background: #eef4fb;
+  color: var(--joint);
+}
+.filter-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--joint);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #eef2f7;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.filter-chip span {
+  opacity: 0.55;
+  font-size: 14px;
+  line-height: 1;
+}
+.filter-advanced {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eef2f7;
 }
 .row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+.row + .row {
   margin-top: 8px;
 }
 .row select,
@@ -331,33 +491,67 @@ onMounted(load)
 .chart-panel {
   background: #fff;
   border-radius: 16px;
-  padding: 14px 14px 12px;
+  padding: 10px 14px 12px;
   margin-bottom: 12px;
   box-shadow: var(--shadow);
 }
-.chart-head {
+.chart-panel.collapsed {
+  padding-bottom: 10px;
+}
+.chart-toggle {
   display: flex;
+  width: 100%;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
 }
-.chart-head h3 {
+.chart-toggle-text {
+  min-width: 0;
+}
+.chart-toggle h3 {
   margin: 0;
   font-size: 15px;
 }
-.chart-head p {
+.chart-toggle p {
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--muted);
+}
+.chart-toggle-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.chevron {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 12px;
+  transition: transform 0.18s ease;
+}
+.chevron.open {
+  transform: rotate(180deg);
 }
 .legend {
   display: flex;
   gap: 14px;
   font-size: 12px;
   color: var(--muted);
-  padding-top: 2px;
 }
 .legend i {
   display: inline-block;
@@ -376,6 +570,7 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 12px;
 }
 .college-row {
   display: grid;
@@ -492,6 +687,9 @@ onMounted(load)
   }
   .college-row em {
     grid-area: nums;
+  }
+  .chart-toggle-side .legend {
+    display: none;
   }
 }
 </style>

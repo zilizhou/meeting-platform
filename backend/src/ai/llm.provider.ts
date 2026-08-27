@@ -5,12 +5,21 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as https from 'node:https';
+import type { IncomingMessage } from 'node:http';
 
 export interface LlmChatResult {
   text: string;
   provider: string;
   model: string;
   demo: boolean;
+}
+
+export interface LlmChatOptions {
+  demoKind?: 'material_summary' | 'minutes_draft';
+  /** 网络不可达时回退本地演示，避免整条 AI 链路不可用 */
+  fallbackOnNetworkError?: boolean;
+  /** 若提供则走 OpenAI 兼容 SSE，边生成边回调 */
+  onToken?: (text: string) => void;
 }
 
 /** 与 zxyun 一致：绕过本机 Clash Fake-IP（198.18.0.x）导致的 fetch failed */
@@ -46,21 +55,19 @@ export class LlmProvider {
   async chat(
     system: string,
     user: string,
-    options?: {
-      demoKind?: 'material_summary' | 'minutes_draft';
-      /** 网络不可达时回退本地演示，避免整条 AI 链路不可用 */
-      fallbackOnNetworkError?: boolean;
-    },
+    options?: LlmChatOptions,
   ): Promise<LlmChatResult> {
     const demoKind = options?.demoKind || 'material_summary';
     const fallbackOnNetworkError = options?.fallbackOnNetworkError !== false;
     const apiKey = this.config.get<string>('LLM_API_KEY')?.trim();
     if (!apiKey) {
+      const text =
+        demoKind === 'minutes_draft'
+          ? this.demoMinutesDraft(user)
+          : this.demoSummary(user);
+      this.emitDemoTokens(text, options?.onToken);
       return {
-        text:
-          demoKind === 'minutes_draft'
-            ? this.demoMinutesDraft(user)
-            : this.demoSummary(user),
+        text,
         provider: 'demo',
         model: 'local-heuristic',
         demo: true,
@@ -74,15 +81,34 @@ export class LlmProvider {
     const provider =
       this.config.get<string>('LLM_PROVIDER') || 'openai_compatible';
     const url = `${baseUrl}/chat/completions`;
+    const messages = [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ];
 
     try {
+      if (options?.onToken) {
+        const text = await this.postChatCompletionsStream(
+          url,
+          apiKey,
+          {
+            model,
+            temperature: 0.2,
+            stream: true,
+            messages,
+          },
+          options.onToken,
+        );
+        if (!text.trim()) {
+          throw new BadRequestException('大模型返回为空');
+        }
+        return { text, provider, model, demo: false };
+      }
+
       const res = await this.postChatCompletions(url, apiKey, {
         model,
         temperature: 0.2,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
+        messages,
       });
 
       if (!res.ok) {
@@ -114,11 +140,13 @@ export class LlmProvider {
           demoKind === 'minutes_draft'
             ? this.demoMinutesDraft(user)
             : this.demoSummary(user);
+        const text =
+          `【大模型暂不可达，已回退本地演示】\n` +
+          `原因：${e?.message || '网络错误'}\n\n` +
+          demoText;
+        this.emitDemoTokens(text, options?.onToken);
         return {
-          text:
-            `【大模型暂不可达，已回退本地演示】\n` +
-            `原因：${e?.message || '网络错误'}\n\n` +
-            demoText,
+          text,
           provider: 'demo_fallback',
           model: 'local-heuristic',
           demo: true,
@@ -127,6 +155,14 @@ export class LlmProvider {
       throw new BadRequestException(
         `大模型服务不可达：${e?.message || '网络错误'}。请检查网络、代理或 LLM_BASE_URL`,
       );
+    }
+  }
+
+  private emitDemoTokens(text: string, onToken?: (t: string) => void) {
+    if (!onToken || !text) return;
+    const chunkSize = 24;
+    for (let i = 0; i < text.length; i += chunkSize) {
+      onToken(text.slice(i, i + chunkSize));
     }
   }
 
@@ -139,6 +175,96 @@ export class LlmProvider {
     apiKey: string,
     body: Record<string, unknown>,
   ): Promise<{ ok: boolean; status: number; text: string }> {
+    return this.requestChatCompletions(url, apiKey, body).then((res) => {
+      return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8');
+          const status = res.statusCode || 0;
+          resolve({ ok: status >= 200 && status < 300, status, text });
+        });
+        res.on('error', reject);
+      });
+    });
+  }
+
+  private postChatCompletionsStream(
+    url: string,
+    apiKey: string,
+    body: Record<string, unknown>,
+    onToken: (text: string) => void,
+  ): Promise<string> {
+    return this.requestChatCompletions(url, apiKey, body).then((res) => {
+      const status = res.statusCode || 0;
+      if (status < 200 || status >= 300) {
+        return new Promise<string>((_resolve, reject) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => {
+            const text = Buffer.concat(chunks).toString('utf8');
+            this.logger.warn(
+              `LLM 流式调用失败 ${status}: ${text.slice(0, 300)}`,
+            );
+            reject(
+              new BadRequestException(
+                `大模型调用失败（HTTP ${status}）。请检查 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL`,
+              ),
+            );
+          });
+          res.on('error', reject);
+        });
+      }
+
+      return new Promise<string>((resolve, reject) => {
+        let buffer = '';
+        let full = '';
+        const flushLine = (line: string) => {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) return;
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === '[DONE]') return;
+          try {
+            const json = JSON.parse(payload);
+            const piece = String(
+              json?.choices?.[0]?.delta?.content ??
+                json?.choices?.[0]?.message?.content ??
+                '',
+            );
+            if (piece) {
+              full += piece;
+              onToken(piece);
+            }
+          } catch {
+            /* ignore malformed sse chunk */
+          }
+        };
+
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => {
+          buffer += chunk;
+          buffer = buffer.replace(/\r\n/g, '\n');
+          let idx: number;
+          while ((idx = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 1);
+            flushLine(line);
+          }
+        });
+        res.on('end', () => {
+          if (buffer.trim()) flushLine(buffer);
+          resolve(full.trim());
+        });
+        res.on('error', reject);
+      });
+    });
+  }
+
+  private requestChatCompletions(
+    url: string,
+    apiKey: string,
+    body: Record<string, unknown>,
+  ): Promise<IncomingMessage> {
     const parsed = new URL(url);
     const payload = JSON.stringify(body);
     const endpointIp =
@@ -166,18 +292,11 @@ export class LlmProvider {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(payload),
+            Accept: body.stream ? 'text/event-stream' : 'application/json',
             Connection: 'close',
           },
         },
-        (res) => {
-          const chunks: Buffer[] = [];
-          res.on('data', (c) => chunks.push(c));
-          res.on('end', () => {
-            const text = Buffer.concat(chunks).toString('utf8');
-            const status = res.statusCode || 0;
-            resolve({ ok: status >= 200 && status < 300, status, text });
-          });
-        },
+        (res) => resolve(res),
       );
       req.setTimeout(timeoutMs, () => {
         req.destroy(new Error(`LLM 请求超时 ${timeoutMs}ms`));

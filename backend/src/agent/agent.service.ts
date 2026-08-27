@@ -107,7 +107,16 @@ export class AgentService {
     };
   }
 
-  async chat(user: AuthUser, dto: AgentChatDto): Promise<AgentChatResult> {
+  async chat(
+    user: AuthUser,
+    dto: AgentChatDto,
+    stream?: {
+      onToken?: (text: string) => void;
+      onMeta?: (meta: Record<string, unknown>) => void;
+      /** 标记是否已通过 onToken 推送过正文，避免 SSE 再假流式一遍 */
+      markStreamed?: () => void;
+    },
+  ): Promise<AgentChatResult> {
     const message = dto.message.trim();
     if (!message) throw new BadRequestException('请输入内容');
 
@@ -124,9 +133,28 @@ export class AgentService {
       ? this.llm.status().model
       : 'rules-heuristic';
     const actions: AgentAction[] = [];
+    let streamed = false;
+    const onToken = stream?.onToken
+      ? (text: string) => {
+          if (!text) return;
+          streamed = true;
+          stream.onToken?.(text);
+          stream.markStreamed?.();
+        }
+      : undefined;
+
+    stream?.onMeta?.({
+      sessionId,
+      intent,
+      demo,
+      provider,
+      model,
+    });
 
     if (intent === 'RULES_ASK') {
-      const asked = await this.ai.askRules(user, message);
+      const asked = await this.ai.askRules(user, message, undefined, {
+        onToken,
+      });
       reply = asked.outputText;
       citations = asked.citations;
       demo = Boolean(asked.demo);
@@ -140,6 +168,7 @@ export class AgentService {
         message,
         reply,
         '根据给定数据写一份简洁的「今日会议工作简报」，分点，勿编造。',
+        onToken,
       );
       if (polished) {
         reply = polished.text;
@@ -157,6 +186,7 @@ export class AgentService {
         message,
         reply,
         '根据议题事实写一页「议题简报」，分：概况、材料、审题、风险、建议下一步。禁止建议自动同意/否决。',
+        onToken,
       );
       if (polished) {
         reply = polished.text;
@@ -174,6 +204,7 @@ export class AgentService {
         message,
         reply,
         '根据会议事实写「会中简报」：签到、法定人数、议题表决、纪要状态、下一步。勿编造票数。',
+        onToken,
       );
       if (polished) {
         reply = polished.text;
@@ -186,7 +217,13 @@ export class AgentService {
       reply = built.reply;
       actions.push(...built.actions);
     } else if (intent === 'DRAFT_REVIEW_COMMENT') {
-      const built = await this.buildReviewDraft(user, dto.context, todos, message);
+      const built = await this.buildReviewDraft(
+        user,
+        dto.context,
+        todos,
+        message,
+        onToken,
+      );
       reply = built.reply;
       actions.push(...built.actions);
     } else if (intent === 'MESSAGE_DIGEST') {
@@ -214,6 +251,7 @@ export class AgentService {
         message,
         reply,
         '根据待办与进度数据用简洁中文汇报，勿编造，勿建议自动审批/表决，不超过8条。',
+        onToken,
       );
       if (polished) {
         reply = polished.text;
@@ -250,6 +288,7 @@ export class AgentService {
         todos,
         flow,
         topicHint?.reply,
+        onToken,
       );
       if (open) {
         reply = open.reply;
@@ -265,6 +304,14 @@ export class AgentService {
       } else {
         reply = this.buildHelpReply(todos);
         actions.push(...this.todoActions(todos.items.slice(0, 3)));
+      }
+    }
+
+    // 规则答复未走模型流时，若调用方要流式展示，在此快速推送
+    if (onToken && !streamed && reply) {
+      const chunkSize = 48;
+      for (let i = 0; i < reply.length; i += chunkSize) {
+        onToken(reply.slice(i, i + chunkSize));
       }
     }
 
@@ -330,7 +377,7 @@ export class AgentService {
   }
 
   /**
-   * SSE 流式对话：先完整生成答复，再按块推送 token，最后 done 带上 actions 等元数据。
+   * SSE 流式对话：检索/组事实阶段后，大模型边生成边推 token。
    */
   async chatStream(
     user: AuthUser,
@@ -338,20 +385,24 @@ export class AgentService {
     emit: (event: string, data: unknown) => void,
   ) {
     emit('status', { phase: 'thinking' });
-    const result = await this.chat(user, dto);
-    emit('meta', {
-      sessionId: result.sessionId,
-      intent: result.intent,
-      demo: result.demo,
-      provider: result.provider,
-      model: result.model,
+    let streamed = false;
+    let generating = false;
+    const result = await this.chat(user, dto, {
+      onMeta: (meta) => emit('meta', meta),
+      onToken: (text) => {
+        if (!generating) {
+          generating = true;
+          emit('status', { phase: 'generating' });
+        }
+        streamed = true;
+        emit('token', { text });
+      },
+      markStreamed: () => {
+        streamed = true;
+      },
     });
-    const text = String(result.reply || '');
-    const chunkSize = 14;
-    for (let i = 0; i < text.length; i += chunkSize) {
-      emit('token', { text: text.slice(i, i + chunkSize) });
-      // 轻微间隔，形成可读的流式效果
-      await new Promise((r) => setTimeout(r, 10));
+    if (!streamed && result.reply) {
+      emit('token', { text: result.reply });
     }
     emit('done', {
       sessionId: result.sessionId,
@@ -583,13 +634,22 @@ export class AgentService {
     return 'OPEN_QA';
   }
 
-  private async maybePolish(question: string, facts: string, systemExtra: string) {
+  private async maybePolish(
+    question: string,
+    facts: string,
+    systemExtra: string,
+    onToken?: (text: string) => void,
+  ) {
     if (!this.llm.isConfigured()) return null;
     try {
       const polished = await this.llm.chat(
         `你是高校双会议智能助理。${systemExtra} 禁止建议自动审批/表决/签署。`,
         `用户问：${question}\n\n事实材料：\n${facts}`,
-        { demoKind: 'material_summary', fallbackOnNetworkError: false },
+        {
+          demoKind: 'material_summary',
+          fallbackOnNetworkError: false,
+          onToken,
+        },
       );
       if (polished.demo) return null;
       return polished;
@@ -862,6 +922,7 @@ export class AgentService {
     todos: Awaited<ReturnType<WorkspaceService['getTodos']>>,
     flow: Awaited<ReturnType<WorkspaceService['getFlowBoard']>>,
     topicSearchFacts?: string,
+    onToken?: (text: string) => void,
   ): Promise<{
     reply: string;
     demo: boolean;
@@ -901,11 +962,17 @@ export class AgentService {
           '若问题在问「哪些议题/相关议题」，只列检索命中的议题，不要罗列无关待办。',
         ].join('\n'),
         `用户问：${message}\n\n系统事实：\n${facts}`,
-        { demoKind: 'material_summary', fallbackOnNetworkError: false },
+        {
+          demoKind: 'material_summary',
+          fallbackOnNetworkError: false,
+          onToken,
+        },
       );
       if (result.demo) return null;
+      const disclaimerTail = `\n\n${DISCLAIMER}`;
+      if (onToken) onToken(disclaimerTail);
       return {
-        reply: `${result.text}\n\n${DISCLAIMER}`,
+        reply: `${result.text}${disclaimerTail}`,
         demo: false,
         provider: result.provider,
         model: result.model,
@@ -1245,6 +1312,7 @@ export class AgentService {
     context: AgentChatDto['context'] | undefined,
     todos: Awaited<ReturnType<WorkspaceService['getTodos']>>,
     message: string,
+    onToken?: (text: string) => void,
   ) {
     const canReview =
       user.roles.includes(RoleCode.SECRETARY) ||
@@ -1292,9 +1360,16 @@ export class AgentService {
         const polished = await this.llm.chat(
           '你是高校双会议审题秘书助手。根据议题事实起草「审题意见草稿」提纲，必须标注仅供参考、须人工确认。禁止输出「建议同意通过」作为最终结论，可列出关注点与待核实项。',
           brief.reply,
-          { demoKind: 'material_summary' },
+          {
+            demoKind: 'material_summary',
+            fallbackOnNetworkError: false,
+            onToken,
+          },
         );
-        if (!polished.demo) draft = polished.text;
+        if (!polished.demo) {
+          draft = polished.text;
+          if (onToken) onToken(`\n\n${DISCLAIMER}`);
+        }
       } catch {
         /* keep template */
       }

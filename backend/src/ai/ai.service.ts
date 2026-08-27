@@ -345,7 +345,12 @@ export class AiService {
     return this.toView(row);
   }
 
-  async askRules(user: AuthUser, question: string, collegeId?: string) {
+  async askRules(
+    user: AuthUser,
+    question: string,
+    collegeId?: string,
+    options?: { onToken?: (text: string) => void },
+  ) {
     const q = question.trim();
     if (q.length < 2) {
       throw new BadRequestException('请输入问题');
@@ -370,11 +375,13 @@ export class AiService {
       provider = this.llm.isConfigured() ? 'rag' : 'demo';
       model = 'rules-kb';
       demo = !this.llm.isConfigured();
+      options?.onToken?.(text);
     } else if (!this.llm.isConfigured()) {
       text = this.rulesRag.demoAnswer(q, hits);
       provider = 'demo';
       model = 'rules-kb';
       demo = true;
+      options?.onToken?.(text);
     } else {
       const context = hits
         .map(
@@ -392,6 +399,7 @@ export class AiService {
       const userPrompt = `用户问题：${q}\n\n制度摘录：\n${context}`;
       const result = await this.llm.chat(system, userPrompt, {
         demoKind: 'material_summary',
+        onToken: options?.onToken,
       });
       // 若走了 demo 回退（不应发生，因已配置），仍可用
       text = result.text;
