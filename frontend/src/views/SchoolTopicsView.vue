@@ -61,11 +61,6 @@
               {{ c.name }}
             </option>
           </select>
-          <select v-model="meetingType" @change="load">
-            <option value="">全部类型</option>
-            <option value="PARTY_COMMITTEE">党委会</option>
-            <option value="JOINT_CONFERENCE">党政联席会议</option>
-          </select>
           <select v-model="status" @change="load">
             <option value="">全部状态</option>
             <option v-for="s in statuses" :key="s.value" :value="s.value">{{ s.label }}</option>
@@ -130,6 +125,23 @@
       </div>
     </section>
 
+    <div class="ui-filter is-equal list-type-tabs" role="tablist" aria-label="会议类型">
+      <button
+        v-for="t in meetingTypes"
+        :key="t.key || 'all'"
+        type="button"
+        role="tab"
+        :aria-selected="meetingType === t.key"
+        :class="{
+          on: meetingType === t.key,
+          party: t.key === 'PARTY_COMMITTEE',
+        }"
+        @click="setMeetingType(t.key)"
+      >
+        {{ t.label }}
+      </button>
+    </div>
+
     <div v-if="!items.length" class="ui-empty">没有符合条件的议题</div>
     <article
       v-for="t in items"
@@ -180,7 +192,7 @@ interface CollegeBar {
   total: number
 }
 
-type FilterKey = 'collegeId' | 'meetingType' | 'status' | 'date'
+type FilterKey = 'collegeId' | 'status' | 'date'
 
 const CHART_TOP = 10
 
@@ -209,6 +221,18 @@ const statuses = [
   { value: 'RESOLVED', label: '已决议' },
   { value: 'REJECTED', label: '未通过' },
 ]
+
+const meetingTypes: Array<{ key: string; label: string }> = [
+  { key: '', label: '全部' },
+  { key: 'PARTY_COMMITTEE', label: '党委会' },
+  { key: 'JOINT_CONFERENCE', label: '党政联席会' },
+]
+
+function setMeetingType(key: string) {
+  if (meetingType.value === key) return
+  meetingType.value = key
+  load()
+}
 
 const STATUS_MAP: Record<string, string> = Object.fromEntries(
   statuses.map((s) => [s.value, s.label]),
@@ -271,11 +295,6 @@ const activeFilterChips = computed(() => {
     const name = colleges.value.find((c) => c.collegeId === collegeId.value)?.name || '已选部门'
     chips.push({ key: 'collegeId', label: name })
   }
-  if (meetingType.value === 'PARTY_COMMITTEE') {
-    chips.push({ key: 'meetingType', label: '党委会' })
-  } else if (meetingType.value === 'JOINT_CONFERENCE') {
-    chips.push({ key: 'meetingType', label: '联席会议' })
-  }
   if (status.value) {
     chips.push({ key: 'status', label: statusLabel(status.value) })
   }
@@ -307,7 +326,6 @@ function barPct(n: number) {
 
 function clearFilter(key: FilterKey) {
   if (key === 'collegeId') collegeId.value = ''
-  if (key === 'meetingType') meetingType.value = ''
   if (key === 'status') status.value = ''
   if (key === 'date') {
     from.value = ''
@@ -467,6 +485,9 @@ onMounted(() => {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid #eef2f7;
+}
+.list-type-tabs {
+  margin: 0 0 12px;
 }
 .row {
   display: flex;
