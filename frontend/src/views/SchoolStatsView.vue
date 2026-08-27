@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="ui-hero is-official stats-hero">
+    <div class="ui-hero is-official">
       <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
       <h2>总览</h2>
       <p>所管学院的议题、会议数量与时间分布。数字以系统为准。</p>
@@ -507,24 +507,6 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 767px) {
-  .stats-hero .nums {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .stats-hero .nums .kpi {
-    display: flex;
-    min-width: 0;
-    min-height: 86px;
-    padding: 10px 12px 12px;
-    flex-direction: column;
-    justify-content: center;
-  }
-  .stats-hero .nums .kpi span {
-    line-height: 1.3;
-  }
-}
 .jump {
   display: grid;
   grid-template-columns: 1fr;
