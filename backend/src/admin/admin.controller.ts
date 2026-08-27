@@ -104,7 +104,6 @@ export class AdminController {
     @Query('collegeId') collegeId?: string,
     @Query('meetingType') meetingType?: string,
     @Query('q') q?: string,
-    @Query('topicQ') topicQ?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
@@ -112,7 +111,6 @@ export class AdminController {
       collegeId,
       meetingType,
       q,
-      topicQ,
       from,
       to,
     });

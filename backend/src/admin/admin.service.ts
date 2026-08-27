@@ -460,7 +460,6 @@ export class AdminService {
       collegeId?: string;
       meetingType?: string;
       q?: string;
-      topicQ?: string;
       from?: string;
       to?: string;
     },
@@ -469,7 +468,6 @@ export class AdminService {
     const from = this.parseDay(query?.from);
     const to = this.parseDay(query?.to, true);
     const kw = query?.q?.trim();
-    const topicKw = query?.topicQ?.trim();
     const items = await this.prisma.meeting.findMany({
       where: {
         ...this.meetingCollegeWhere(user, query?.collegeId),
@@ -480,14 +478,8 @@ export class AdminService {
               OR: [
                 { title: { contains: kw } },
                 { college: { name: { contains: kw } } },
+                { topics: { some: { title: { contains: kw } } } },
               ],
-            }
-          : {}),
-        ...(topicKw
-          ? {
-              topics: {
-                some: { title: { contains: topicKw } },
-              },
             }
           : {}),
       },

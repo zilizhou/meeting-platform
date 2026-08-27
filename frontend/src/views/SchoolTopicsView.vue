@@ -25,7 +25,7 @@
         <input
           v-model="q"
           type="search"
-          placeholder="搜索标题、学院、会议"
+          placeholder="搜索议题标题、学院、会议"
           @keyup.enter="load"
         />
         <button

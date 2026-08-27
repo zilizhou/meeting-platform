@@ -22,20 +22,12 @@
 
     <div class="filter-card">
       <div class="filter-main">
-        <div class="filter-searches">
-          <input
-            v-model="q"
-            type="search"
-            placeholder="搜索会议标题、学院名称"
-            @keyup.enter="load"
-          />
-          <input
-            v-model="topicQ"
-            type="search"
-            placeholder="搜索议题标题"
-            @keyup.enter="load"
-          />
-        </div>
+        <input
+          v-model="q"
+          type="search"
+          placeholder="搜索会议标题、学院、议题"
+          @keyup.enter="load"
+        />
         <button
           class="filter-toggle"
           type="button"
@@ -214,7 +206,6 @@ const CHART_TOP = 10
 
 const router = useRouter()
 const q = ref('')
-const topicQ = ref('')
 const collegeId = ref('')
 const meetingType = ref('')
 const from = ref('')
@@ -410,7 +401,6 @@ function unwrapMeetings(list: unknown) {
 async function load() {
   const baseParams = {
     q: q.value || undefined,
-    topicQ: topicQ.value || undefined,
     meetingType: meetingType.value || undefined,
     from: from.value || undefined,
     to: to.value || undefined,
@@ -442,7 +432,6 @@ function scheduleLoad() {
   timer = window.setTimeout(load, 320)
 }
 watch(q, scheduleLoad)
-watch(topicQ, scheduleLoad)
 
 onMounted(() => {
   if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
@@ -463,32 +452,20 @@ onMounted(() => {
 .filter-main {
   display: flex;
   gap: 8px;
-  align-items: stretch;
+  align-items: center;
 }
-.filter-searches {
+.filter-main input[type='search'] {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.filter-searches input[type='search'] {
-  width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px 12px;
   font: inherit;
   background: #f7f9fc;
 }
-@media (min-width: 640px) {
-  .filter-searches {
-    flex-direction: row;
-  }
-}
 .filter-toggle {
   flex: 0 0 auto;
-  align-self: stretch;
-  min-height: 40px;
+  height: 40px;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
