@@ -20,6 +20,7 @@ import { SystemModule } from './system/system.module';
 import { AiModule } from './ai/ai.module';
 import { AgentModule } from './agent/agent.module';
 import { PartyImportModule } from './party-import/party-import.module';
+import { FeedbackModule } from './feedback/feedback.module';
 import { RequestContextMiddleware } from './common/request-context.middleware';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { clientIpFromReq } from './common/request-context';
@@ -64,6 +65,7 @@ function envInt(name: string, fallback: number): number {
     AiModule,
     AgentModule,
     PartyImportModule,
+    FeedbackModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -133,6 +133,35 @@ body,
   min-width: 0;
 }
 
+/* 校级总览：外层不滚，左右内容区各自滚动 */
+.app-shell.is-overview .app-content {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(var(--tab-h) + var(--safe-b) + 12px);
+}
+
+.app-shell.is-overview .app-content > * {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 860px) {
+  .app-shell.is-overview .app-content {
+    overflow: auto;
+    display: block;
+  }
+
+  .app-shell.is-overview .app-content > * {
+    display: block;
+    height: auto;
+    min-height: 0;
+  }
+}
+
 .app-tabbar {
   position: fixed;
   left: 0;
@@ -1250,6 +1279,10 @@ body,
 
   /* 电脑端无底栏，智能体与其它页同边距 */
   .app-shell.is-agent .app-content {
+    padding: 22px 32px 22px;
+  }
+
+  .app-shell.is-overview .app-content {
     padding: 22px 32px 22px;
   }
 

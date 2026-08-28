@@ -153,6 +153,16 @@ const router = createRouter({
           name: 'school-meetings',
           component: () => import('@/views/SchoolMeetingsView.vue'),
         },
+        {
+          path: 'feedback',
+          name: 'feedback',
+          component: () => import('@/views/FeedbackListView.vue'),
+        },
+        {
+          path: 'feedback/:id',
+          name: 'feedback-thread',
+          component: () => import('@/views/FeedbackListView.vue'),
+        },
       ],
     },
   ],

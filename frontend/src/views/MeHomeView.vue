@@ -71,7 +71,20 @@
             <div class="ico">览</div>
             <div>
               <strong>总览</strong>
-              <em>部门 · 议题 · 会议</em>
+              <em>部门 · 时段 · 双会与议题</em>
+            </div>
+            <span class="chev">›</span>
+          </button>
+          <button
+            v-if="canAccessSchoolDashboard || canCollegeFeedback"
+            class="item"
+            type="button"
+            @click="router.push('/feedback')"
+          >
+            <div class="ico">馈</div>
+            <div>
+              <strong>{{ canAccessSchoolDashboard ? '部门反馈' : '校级反馈' }}</strong>
+              <em>{{ canAccessSchoolDashboard ? '向各部门发送与查看往来' : '查看并回复校级反馈' }}</em>
             </div>
             <span class="chev">›</span>
           </button>
@@ -83,8 +96,8 @@
           >
             <div class="ico">题</div>
             <div>
-              <strong>议题查询</strong>
-              <em>所管部门议题</em>
+              <strong>议题台账</strong>
+              <em>所管部门议题检索</em>
             </div>
             <span class="chev">›</span>
           </button>
@@ -96,7 +109,7 @@
           >
             <div class="ico">会</div>
             <div>
-              <strong>会议查询</strong>
+              <strong>会议台账</strong>
               <em>按时间查阅会议</em>
             </div>
             <span class="chev">›</span>
@@ -198,6 +211,18 @@ const canManageUsers = computed(() => {
     roles.includes('COLLEGE_ADMIN') ||
     roles.includes('SECRETARY')
   )
+})
+
+const canCollegeFeedback = computed(() => {
+  const roles = auth.user?.roles || []
+  return [
+    'COLLEGE_ADMIN',
+    'SECRETARY',
+    'VICE_SECRETARY',
+    'DEAN',
+    'VICE_DEAN',
+    'MEETING_SECRETARY',
+  ].some((r) => roles.includes(r))
 })
 
 async function load() {

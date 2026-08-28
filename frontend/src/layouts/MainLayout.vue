@@ -4,6 +4,7 @@
     :class="{
       'is-detail': isDetail,
       'is-agent': route.name === 'agent',
+      'is-overview': route.name === 'admin',
     }"
   >
     <aside class="app-side" aria-label="主导航">
@@ -109,18 +110,6 @@ const schoolTabs: TabItem[] = [
     icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-5H4v5Zm10-11h6V4h-6v5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
   },
   {
-    name: 'school-topics',
-    label: '议题',
-    path: '/school-topics',
-    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M7 4.5h10A1.5 1.5 0 0 1 18.5 6v13.2L12 16.2l-6.5 3V6A1.5 1.5 0 0 1 7 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.2 8.5h5.6M9.2 11.5h5.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  },
-  {
-    name: 'school-meetings',
-    label: '会议',
-    path: '/school-meetings',
-    icon: `<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  },
-  {
     name: 'agent',
     label: '智能体',
     path: '/agent',
@@ -220,14 +209,16 @@ function isTabActive(name: string) {
       String(route.name),
     ) && route.query.from !== 'school'
   }
-  if (name === 'school-topics') {
-    return route.name === 'topic-detail' && route.query.from === 'school'
-  }
-  if (name === 'school-meetings') {
-    return route.name === 'meeting-detail' && route.query.from === 'school'
-  }
   if (name === 'admin') {
-    return route.name === 'admin-ops'
+    return (
+      route.name === 'admin-ops' ||
+      route.name === 'feedback' ||
+      route.name === 'feedback-thread' ||
+      ((route.name === 'topic-detail' || route.name === 'meeting-detail') &&
+        route.query.from === 'school') ||
+      route.name === 'school-topics' ||
+      route.name === 'school-meetings'
+    )
   }
   return false
 }

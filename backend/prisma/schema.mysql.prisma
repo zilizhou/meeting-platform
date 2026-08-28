@@ -26,13 +26,14 @@ model College {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users         User[]
-  viewerScopes  UserCollegeScope[]
-  rosters       RosterMember[]
-  meetings      Meeting[]
-  topics        Topic[]
-  auditLogs     AuditLog[]
-  categoryDicts CategoryDict[]
+  users            User[]
+  viewerScopes     UserCollegeScope[]
+  rosters          RosterMember[]
+  meetings         Meeting[]
+  topics           Topic[]
+  auditLogs        AuditLog[]
+  categoryDicts    CategoryDict[]
+  feedbackThreads  SchoolFeedbackThread[]
 }
 
 model User {
@@ -69,6 +70,8 @@ model User {
   auditLogs            AuditLog[]
   notifications        Notification[]
   materialReceipts     MaterialReadReceipt[]
+  feedbackThreads      SchoolFeedbackThread[]  @relation("FeedbackThreadCreator")
+  feedbackMessages     SchoolFeedbackMessage[] @relation("FeedbackMessageAuthor")
 }
 
 // 校级查阅账号的分管学院；无记录 = 全校可见
@@ -449,4 +452,34 @@ model MeetingFrequencyRule {
   updatedAt     DateTime @updatedAt
 
   @@unique([collegeId, meetingType])
+}
+
+/// 校级对部门反馈线程（可往来回复）
+model SchoolFeedbackThread {
+  id            String   @id @default(cuid())
+  collegeId     String
+  createdById   String
+  subject       String?
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  college   College                 @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  createdBy User                    @relation("FeedbackThreadCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  messages  SchoolFeedbackMessage[]
+
+  @@index([collegeId, lastMessageAt])
+  @@index([createdById])
+}
+
+model SchoolFeedbackMessage {
+  id           String   @id @default(cuid())
+  threadId     String
+  authorUserId String
+  content      String   @db.Text
+  createdAt    DateTime @default(now())
+
+  thread SchoolFeedbackThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author User                 @relation("FeedbackMessageAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
 }

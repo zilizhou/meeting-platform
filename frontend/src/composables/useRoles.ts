@@ -79,6 +79,17 @@ export function useRoles() {
       has('MEETING_SECRETARY', 'COLLEGE_ADMIN', 'SECRETARY'),
     ),
     canManageUsers: computed(() => has('COLLEGE_ADMIN', 'SECRETARY')),
+    /** 院方可收发校级反馈 */
+    canCollegeFeedback: computed(() =>
+      has(
+        'COLLEGE_ADMIN',
+        'SECRETARY',
+        'VICE_SECRETARY',
+        'DEAN',
+        'VICE_DEAN',
+        'MEETING_SECRETARY',
+      ),
+    ),
     canManageAvoid: computed(() =>
       has('MEETING_SECRETARY', 'COLLEGE_ADMIN', 'SECRETARY', 'DEAN'),
     ),

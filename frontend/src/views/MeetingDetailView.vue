@@ -208,9 +208,12 @@
 
         <div class="dialog-section">
           <div class="dialog-label">议题正文</div>
-          <div class="dialog-content">
-            {{ dialogTopic.content?.trim() || '（暂无议题正文）' }}
-          </div>
+          <div
+            v-if="dialogTopic.content?.trim()"
+            class="dialog-content rich"
+            v-html="renderContentHtml(dialogTopic.content)"
+          />
+          <div v-else class="dialog-content">（暂无议题正文）</div>
         </div>
 
         <div class="dialog-section">
@@ -277,6 +280,7 @@ import Sortable from 'sortablejs'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 import { exportMeetingMinutesDoc } from '@/utils/exportMinutesDoc'
+import { renderContentHtml } from '@/utils/markdown'
 
 const route = useRoute()
 const router = useRouter()
@@ -1142,6 +1146,20 @@ watch(
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text);
+}
+.dialog-content.rich {
+  white-space: normal;
+}
+.dialog-content.rich :deep(p) {
+  margin: 0 0 0.55em;
+}
+.dialog-content.rich :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.dialog-content.rich :deep(ul),
+.dialog-content.rich :deep(ol) {
+  margin: 0.35em 0 0.55em;
+  padding-left: 1.35em;
 }
 .info-list {
   display: grid;

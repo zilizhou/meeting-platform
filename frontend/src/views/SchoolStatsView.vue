@@ -1,274 +1,241 @@
 <template>
-  <div>
-    <div class="ui-hero is-official">
+  <div class="overview">
+    <div class="ui-hero is-official is-compact">
       <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
       <h2>总览</h2>
-      <p>所管学院的议题、会议数量与时间分布。数字以系统为准。</p>
-      <div class="nums">
-        <div class="kpi gold">
-          <strong>{{ data?.colleges?.count ?? '—' }}</strong>
-          <span>所管部门</span>
-        </div>
-        <div class="kpi coral">
-          <strong>{{ data?.topics?.total ?? '—' }}</strong>
-          <span>议题</span>
-        </div>
-        <div class="kpi sky">
-          <strong>{{ data?.meetings?.total ?? '—' }}</strong>
-          <span>会议</span>
-        </div>
-        <div class="kpi mint">
-          <strong>{{ data?.holding?.bothOkCount ?? '—' }}</strong>
-          <span>双会齐全</span>
-        </div>
-      </div>
+      <p>左侧选部门，右侧按时段展开双会与议题。</p>
     </div>
 
-    <div class="ui-filter is-equal" role="tablist">
-      <button
-        v-for="p in presets"
-        :key="p.key"
-        type="button"
-        role="tab"
-        :aria-selected="preset === p.key"
-        :class="{ on: preset === p.key }"
-        @click="applyPreset(p.key)"
-      >
-        {{ p.label }}
-      </button>
-    </div>
-    <div v-if="preset === 'custom'" class="range-row">
-      <input v-model="from" type="date" @change="load" />
-      <span>至</span>
-      <input v-model="to" type="date" @change="load" />
+    <div class="topic-filter-bar">
+      <input
+        v-model="topicQ"
+        type="search"
+        class="topic-search"
+        placeholder="模糊检索议题标题、会议标题"
+      />
+      <select v-model="categoryId" class="topic-cat-select" aria-label="议题分类">
+        <option value="">全部分类</option>
+        <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
+      </select>
     </div>
 
-    <div class="stat-grid">
-      <article class="stat-card party">
-        <h3>党委会</h3>
-        <p class="big">{{ data?.meetings?.party ?? 0 }} <em>场</em></p>
-        <div class="sub">议题 {{ data?.topics?.party ?? 0 }} 项</div>
-      </article>
-      <article class="stat-card joint">
-        <h3>党政联席会议</h3>
-        <p class="big">{{ data?.meetings?.joint ?? 0 }} <em>场</em></p>
-        <div class="sub">议题 {{ data?.topics?.joint ?? 0 }} 项</div>
-      </article>
-    </div>
+    <div class="split">
+      <aside class="dept-pane" aria-label="部门列表">
+        <div class="dept-pane-head">
+          <strong>部门</strong>
+          <span>{{ filteredColleges.length }}/{{ colleges.length }}</span>
+        </div>
+        <input
+          v-model="deptQ"
+          type="search"
+          class="dept-search"
+          placeholder="筛选部门名称"
+        />
+        <div class="dept-list" role="listbox">
+          <button
+            v-for="c in filteredColleges"
+            :key="c.collegeId"
+            type="button"
+            role="option"
+            class="dept-item"
+            :aria-selected="collegeId === c.collegeId"
+            :class="{ on: collegeId === c.collegeId }"
+            @click="selectCollege(c.collegeId)"
+          >
+            <span class="name" :title="c.name">{{ c.name }}</span>
+            <em v-if="c.meetingCount != null">{{ c.meetingCount }}</em>
+          </button>
+          <div v-if="!filteredColleges.length" class="dept-empty">无匹配部门</div>
+        </div>
+      </aside>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h3>按月召开</h3>
-        <span>党委会 / 党政联席会议</span>
-      </div>
-      <div v-if="!monthlyMax" class="ui-empty">所选时段暂无召开数据</div>
-      <div v-else class="month-chart">
-        <div v-for="row in data?.monthly || []" :key="row.month" class="month-col">
-          <div class="bars">
-            <div class="bar-wrap">
-              <span class="n party">{{ row.partyMeetings }}</span>
-              <i class="party" :style="{ height: barH(row.partyMeetings) }" />
-            </div>
-            <div class="bar-wrap">
-              <span class="n joint">{{ row.jointMeetings }}</span>
-              <i class="joint" :style="{ height: barH(row.jointMeetings) }" />
-            </div>
-          </div>
-          <em>{{ row.month.slice(5) }}月</em>
-        </div>
-      </div>
-      <div class="legend">
-        <span><i class="party" />党委会</span>
-        <span><i class="joint" />党政联席会议</span>
-      </div>
-    </section>
-
-    <section class="panel" :class="{ collapsed: !collegeOpen }">
-      <button
-        class="panel-toggle"
-        type="button"
-        :aria-expanded="collegeOpen"
-        @click="collegeOpen = !collegeOpen"
-      >
-        <div class="panel-toggle-text">
-          <h3>各部门对照</h3>
-          <p v-if="collegeOpen">会议数 / 议题数对照</p>
-          <p v-else>共 {{ (data?.colleges?.items || []).length }} 个部门 · 点击展开</p>
-        </div>
-        <div class="panel-toggle-side">
-          <span v-if="collegeOpen" class="legend college-legend">
-            <span><i class="meet" />会议数</span>
-            <span><i class="topic" />议题数</span>
-          </span>
-          <span class="chevron" :class="{ open: collegeOpen }" aria-hidden="true">▾</span>
-        </div>
-      </button>
-      <div v-show="collegeOpen">
-        <div v-if="!(data?.colleges?.items || []).length" class="ui-empty">暂无部门数据</div>
-        <div v-else class="college-bars">
-          <div v-for="c in data?.colleges?.items || []" :key="c.collegeId" class="college-row">
-            <strong>{{ c.name }}</strong>
-            <div class="tracks">
-              <div class="track">
-                <b
-                  v-if="c.meetingCount > 0"
-                  class="meet"
-                  :style="{ width: pct(c.meetingCount, collegeMax) }"
-                />
+      <section class="detail-pane">
+        <template v-if="collegeId">
+          <div class="detail-tools">
+            <div class="detail-head">
+              <div>
+                <h3>{{ selectedCollegeName }}</h3>
+                <p v-if="!loading">
+                  会议 {{ listSummary.total }} · 党委会 {{ listSummary.party }} · 联席
+                  {{ listSummary.joint }} · 议题 {{ listSummary.topics }}
+                  <template v-if="hasTopicFilter">（已筛选）</template>
+                </p>
               </div>
-              <div class="track">
-                <b
-                  v-if="c.topicCount > 0"
-                  class="topic"
-                  :style="{ width: pct(c.topicCount, collegeMax) }"
-                />
+              <button type="button" class="ui-btn ghost" @click="feedbackOpen = true">反馈</button>
+            </div>
+
+            <div class="period-bar">
+              <select
+                v-model.number="year"
+                class="year-select"
+                aria-label="年份"
+                @change="onYearChange"
+              >
+                <option v-for="y in yearOptions" :key="y" :value="y">{{ y }} 年</option>
+              </select>
+              <div class="period-chips" role="tablist" aria-label="季度与全年">
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="period === 'year'"
+                  :class="{ on: period === 'year' }"
+                  @click="setPeriod('year')"
+                >
+                  全年
+                </button>
+                <button
+                  v-for="q in quarters"
+                  :key="q.key"
+                  type="button"
+                  role="tab"
+                  :aria-selected="period === q.key"
+                  :class="{ on: period === q.key }"
+                  @click="setPeriod(q.key)"
+                >
+                  {{ q.label }}
+                </button>
               </div>
             </div>
-            <em>
-              <span class="meet-n">会 {{ c.meetingCount }}</span>
-              ·
-              <span class="topic-n">题 {{ c.topicCount }}</span>
-            </em>
+            <div class="period-chips is-months" role="tablist" aria-label="月份">
+              <button
+                v-for="m in months"
+                :key="m.key"
+                type="button"
+                role="tab"
+                :aria-selected="period === m.key"
+                :class="{ on: period === m.key }"
+                @click="setPeriod(m.key)"
+              >
+                {{ m.label }}
+              </button>
+            </div>
+
+            <div class="ui-filter is-equal type-tabs" role="tablist" aria-label="会议类型">
+              <button
+                v-for="t in typeTabs"
+                :key="t.key || 'all'"
+                type="button"
+                role="tab"
+                :aria-selected="meetingType === t.key"
+                :class="{
+                  on: meetingType === t.key,
+                  party: t.key === 'PARTY_COMMITTEE',
+                }"
+                @click="meetingType = t.key"
+              >
+                {{ t.label }}
+                <em>{{ t.count }}</em>
+              </button>
+            </div>
+            <div v-if="hasTopicFilter" class="filter-hint">
+              <span>已按议题检索/分类筛选</span>
+              <button type="button" @click="clearTopicFilters">清除筛选</button>
+            </div>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <section class="panel recent-panel">
-      <div class="recent-head">
-        <div class="ui-filter is-equal" role="tablist" aria-label="近期列表">
-          <button
-            type="button"
-            role="tab"
-            :aria-selected="recentTab === 'topics'"
-            :class="{ on: recentTab === 'topics' }"
-            @click="switchRecentTab('topics')"
-          >
-            近期议题
-          </button>
-          <button
-            type="button"
-            role="tab"
-            :aria-selected="recentTab === 'meetings'"
-            :class="{ on: recentTab === 'meetings' }"
-            @click="switchRecentTab('meetings')"
-          >
-            近期会议
-          </button>
-        </div>
-        <button
-          class="panel-link recent-more"
-          type="button"
-          @click="recentTab === 'topics' ? goTopics() : goMeetings()"
-        >
-          {{ recentTab === 'topics' ? '查看全部议题 →' : '查看全部会议 →' }}
-        </button>
-      </div>
+          <div class="detail-scroll">
+            <div v-if="loading" class="pane-empty">加载中…</div>
+            <div v-else-if="!visibleMeetings.length" class="pane-empty">
+              <template v-if="hasTopicFilter">
+                <p>当前筛选下没有匹配的会议或议题</p>
+                <button type="button" class="ui-btn ghost" @click="clearTopicFilters">清除筛选</button>
+              </template>
+              <template v-else>该部门在所选时段暂无会议</template>
+            </div>
 
-      <div ref="recentScrollEl" class="recent-scroll">
-        <div v-show="recentTab === 'topics'" class="recent-list">
-          <div v-if="!recentTopics.length" class="ui-empty">所选时段暂无议题</div>
-          <article
-            v-for="t in recentTopics"
-            :key="t.id"
-            class="list-card"
-            :class="t.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
-            role="link"
-            tabindex="0"
-            @click="openTopic(t.id)"
-            @keydown.enter="openTopic(t.id)"
-          >
-            <div class="list-top">
-              <span class="ui-tag" :class="t.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'">
-                {{ t.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '党政联席会议' }}
-              </span>
-              <span class="ui-tag">{{ statusLabel(t.status) }}</span>
-            </div>
-            <h4>{{ t.title }}</h4>
-            <div class="list-meta">
-              {{ t.college?.name || '—' }} · {{ t.meeting?.title || '未关联会议' }} ·
-              {{ formatDay(t.createdAt) }}
-            </div>
-          </article>
-        </div>
+            <div v-else class="tree">
+              <div
+                v-for="group in visibleTreeGroups"
+                :key="group.key"
+                class="tree-group"
+                :class="group.key === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
+              >
+                <button
+                  type="button"
+                  class="tree-row is-group"
+                  :aria-expanded="isGroupOpen(group.key)"
+                  @click="toggleGroup(group.key)"
+                >
+                  <span class="chev" :class="{ open: isGroupOpen(group.key) }">▸</span>
+                  <strong>{{ group.label }}</strong>
+                  <em>{{ group.items.length }}</em>
+                </button>
 
-        <div v-show="recentTab === 'meetings'" class="recent-list">
-          <div v-if="!recentMeetings.length" class="ui-empty">所选时段暂无会议</div>
-          <article
-            v-for="m in recentMeetings"
-            :key="m.id"
-            class="list-card"
-            :class="m.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
-            role="link"
-            tabindex="0"
-            @click="openMeeting(m.id)"
-            @keydown.enter="openMeeting(m.id)"
-          >
-            <div class="list-top">
-              <span class="ui-tag" :class="m.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint'">
-                {{ m.meetingType === 'PARTY_COMMITTEE' ? '党委会' : '党政联席会议' }}
-              </span>
-              <span class="ui-tag">{{ meetingStatusLabel(m.status) }}</span>
-            </div>
-            <h4>{{ m.title }}</h4>
-            <div class="list-meta">
-              {{ m.college?.name || '—' }} · {{ formatDay(m.scheduledAt || m.createdAt) }} ·
-              议题 {{ m.topics?.length || 0 }} 项
-            </div>
-          </article>
-        </div>
-      </div>
-    </section>
+                <div v-show="isGroupOpen(group.key)" class="tree-children">
+                  <div v-if="!group.items.length" class="tree-empty">本时段无记录</div>
+                  <div v-for="m in group.items" :key="m.id" class="tree-meeting">
+                    <div class="tree-row is-meeting">
+                      <button
+                        type="button"
+                        class="expand-hit"
+                        :aria-expanded="isMeetingOpen(m.id)"
+                        :aria-label="isMeetingOpen(m.id) ? '收起议题' : '展开议题'"
+                        @click="toggleMeeting(m.id)"
+                      >
+                        <span class="chev" :class="{ open: isMeetingOpen(m.id) }">▸</span>
+                      </button>
+                      <button type="button" class="meeting-main" @click="toggleMeeting(m.id)">
+                        <strong>{{ m.title }}</strong>
+                        <span
+                          >{{ statusLabel(m.status) }} ·
+                          {{ formatTime(m.scheduledAt || m.createdAt) }} · 议题
+                          {{ m.topics?.length || 0 }}</span
+                        >
+                      </button>
+                      <button type="button" class="link-btn" @click="openMeeting(m)">详情</button>
+                    </div>
 
-    <!-- 暂时隐藏：简报与预警入口
-    <div v-if="auth.user?.isSchoolAdmin" class="jump">
-      <button class="w-entry" type="button" @click="router.push('/admin-ops')">
-        <div class="ico">报</div>
-        <strong>简报与预警</strong>
-        <em>领导简报 · 巡视导出</em>
-      </button>
+                    <ul v-show="isMeetingOpen(m.id)" class="topic-children">
+                      <li v-if="!m.topics?.length" class="tree-empty">暂无议题</li>
+                      <li v-for="(topic, idx) in m.topics || []" :key="topic.id">
+                        <button type="button" class="topic-link" @click="openTopic(topic.id)">
+                          <span class="topic-idx">{{ idx + 1 }}.</span>
+                          <span v-if="topic.category?.name" class="topic-cat">{{ topic.category.name }}</span>
+                          <span class="topic-title">{{ topic.title }}</span>
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <div v-else class="pane-empty hint">
+          请从左侧选择部门。部门较多时可直接搜索名称。
+        </div>
+      </section>
     </div>
-    -->
+
+    <SchoolFeedbackPanel
+      :open="feedbackOpen"
+      :college-id="collegeId"
+      :college-name="selectedCollegeName"
+      :can-create="true"
+      @close="feedbackOpen = false"
+    />
+
+    <SchoolPreviewDrawer
+      v-model:kind="previewKind"
+      v-model:id="previewId"
+      :open="previewOpen"
+      @close="previewOpen = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
-
-interface MonthlyRow {
-  month: string
-  partyMeetings: number
-  jointMeetings: number
-  partyTopics: number
-  jointTopics: number
-}
+import SchoolFeedbackPanel from '@/components/SchoolFeedbackPanel.vue'
+import SchoolPreviewDrawer from '@/components/SchoolPreviewDrawer.vue'
 
 interface CollegeRow {
   collegeId: string
   name: string
-  topicCount: number
-  meetingCount: number
-}
-
-interface StatsPayload {
-  colleges: { count: number; items: CollegeRow[] }
-  topics: { total: number; party: number; joint: number; byStatus: Record<string, number> }
-  meetings: { total: number; party: number; joint: number }
-  monthly: MonthlyRow[]
-  holding?: { label?: string; bothOkCount?: number }
-}
-
-interface TopicRow {
-  id: string
-  title: string
-  status: string
-  meetingType: string
-  createdAt: string
-  college?: { name: string }
-  meeting?: { title?: string } | null
+  meetingCount?: number
 }
 
 interface MeetingRow {
@@ -278,44 +245,77 @@ interface MeetingRow {
   meetingType: string
   scheduledAt?: string
   createdAt: string
-  college?: { name: string }
-  topics?: Array<{ id: string }>
+  topics?: Array<{
+    id: string
+    title: string
+    category?: { id?: string; name?: string; code?: string } | null
+  }>
 }
 
-type Preset = 'year' | 'quarter' | 'month' | 'all' | 'custom'
+type GroupKey = 'PARTY_COMMITTEE' | 'JOINT_CONFERENCE'
+type PeriodKey =
+  | 'year'
+  | 'q1'
+  | 'q2'
+  | 'q3'
+  | 'q4'
+  | 'm1'
+  | 'm2'
+  | 'm3'
+  | 'm4'
+  | 'm5'
+  | 'm6'
+  | 'm7'
+  | 'm8'
+  | 'm9'
+  | 'm10'
+  | 'm11'
+  | 'm12'
 
-const RECENT_LIMIT = 20
-
-const router = useRouter()
 const auth = useAuthStore()
-const data = ref<StatsPayload | null>(null)
-const recentTopics = ref<TopicRow[]>([])
-const recentMeetings = ref<MeetingRow[]>([])
-const collegeOpen = ref(false)
-const recentTab = ref<'topics' | 'meetings'>('topics')
-const recentScrollEl = ref<HTMLElement | null>(null)
-const preset = ref<Preset>('year')
+const colleges = ref<CollegeRow[]>([])
+const collegeId = ref('')
+const deptQ = ref('')
+const meetings = ref<MeetingRow[]>([])
+const loading = ref(false)
+const feedbackOpen = ref(false)
+const previewOpen = ref(false)
+const previewKind = ref<'meeting' | 'topic'>('meeting')
+const previewId = ref('')
+const now = new Date()
+const year = ref(now.getFullYear())
+const period = ref<PeriodKey>(`q${Math.floor(now.getMonth() / 3) + 1}` as PeriodKey)
 const from = ref('')
 const to = ref('')
+const openGroups = ref<Record<GroupKey, boolean>>({
+  PARTY_COMMITTEE: true,
+  JOINT_CONFERENCE: true,
+})
+const openMeetings = ref<Record<string, boolean>>({})
+const meetingType = ref('')
+const topicQ = ref('')
+const categoryId = ref('')
 
-const presets: Array<{ key: Preset; label: string }> = [
-  { key: 'year', label: '本年' },
-  { key: 'quarter', label: '本季' },
-  { key: 'month', label: '本月' },
-  { key: 'all', label: '全部' },
-  { key: 'custom', label: '自定义' },
+const yearOptions = computed(() => {
+  const y = new Date().getFullYear()
+  return [y, y - 1, y - 2, y - 3, y - 4]
+})
+
+const quarters: Array<{ key: PeriodKey; label: string; startMonth: number }> = [
+  { key: 'q1', label: '第一季度', startMonth: 0 },
+  { key: 'q2', label: '第二季度', startMonth: 3 },
+  { key: 'q3', label: '第三季度', startMonth: 6 },
+  { key: 'q4', label: '第四季度', startMonth: 9 },
 ]
 
-const TOPIC_STATUS: Record<string, string> = {
-  DRAFT: '草稿',
-  PENDING_REVIEW: '待审',
-  DEFERRED: '已暂缓',
-  APPROVED: '已通过',
-  ON_AGENDA: '已入会',
-  DISCUSSED: '待再议',
-  RESOLVED: '已决议',
-  REJECTED: '未通过',
-}
+const months: Array<{ key: PeriodKey; label: string; month: number }> = Array.from(
+  { length: 12 },
+  (_, i) => ({
+    key: `m${i + 1}` as PeriodKey,
+    label: `${i + 1}月`,
+    month: i,
+  }),
+)
 
 const MEETING_STATUS: Record<string, string> = {
   DRAFT: '草稿',
@@ -326,24 +326,119 @@ const MEETING_STATUS: Record<string, string> = {
   ARCHIVED: '已归档',
 }
 
+const summary = reactive({ total: 0, party: 0, joint: 0, topics: 0 })
+
+const filteredColleges = computed(() => {
+  const q = deptQ.value.trim().toLowerCase()
+  if (!q) return colleges.value
+  return colleges.value.filter((c) => c.name.toLowerCase().includes(q))
+})
+
+const selectedCollegeName = computed(
+  () => colleges.value.find((c) => c.collegeId === collegeId.value)?.name || '—',
+)
+
 const scopeLabel = computed(() => {
   const ids = auth.user?.collegeScopeIds || []
-  const names = (data.value?.colleges?.items || []).map((c) => c.name)
-  if (ids.length) return `校级分管查阅 · ${names.join('、') || '分管学院'}`
+  if (ids.length) return `校级分管查阅 · ${colleges.value.map((c) => c.name).join('、') || '分管学院'}`
   if ((auth.user?.roles || []).includes('SCHOOL_VIEWER') && !auth.user?.isSchoolAdmin) {
     return '校级查阅 · 全校'
   }
   return '校级监管 · 全校'
 })
 
-const monthlyMax = computed(() => {
-  const rows = data.value?.monthly || []
-  return Math.max(0, ...rows.map((r) => Math.max(r.partyMeetings, r.jointMeetings)))
+/** Tab 数量与下方列表同源：含议题检索/分类筛选结果 */
+const typeTabs = computed(() => [
+  { key: '', label: '全部', count: filteredMeetings.value.length },
+  {
+    key: 'PARTY_COMMITTEE',
+    label: '党委会',
+    count: filteredMeetings.value.filter((m) => m.meetingType === 'PARTY_COMMITTEE').length,
+  },
+  {
+    key: 'JOINT_CONFERENCE',
+    label: '党政联席会',
+    count: filteredMeetings.value.filter((m) => m.meetingType === 'JOINT_CONFERENCE').length,
+  },
+])
+
+const hasTopicFilter = computed(() => !!(topicQ.value.trim() || categoryId.value))
+
+const categoryOptions = computed(() => {
+  const map = new Map<string, string>()
+  for (const m of meetings.value) {
+    for (const t of m.topics || []) {
+      if (t.category?.id && t.category.name) map.set(t.category.id, t.category.name)
+    }
+  }
+  return [...map.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh'))
 })
 
-const collegeMax = computed(() => {
-  const rows = data.value?.colleges?.items || []
-  return Math.max(1, ...rows.map((c) => Math.max(c.meetingCount, c.topicCount)))
+function applyTopicFilters(list: MeetingRow[]) {
+  const q = topicQ.value.trim().toLowerCase()
+  const cat = categoryId.value
+  if (!q && !cat) return list
+
+  const out: MeetingRow[] = []
+  for (const m of list) {
+    const meetingHit = q ? m.title.toLowerCase().includes(q) : false
+    let topics = [...(m.topics || [])]
+    if (cat) topics = topics.filter((t) => t.category?.id === cat)
+    if (q) {
+      topics = topics.filter(
+        (t) => t.title.toLowerCase().includes(q) || meetingHit,
+      )
+    }
+    if (topics.length) {
+      out.push({ ...m, topics })
+      continue
+    }
+    // 仅会议标题命中且未选分类时保留会议
+    if (meetingHit && !cat) out.push({ ...m, topics: m.topics || [] })
+  }
+  return out
+}
+
+const filteredMeetings = computed(() => applyTopicFilters(meetings.value))
+
+const listSummary = computed(() => {
+  const list = filteredMeetings.value
+  return {
+    total: list.length,
+    party: list.filter((m) => m.meetingType === 'PARTY_COMMITTEE').length,
+    joint: list.filter((m) => m.meetingType === 'JOINT_CONFERENCE').length,
+    topics: list.reduce((n, m) => n + (m.topics?.length || 0), 0),
+  }
+})
+
+function clearTopicFilters() {
+  topicQ.value = ''
+  categoryId.value = ''
+}
+
+const partyMeetings = computed(() =>
+  filteredMeetings.value.filter((m) => m.meetingType === 'PARTY_COMMITTEE'),
+)
+const jointMeetings = computed(() =>
+  filteredMeetings.value.filter((m) => m.meetingType === 'JOINT_CONFERENCE'),
+)
+
+const treeGroups = computed(() => [
+  { key: 'PARTY_COMMITTEE' as GroupKey, label: '党委会', items: partyMeetings.value },
+  { key: 'JOINT_CONFERENCE' as GroupKey, label: '党政联席会', items: jointMeetings.value },
+])
+
+const visibleTreeGroups = computed(() => {
+  if (!meetingType.value) return treeGroups.value
+  return treeGroups.value.filter((g) => g.key === meetingType.value)
+})
+
+const visibleMeetings = computed(() => {
+  if (meetingType.value === 'PARTY_COMMITTEE') return partyMeetings.value
+  if (meetingType.value === 'JOINT_CONFERENCE') return jointMeetings.value
+  return filteredMeetings.value
 })
 
 function pad(n: number) {
@@ -354,501 +449,623 @@ function isoDay(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-function today() {
-  return isoDay(new Date())
+function statusLabel(s: string) {
+  return MEETING_STATUS[s] || s
 }
 
-function formatDay(iso?: string) {
+function formatTime(iso?: string) {
   if (!iso) return '—'
   const d = new Date(iso)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-function statusLabel(s: string) {
-  return TOPIC_STATUS[s] || s
+function isGroupOpen(key: GroupKey) {
+  return !!openGroups.value[key]
 }
 
-function meetingStatusLabel(s: string) {
-  return MEETING_STATUS[s] || s
+function toggleGroup(key: GroupKey) {
+  openGroups.value = { ...openGroups.value, [key]: !openGroups.value[key] }
 }
 
-function rangeParams() {
-  const params: Record<string, string> = {}
-  if (preset.value !== 'all' && from.value) params.from = from.value
-  if (preset.value !== 'all' && to.value) params.to = to.value
-  return params
+function isMeetingOpen(id: string) {
+  return openMeetings.value[id] !== false
 }
 
-function applyPreset(key: Preset) {
-  preset.value = key
-  const now = new Date()
-  if (key === 'year') {
-    from.value = `${now.getFullYear()}-01-01`
-    to.value = today()
-    load()
+function toggleMeeting(id: string) {
+  const next = !(openMeetings.value[id] !== false)
+  openMeetings.value = { ...openMeetings.value, [id]: next }
+}
+
+function lastDayOfMonth(y: number, monthIndex: number) {
+  return isoDay(new Date(y, monthIndex + 1, 0))
+}
+
+function setPeriod(key: PeriodKey) {
+  period.value = key
+  clearTopicFilters()
+  applyPeriod()
+}
+
+function onYearChange() {
+  clearTopicFilters()
+  applyPeriod()
+}
+
+function applyPeriod() {
+  const y = year.value
+  if (period.value === 'year') {
+    from.value = `${y}-01-01`
+    to.value = `${y}-12-31`
+    loadMeetings()
     return
   }
-  if (key === 'quarter') {
-    const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
-    from.value = isoDay(new Date(now.getFullYear(), quarterStartMonth, 1))
-    to.value = today()
-    load()
+  if (period.value.startsWith('q')) {
+    const q = quarters.find((item) => item.key === period.value)
+    if (!q) return
+    from.value = `${y}-${pad(q.startMonth + 1)}-01`
+    to.value = lastDayOfMonth(y, q.startMonth + 2)
+    loadMeetings()
     return
   }
-  if (key === 'month') {
-    from.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`
-    to.value = today()
-    load()
-    return
-  }
-  if (key === 'all') {
-    from.value = ''
-    to.value = ''
-    load()
-    return
+  if (period.value.startsWith('m')) {
+    const m = months.find((item) => item.key === period.value)
+    if (!m) return
+    from.value = `${y}-${pad(m.month + 1)}-01`
+    to.value = lastDayOfMonth(y, m.month)
+    loadMeetings()
   }
 }
 
-function barH(n: number) {
-  const max = monthlyMax.value || 1
-  if (n <= 0) return '2px'
-  return `${Math.max(6, Math.round((n / max) * 72))}px`
+function selectCollege(id: string) {
+  collegeId.value = id
 }
 
-function pct(n: number, max: number) {
-  if (n <= 0) return '0%'
-  return `${Math.max(6, Math.round((n / Math.max(max, 1)) * 100))}%`
+async function loadColleges() {
+  const stats: any = await http.get('/admin/stats')
+  colleges.value = (stats?.colleges?.items || []).map((c: any) => ({
+    collegeId: c.collegeId || c.id,
+    name: c.name,
+    meetingCount: c.meetingCount,
+  }))
+  if (!collegeId.value && colleges.value.length) {
+    collegeId.value = colleges.value[0].collegeId
+  }
+}
+
+async function loadMeetings() {
+  if (!collegeId.value) {
+    meetings.value = []
+    summary.total = 0
+    summary.party = 0
+    summary.joint = 0
+    summary.topics = 0
+    return
+  }
+  loading.value = true
+  try {
+    const res: any = await http.get('/admin/meetings', {
+      params: {
+        collegeId: collegeId.value,
+        from: from.value || undefined,
+        to: to.value || undefined,
+      },
+    })
+    meetings.value = res.items || []
+    summary.total = res.summary?.total ?? meetings.value.length
+    summary.party =
+      res.summary?.party ??
+      meetings.value.filter((m) => m.meetingType === 'PARTY_COMMITTEE').length
+    summary.joint =
+      res.summary?.joint ??
+      meetings.value.filter((m) => m.meetingType === 'JOINT_CONFERENCE').length
+    summary.topics = meetings.value.reduce((n, m) => n + (m.topics?.length || 0), 0)
+    openMeetings.value = Object.fromEntries(meetings.value.map((m) => [m.id, true]))
+  } finally {
+    loading.value = false
+  }
+}
+
+function openMeeting(m: MeetingRow) {
+  previewKind.value = 'meeting'
+  previewId.value = m.id
+  previewOpen.value = true
 }
 
 function openTopic(id: string) {
-  router.push({ path: `/topics/${id}`, query: { from: 'school' } })
+  previewKind.value = 'topic'
+  previewId.value = id
+  previewOpen.value = true
 }
 
-function openMeeting(id: string) {
-  router.push({ path: `/meetings/${id}`, query: { from: 'school' } })
-}
+watch(collegeId, () => {
+  feedbackOpen.value = false
+  topicQ.value = ''
+  categoryId.value = ''
+  loadMeetings()
+})
 
-function goTopics() {
-  router.push('/school-topics')
-}
-
-function goMeetings() {
-  router.push('/school-meetings')
-}
-
-function switchRecentTab(tab: 'topics' | 'meetings') {
-  recentTab.value = tab
-  if (recentScrollEl.value) recentScrollEl.value.scrollTop = 0
-}
-
-function unwrapList<T>(payload: unknown): T[] {
-  if (Array.isArray(payload)) return payload as T[]
-  const items = (payload as { items?: T[] } | null)?.items
-  return items || []
-}
-
-async function load() {
-  const params = rangeParams()
-  try {
-    const [stats, topics, meetings] = await Promise.all([
-      http.get('/admin/stats', { params }),
-      http.get('/admin/topics', { params }),
-      http.get('/admin/meetings', { params }),
-    ])
-    data.value = stats as unknown as StatsPayload
-    recentTopics.value = unwrapList<TopicRow>(topics).slice(0, RECENT_LIMIT)
-    recentMeetings.value = unwrapList<MeetingRow>(meetings).slice(0, RECENT_LIMIT)
-  } catch {
-    data.value = null
-    recentTopics.value = []
-    recentMeetings.value = []
+watch([topicQ, categoryId], () => {
+  for (const m of filteredMeetings.value) {
+    openMeetings.value[m.id] = true
   }
-}
+})
 
-onMounted(() => {
-  applyPreset('year')
+watch(categoryOptions, (opts) => {
+  if (categoryId.value && !opts.some((o) => o.id === categoryId.value)) {
+    categoryId.value = ''
+  }
+})
+
+onMounted(async () => {
+  await loadColleges()
+  applyPeriod()
 })
 </script>
 
 <style scoped>
-.range-row {
+.overview {
+  min-height: 0;
+  height: 100%;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 14px;
-  font-size: 13px;
-  color: var(--muted);
+  flex-direction: column;
+  overflow: hidden;
 }
-.range-row input {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: #fff;
-  font: inherit;
-}
-.stat-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.stat-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: var(--shadow);
-  border-top: 3px solid var(--joint);
-}
-.stat-card.party {
-  border-top-color: var(--party);
-}
-.stat-card h3 {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-.stat-card .big {
-  margin: 8px 0 4px;
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-}
-.stat-card.party .big {
-  color: var(--party);
-}
-.stat-card.joint .big {
-  color: var(--joint);
-}
-.stat-card em {
-  font-size: 13px;
-  font-style: normal;
-  font-weight: 600;
-  color: var(--muted);
-}
-.stat-card .sub {
-  font-size: 12px;
-  color: var(--muted);
-}
-.panel {
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px;
+.ui-hero.is-compact {
+  flex-shrink: 0;
   margin-bottom: 12px;
+  padding-bottom: 14px;
+}
+.ui-hero.is-compact h2 {
+  margin-bottom: 4px;
+}
+.ui-hero.is-compact p {
+  margin-bottom: 0;
+}
+
+.topic-filter-bar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.topic-search {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fff;
   box-shadow: var(--shadow);
 }
-.panel.collapsed {
-  padding-bottom: 12px;
+.topic-cat-select {
+  flex-shrink: 0;
+  min-width: 140px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 12px;
+  font: inherit;
+  background: #fff;
+  box-shadow: var(--shadow);
 }
-.panel-head {
+
+.split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.dept-pane,
+.detail-pane {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dept-pane {
+  position: relative;
+  top: auto;
+  max-height: none;
+}
+.dept-pane-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 14px;
-  gap: 8px;
+  padding: 12px 14px 8px;
+  flex-shrink: 0;
 }
-.panel-head h3 {
-  margin: 0;
+.dept-pane-head strong {
   font-size: 15px;
 }
-.panel-head span {
-  font-size: 12px;
+.dept-pane-head span {
   color: var(--muted);
-}
-.panel-link {
-  border: 0;
-  background: transparent;
-  color: var(--joint);
-  font: inherit;
   font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  white-space: nowrap;
 }
-.recent-panel {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100dvh - var(--tab-h) - var(--safe-b) - 20px);
-  overflow: hidden;
-  padding-top: 12px;
-  padding-bottom: 12px;
+.dept-search {
+  flex-shrink: 0;
+  margin: 0 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  background: #f7f9fc;
 }
-.recent-head {
-  flex: 0 0 auto;
-  background: #fff;
-  padding-bottom: 8px;
-}
-.recent-head .ui-filter {
-  margin-bottom: 8px;
-}
-.recent-more {
-  display: block;
-  width: 100%;
-  text-align: right;
-}
-.recent-scroll {
-  flex: 1 1 auto;
-  min-height: 180px;
-  overflow-y: auto;
+.dept-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 8px 10px;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  touch-action: pan-y;
-  padding-right: 2px;
 }
-.recent-list .list-card {
-  margin: 0 0 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #f8fafc;
-  cursor: pointer;
-}
-.recent-list .list-card:last-child {
-  margin-bottom: 0;
-}
-.recent-list .list-card:hover {
-  border-color: rgba(26, 79, 139, 0.28);
-  background: #fff;
-}
-.recent-list .list-card.party:hover {
-  border-color: rgba(176, 48, 48, 0.28);
-}
-@media (min-width: 1024px) {
-  .recent-panel {
-    max-height: calc(100dvh - 48px);
-  }
-}
-.list-top {
+.dept-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.list-card h4 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.4;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
   color: var(--text);
 }
-.list-meta {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.45;
+.dept-item:hover {
+  background: #f3f6fb;
 }
-.panel-toggle {
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-}
-.panel-toggle-text h3 {
-  margin: 0;
-  font-size: 15px;
-}
-.panel-toggle-text p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-.panel-toggle-side {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  padding-top: 2px;
-}
-.chevron {
-  display: inline-flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 12px;
-  transition: transform 0.18s ease;
-}
-.chevron.open {
-  transform: rotate(180deg);
-}
-.month-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  min-height: 128px;
-  overflow-x: auto;
-  padding: 4px 0 4px;
-}
-.month-col {
-  flex: 1;
-  min-width: 36px;
-  text-align: center;
-}
-.month-col .bars {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 4px;
-  height: 100px;
-}
-.month-col .bar-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 3px;
-  min-width: 14px;
-}
-.month-col .bar-wrap .n {
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.month-col .bar-wrap .n.party {
-  color: var(--party);
-}
-.month-col .bar-wrap .n.joint {
+.dept-item.on {
+  background: #e8f0fa;
   color: var(--joint);
+  font-weight: 700;
 }
-.month-col i {
-  display: block;
-  width: 10px;
-  border-radius: 4px 4px 0 0;
-}
-.month-col i.party,
-.legend i.party {
-  background: var(--party);
-}
-.month-col i.joint,
-.legend i.joint {
-  background: var(--joint);
-}
-.month-col em {
-  display: block;
-  margin-top: 6px;
-  font-size: 10px;
-  font-style: normal;
-  color: var(--muted);
-}
-.legend {
-  display: flex;
-  gap: 16px;
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.panel-head .legend {
-  margin-top: 0;
-}
-.legend i {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  margin-right: 4px;
-}
-.legend i.meet,
-.college-row .track .meet {
-  background: var(--joint);
-}
-.legend i.topic,
-.college-row .track .topic {
-  background: var(--party);
-}
-.college-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-.college-row {
-  display: grid;
-  grid-template-columns: minmax(96px, 1.1fr) minmax(120px, 2.2fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-.college-row strong {
-  font-size: 13px;
-  line-height: 1.3;
+.dept-item .name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
 }
-.college-row .tracks {
+.dept-item em {
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+  background: #eef2f7;
+  border-radius: 999px;
+  min-width: 22px;
+  text-align: center;
+  padding: 2px 6px;
+}
+.dept-item.on em {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--joint);
+}
+.dept-empty,
+.pane-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 28px 16px;
+  font-size: 14px;
+}
+.pane-empty.hint {
+  margin: 24px 12px;
+}
+
+.detail-pane {
+  padding: 0;
+}
+.detail-tools {
+  flex-shrink: 0;
+  padding: 14px 14px 0;
+}
+.detail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 14px 14px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.detail-head h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.detail-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ui-btn.ghost {
+  background: #eef3fa;
+  color: var(--joint);
+  border: none;
+  flex-shrink: 0;
+}
+.period-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.year-select {
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 600;
+  background: #f7f9fc;
+  color: var(--text);
+}
+.year-select:focus {
+  outline: 2px solid rgba(15, 53, 95, 0.2);
+}
+.period-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.period-chips.is-months {
+  margin-bottom: 10px;
+}
+.period-chips button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  background: #f7f9fc;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.period-chips.is-months button {
+  min-width: 44px;
+  padding: 0 10px;
+}
+.period-chips button.on {
+  background: var(--joint);
+  border-color: var(--joint);
+  color: #fff;
+}
+.type-tabs {
+  margin: 0 0 12px;
+}
+.type-tabs button em {
+  font-style: normal;
+  margin-left: 6px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.type-tabs button.on em {
+  opacity: 1;
+}
+.filter-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -4px 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f3f6fb;
+  color: var(--muted);
+  font-size: 12px;
+}
+.filter-hint button {
+  border: none;
+  background: transparent;
+  color: var(--joint);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pane-empty p {
+  margin: 0 0 12px;
+}
+.pane-empty .ui-btn {
+  margin-top: 4px;
+}
+
+.tree {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+  gap: 10px;
 }
-.college-row .track {
-  height: 8px;
-  background: #e8edf5;
-  border-radius: 999px;
+.tree-group {
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
   overflow: hidden;
 }
-.college-row .track b {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  min-width: 0;
+.tree-group.party {
+  border-left: 3px solid var(--party);
 }
-.college-row em {
+.tree-group.joint {
+  border-left: 3px solid var(--joint);
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: #f8fafc;
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.tree-row.is-meeting {
+  background: #fff;
+  border-top: 1px solid #eef2f7;
+  cursor: default;
+}
+.expand-hit {
+  border: none;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.tree-row .chev {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+  width: 12px;
+  display: inline-block;
+}
+.tree-row .chev.open {
+  transform: rotate(90deg);
+}
+.tree-row.is-group strong {
+  flex: 1;
+  font-size: 14px;
+}
+.tree-row.is-group em {
   font-style: normal;
   font-size: 12px;
   color: var(--muted);
-  white-space: nowrap;
-  justify-self: end;
+  background: #eef2f7;
+  border-radius: 999px;
+  padding: 2px 8px;
 }
-.college-row .meet-n {
+.meeting-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.meeting-main strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+.meeting-main span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.link-btn {
+  border: none;
+  background: transparent;
   color: var(--joint);
+  font: inherit;
+  font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 4px 6px;
 }
-.college-row .topic-n {
-  color: var(--party);
-  font-weight: 700;
+.tree-children {
+  background: #fff;
 }
-@media (max-width: 560px) {
-  .college-row {
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      'name nums'
-      'bars bars';
-  }
-  .college-row strong {
-    grid-area: name;
-  }
-  .college-row .tracks {
-    grid-area: bars;
-  }
-  .college-row em {
-    grid-area: nums;
-  }
-  .panel-toggle-side .legend {
-    display: none;
-  }
+.topic-children {
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 10px 34px;
+  background: #f6f8fb;
+}
+.topic-children li {
+  margin: 0;
+}
+.topic-link {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 7px 4px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--joint);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.topic-link:hover {
+  background: rgba(15, 53, 95, 0.06);
+}
+.topic-idx {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 1.4em;
+}
+.topic-cat {
+  flex-shrink: 0;
+  color: var(--muted);
+  background: #eef2f7;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.topic-title {
+  min-width: 0;
+  line-height: 1.4;
+}
+.topic-link:hover .topic-title {
+  text-decoration: underline;
+}
+.tree-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 10px 14px 12px 34px;
 }
 
-.jump {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-@media (min-width: 720px) {
-  .jump {
+@media (max-width: 860px) {
+  .overview {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .split {
     grid-template-columns: 1fr;
+    flex: none;
+    min-height: 0;
+  }
+  .dept-pane {
+    height: auto;
+    max-height: 220px;
+  }
+  .detail-pane {
+    height: auto;
+    min-height: 360px;
+  }
+  .detail-scroll {
+    max-height: min(55vh, 520px);
   }
 }
 </style>

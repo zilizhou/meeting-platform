@@ -182,7 +182,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="内容">
-          <el-input v-model="editForm.content" type="textarea" :rows="6" />
+          <RichTextEditor v-model="editForm.content" height="240px" />
         </el-form-item>
         <el-form-item v-if="editingIsParty" label="第一议题">
           <el-switch v-model="editForm.isFirstTopic" @change="onEditFirstTopic" />
@@ -251,6 +251,8 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
+import RichTextEditor from '@/components/RichTextEditor.vue'
+import { toEditorHtml } from '@/utils/markdown'
 import { useRoles } from '@/composables/useRoles'
 
 const route = useRoute()
@@ -439,7 +441,7 @@ function openEdit(t: any) {
   editingId.value = t.id
   editingMeetingType.value = isPartyTopic(t) ? 'PARTY_COMMITTEE' : 'JOINT_CONFERENCE'
   editForm.title = t.title
-  editForm.content = t.content || ''
+  editForm.content = toEditorHtml(t.content || '')
   editForm.categoryId = t.categoryId || ''
   editForm.isFirstTopic = t.category?.code === 'FIRST_TOPIC'
   editForm.isMajor = Boolean(t.isMajor)

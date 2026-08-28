@@ -12,6 +12,20 @@ function nl2br(s: string): string {
   return esc(s).replace(/\n/g, '<br/>')
 }
 
+function contentForDoc(s: string): string {
+  const raw = String(s || '').trim()
+  if (!raw) return '（无正文）'
+  // 富文本已是 HTML：消毒后直接嵌入；纯文本仍转义换行
+  if (/<\/?[a-z][\s\S]*>/i.test(raw)) {
+    return raw
+      .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+      .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/javascript:/gi, '')
+  }
+  return nl2br(raw)
+}
+
 function formatTime(v?: string | Date | null) {
   if (!v) return '—'
   return new Date(v).toLocaleString('zh-CN')
@@ -51,7 +65,7 @@ export function exportMeetingMinutesDoc(meeting: any) {
 
       return `
         <h3>${idx + 1}. ${esc(t.title)}</h3>
-        <p><b>议题概况：</b>${t.content ? nl2br(t.content) : '（无正文）'}</p>
+        <p><b>议题概况：</b>${t.content ? contentForDoc(t.content) : '（无正文）'}</p>
         <p><b>议题状态：</b>${esc(statusLabel(t.status))}
           ${t.isMajor ? ' · 重大事项' : ''}
           ${t.proposer?.realName ? ` · 提出人 ${esc(t.proposer.realName)}` : ''}

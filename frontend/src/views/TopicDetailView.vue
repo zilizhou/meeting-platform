@@ -153,7 +153,12 @@
             <span v-else>—</span>
           </el-descriptions-item>
           <el-descriptions-item label="内容摘要" :span="2">
-            {{ topic.content || '—' }}
+            <div
+              v-if="topic.content"
+              class="topic-content-html"
+              v-html="renderContentHtml(topic.content)"
+            />
+            <span v-else>—</span>
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -518,6 +523,7 @@ import type { UploadRequestOptions } from 'element-plus'
 import http from '@/api/http'
 import { downloadWithAuth } from '@/api/download'
 import { useRoles } from '@/composables/useRoles'
+import { renderContentHtml } from '@/utils/markdown'
 
 const route = useRoute()
 const router = useRouter()
@@ -962,6 +968,28 @@ onMounted(load)
 .hint {
   color: var(--muted);
   font-size: 13px;
+}
+.topic-content-html {
+  line-height: 1.65;
+  word-break: break-word;
+}
+.topic-content-html :deep(p) {
+  margin: 0 0 0.6em;
+}
+.topic-content-html :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.topic-content-html :deep(ul),
+.topic-content-html :deep(ol) {
+  margin: 0.4em 0 0.6em;
+  padding-left: 1.4em;
+}
+.topic-content-html :deep(h1),
+.topic-content-html :deep(h2),
+.topic-content-html :deep(h3) {
+  margin: 0.5em 0 0.35em;
+  font-size: 1.05em;
+  font-weight: 700;
 }
 .hint {
   margin-top: 12px;

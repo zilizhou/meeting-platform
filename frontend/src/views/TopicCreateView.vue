@@ -21,6 +21,45 @@
       </div>
     </div>
 
+    <div class="panel">
+      <div class="step-label">议题分类 <em class="req">必选</em></div>
+      <p class="hint">
+        <template v-if="!anySelected">请先勾选会议类型，再选择对应议题分类。</template>
+        <template v-else-if="bothSelected">两类会议请分别选择分类，提交时写入各自议题库。</template>
+        <template v-else>请选择本议题所属分类，提交前必须选定。</template>
+      </p>
+      <label v-if="forParty">
+        <span>{{ forJoint ? '党委会分类' : '议题分类' }}</span>
+        <select v-model="form.partyCategoryId" :disabled="!partyCategories.length">
+          <option value="">请选择分类</option>
+          <option v-for="c in partyCategories" :key="c.id" :value="c.id">
+            {{ c.name }}
+          </option>
+        </select>
+      </label>
+      <label v-if="forJoint" :style="forParty ? 'margin-top: 10px' : undefined">
+        <span>{{ forParty ? '党政联席会议分类' : '议题分类' }}</span>
+        <select v-model="form.jointCategoryId" :disabled="!jointCategories.length" @change="onJointCategoryChange">
+          <option value="">请选择分类</option>
+          <option v-for="c in jointCategories" :key="c.id" :value="c.id">
+            {{ c.name }}
+          </option>
+        </select>
+      </label>
+      <p v-if="anySelected && categoryLoadEmpty" class="hint warn">当前会议类型暂无可用分类，请联系学院管理员配置。</p>
+
+      <div class="checks" style="margin-top: 4px; margin-bottom: 0">
+        <label class="check"><input v-model="form.isMajor" type="checkbox" /> 重大事项</label>
+        <label class="check"><input v-model="form.isTempMotion" type="checkbox" /> 临时动议</label>
+        <label v-if="forJoint" class="check">
+          <input v-model="form.isEmergency" type="checkbox" /> 紧急临机
+        </label>
+        <label v-if="forJoint" class="check">
+          <input v-model="form.needPartyPrecheck" type="checkbox" /> 需党委会前置
+        </label>
+      </div>
+    </div>
+
     <div v-if="needCollegePick" class="panel">
       <div class="step-label">写入学院</div>
       <p class="hint">当前账号未绑定学院（如校级管理员）。提交议题前请选择学院，否则无法写入议题库。</p>
@@ -53,7 +92,7 @@
         :disabled="assistLoading"
         @click="runAssist"
       >
-        {{ assistLoading ? '生成中，请稍候…' : 'AI 辅助生成标题 / 内容 / 分类' }}
+        {{ assistLoading ? '生成中，请稍候…' : 'AI 辅助生成标题 / 内容' }}
       </button>
       <p v-if="assistHint" class="hint" :class="{ warn: assistFailed }">{{ assistHint }}</p>
       <button class="ui-btn light" type="button" style="width: 100%; height: 42px; margin-top: 8px" @click="skipAssist">
@@ -88,70 +127,12 @@
       <div class="content-field">
         <div class="content-field-head">
           <span>议题内容</span>
-          <div class="preview-switch" role="tablist" aria-label="议题内容查看方式">
-            <button
-              type="button"
-              role="tab"
-              :aria-selected="contentMode === 'edit'"
-              :class="{ on: contentMode === 'edit' }"
-              @click="contentMode = 'edit'"
-            >
-              编辑
-            </button>
-            <button
-              type="button"
-              role="tab"
-              :aria-selected="contentMode === 'preview'"
-              :class="{ on: contentMode === 'preview' }"
-              @click="contentMode = 'preview'"
-            >
-              Markdown 预览
-            </button>
-          </div>
         </div>
-        <textarea
-          v-if="contentMode === 'edit'"
+        <RichTextEditor
           v-model="form.content"
-          rows="12"
-          placeholder="背景、依据与拟议事项（支持 Markdown）"
+          placeholder="背景、依据与拟议事项"
+          height="300px"
         />
-        <div
-          v-else-if="form.content.trim()"
-          class="markdown-preview content-preview"
-          v-html="renderMarkdown(form.content)"
-        />
-        <div v-else class="content-preview-empty">暂无内容，请切换到“编辑”后填写。</div>
-      </div>
-
-      <label v-if="forParty">
-        <span>{{ forJoint ? '党委会分类' : '议题分类' }}</span>
-        <select v-model="form.partyCategoryId">
-          <option value="">请选择</option>
-          <option v-for="c in partyCategories" :key="c.id" :value="c.id">
-            {{ c.name }}
-          </option>
-        </select>
-      </label>
-
-      <label v-if="forJoint">
-        <span>{{ forParty ? '党政联席会议分类' : '议题分类' }}</span>
-        <select v-model="form.jointCategoryId" @change="onJointCategoryChange">
-          <option value="">请选择</option>
-          <option v-for="c in jointCategories" :key="c.id" :value="c.id">
-            {{ c.name }}
-          </option>
-        </select>
-      </label>
-
-      <div class="checks">
-        <label class="check"><input v-model="form.isMajor" type="checkbox" /> 重大事项</label>
-        <label class="check"><input v-model="form.isTempMotion" type="checkbox" /> 临时动议</label>
-        <label v-if="forJoint" class="check">
-          <input v-model="form.isEmergency" type="checkbox" /> 紧急临机
-        </label>
-        <label v-if="forJoint" class="check">
-          <input v-model="form.needPartyPrecheck" type="checkbox" /> 需党委会前置
-        </label>
       </div>
 
       <label v-if="forJoint && form.needPartyPrecheck">
@@ -185,7 +166,8 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import http from '@/api/http'
-import { renderMarkdown } from '@/utils/markdown'
+import RichTextEditor from '@/components/RichTextEditor.vue'
+import { isRichTextEmpty, renderMarkdown, toEditorHtml } from '@/utils/markdown'
 import { useAuthStore } from '@/stores/auth'
 
 interface CategoryItem {
@@ -243,6 +225,12 @@ const submitLabel = computed(() => {
   return '提交到议题库'
 })
 
+const categoryLoadEmpty = computed(() => {
+  if (forParty.value && !partyCategories.value.length) return true
+  if (forJoint.value && !jointCategories.value.length) return true
+  return false
+})
+
 const partyCategories = ref<CategoryItem[]>([])
 const jointCategories = ref<CategoryItem[]>([])
 const colleges = ref<Array<{ id: string; name: string }>>([])
@@ -254,7 +242,6 @@ const assistHint = ref('')
 const assistFailed = ref(false)
 const assistNarrative = ref('')
 const assistExpanded = ref(false)
-const contentMode = ref<'edit' | 'preview'>('edit')
 const resultEl = ref<HTMLElement | null>(null)
 const saving = ref(false)
 const description = ref('')
@@ -320,13 +307,13 @@ function applyAssistResult(res: any, meetingType: MeetingKind) {
   const title = String(res?.suggestedTitle || '').trim()
   const content = String(res?.suggestedContent || '').trim()
   if (title) form.title = title
-  if (content) form.content = content
+  if (content) form.content = toEditorHtml(content)
   if (meetingType === 'PARTY_COMMITTEE') {
     form.partyCategoryId =
-      res?.suggestedCategoryId || form.partyCategoryId || partyCategories.value[0]?.id || ''
+      form.partyCategoryId || res?.suggestedCategoryId || partyCategories.value[0]?.id || ''
   } else {
     form.jointCategoryId =
-      res?.suggestedCategoryId || form.jointCategoryId || jointCategories.value[0]?.id || ''
+      form.jointCategoryId || res?.suggestedCategoryId || jointCategories.value[0]?.id || ''
     onJointCategoryChange()
   }
   if (res?.suggestions?.isMajor) form.isMajor = true
@@ -337,7 +324,6 @@ function applyAssistResult(res: any, meetingType: MeetingKind) {
   }
   assistNarrative.value = String(res?.narrative || res?.outputText || '').trim()
   assistExpanded.value = false
-  if (content) contentMode.value = 'preview'
 }
 
 async function runAssist() {
@@ -365,7 +351,7 @@ async function runAssist() {
       const jointRes = await runAssistFor('JOINT_CONFERENCE')
       applyAssistResult(jointRes, 'JOINT_CONFERENCE')
     }
-    if (!form.title.trim() && !form.content.trim()) {
+    if (!form.title.trim() && isRichTextEmpty(form.content)) {
       skipAssist()
     }
     assistHint.value = '已生成建议稿，请在下方核对标题、内容与分类后再提交。'
@@ -387,8 +373,8 @@ function skipAssist() {
     if (!form.title.trim()) {
       form.title = text.split('\n')[0].slice(0, 40)
     }
-    if (!form.content.trim()) {
-      form.content = text
+    if (isRichTextEmpty(form.content)) {
+      form.content = toEditorHtml(text)
     }
   }
 }
@@ -410,7 +396,6 @@ function resetDraft() {
   assistFailed.value = false
   assistNarrative.value = ''
   assistExpanded.value = false
-  contentMode.value = 'edit'
   form.title = ''
   form.content = ''
   form.partyCategoryId = ''
@@ -435,16 +420,16 @@ async function submitToLibrary() {
     ElMessage.warning('请确认议题标题（至少 2 字）')
     return
   }
-  if (!form.content.trim()) {
+  if (isRichTextEmpty(form.content)) {
     ElMessage.warning('请确认议题内容')
     return
   }
   if (forParty.value && !form.partyCategoryId) {
-    ElMessage.warning('请选择党委会分类')
+    ElMessage.warning('请选择议题分类（党委会）')
     return
   }
   if (forJoint.value && !form.jointCategoryId) {
-    ElMessage.warning('请选择党政联席会议分类')
+    ElMessage.warning('请选择议题分类（党政联席会议）')
     return
   }
   if (forJoint.value && form.needPartyPrecheck && !form.relatedPartyResolutionId) {
@@ -598,39 +583,6 @@ onMounted(async () => {
   color: var(--muted);
   font-weight: 600;
 }
-.preview-switch {
-  display: inline-flex;
-  padding: 2px;
-  border-radius: 9px;
-  background: #e8edf3;
-}
-.preview-switch button {
-  border: 0;
-  border-radius: 7px;
-  padding: 5px 10px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.preview-switch button.on {
-  background: #fff;
-  color: var(--joint);
-  box-shadow: 0 1px 4px rgba(15, 53, 95, 0.12);
-}
-.content-preview,
-.content-preview-empty {
-  min-height: 286px;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #f7f9fc;
-}
-.content-preview-empty {
-  color: var(--muted);
-  font-size: 13px;
-}
 .markdown-preview {
   color: #334155;
   line-height: 1.75;
@@ -693,6 +645,14 @@ onMounted(async () => {
   font-weight: 700;
   margin-bottom: 12px;
   color: var(--text);
+}
+
+.step-label .req {
+  margin-left: 6px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  color: #c0392b;
 }
 
 .hint {
