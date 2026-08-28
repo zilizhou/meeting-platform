@@ -134,6 +134,9 @@ body,
 }
 
 /* 校级总览：外层不滚，左右内容区各自滚动 */
+.app-shell.is-overview {
+  background: #e8eef5;
+}
 .app-shell.is-overview .app-content {
   overflow: hidden;
   display: flex;
