@@ -162,6 +162,7 @@
                   <button
                     type="button"
                     role="tab"
+                    class="season-year"
                     :aria-selected="period === 'year'"
                     :class="{ on: period === 'year' }"
                     @click="setPeriod('year')"
@@ -173,8 +174,8 @@
                     :key="q.key"
                     type="button"
                     role="tab"
+                    :class="[q.season, { on: period === q.key }]"
                     :aria-selected="period === q.key"
-                    :class="{ on: period === q.key }"
                     @click="setPeriod(q.key)"
                   >
                     {{ q.label }}
@@ -187,8 +188,8 @@
                   :key="m.key"
                   type="button"
                   role="tab"
+                  :class="[m.season, { on: period === m.key }]"
                   :aria-selected="period === m.key"
-                  :class="{ on: period === m.key }"
                   @click="setPeriod(m.key)"
                 >
                   {{ m.label }}
@@ -394,21 +395,27 @@ const yearOptions = computed(() => {
   return [y, y - 1, y - 2, y - 3, y - 4]
 })
 
-const quarters: Array<{ key: PeriodKey; label: string; startMonth: number }> = [
-  { key: 'q1', label: '第一季度', startMonth: 0 },
-  { key: 'q2', label: '第二季度', startMonth: 3 },
-  { key: 'q3', label: '第三季度', startMonth: 6 },
-  { key: 'q4', label: '第四季度', startMonth: 9 },
+type SeasonKey = 'spring' | 'summer' | 'autumn' | 'winter'
+
+const quarters: Array<{
+  key: PeriodKey
+  label: string
+  startMonth: number
+  season: SeasonKey
+}> = [
+  { key: 'q1', label: '第一季度', startMonth: 0, season: 'spring' },
+  { key: 'q2', label: '第二季度', startMonth: 3, season: 'summer' },
+  { key: 'q3', label: '第三季度', startMonth: 6, season: 'autumn' },
+  { key: 'q4', label: '第四季度', startMonth: 9, season: 'winter' },
 ]
 
-const months: Array<{ key: PeriodKey; label: string; month: number }> = Array.from(
-  { length: 12 },
-  (_, i) => ({
+const months: Array<{ key: PeriodKey; label: string; month: number; season: SeasonKey }> =
+  Array.from({ length: 12 }, (_, i) => ({
     key: `m${i + 1}` as PeriodKey,
     label: `${i + 1}月`,
     month: i,
-  }),
-)
+    season: (['spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter', 'winter', 'winter'] as SeasonKey[])[i],
+  }))
 
 const MEETING_STATUS: Record<string, string> = {
   DRAFT: '草稿',
@@ -1068,6 +1075,63 @@ onMounted(async () => {
   border-color: var(--ov-select);
   color: #fff;
   box-shadow: 0 6px 14px rgba(26, 95, 138, 0.22);
+}
+
+/* 四季：春绿 / 夏赤 / 秋金 / 冬蓝；同季月份同色 */
+.period-chips button.spring {
+  color: #2f7a4f;
+  border-color: #b7dcc6;
+  background: #eef8f1;
+}
+.period-chips button.summer {
+  color: #b54a2e;
+  border-color: #efc4b6;
+  background: #fdf1ec;
+}
+.period-chips button.autumn {
+  color: #9a6b14;
+  border-color: #e6d09a;
+  background: #fbf5e6;
+}
+.period-chips button.winter {
+  color: #2f628f;
+  border-color: #b6cfe4;
+  background: #eef5fb;
+}
+.period-chips button.spring:hover,
+.period-chips button.summer:hover,
+.period-chips button.autumn:hover,
+.period-chips button.winter:hover {
+  filter: brightness(0.98);
+}
+.period-chips button.spring.on {
+  background: #2f7a4f;
+  border-color: #2f7a4f;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(47, 122, 79, 0.28);
+}
+.period-chips button.summer.on {
+  background: #b54a2e;
+  border-color: #b54a2e;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(181, 74, 46, 0.28);
+}
+.period-chips button.autumn.on {
+  background: #9a6b14;
+  border-color: #9a6b14;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(154, 107, 20, 0.28);
+}
+.period-chips button.winter.on {
+  background: #2f628f;
+  border-color: #2f628f;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(47, 98, 143, 0.28);
+}
+.period-chips button.season-year.on {
+  background: var(--ov-select);
+  border-color: var(--ov-select);
+  color: #fff;
 }
 .type-tabs {
   margin: 0 0 12px;
