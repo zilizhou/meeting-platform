@@ -48,7 +48,7 @@
           >
             <span class="name" :title="c.name">{{ c.name }}</span>
             <em v-if="c.meetingCount != null">{{ c.meetingCount }}</em>
-            <span class="chev" aria-hidden="true">›</span>
+            <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
           </button>
           <div v-if="!filteredColleges.length" class="dept-empty">无匹配部门</div>
         </div>
@@ -154,16 +154,16 @@
                 <button type="button" class="ui-btn ghost" @click="feedbackOpen = true">反馈</button>
               </div>
 
-              <div class="period-bar">
-                <select
-                  v-model.number="year"
-                  class="year-select"
-                  aria-label="年份"
-                  @change="onYearChange"
-                >
-                  <option v-for="y in yearOptions" :key="y" :value="y">{{ y }} 年</option>
-                </select>
-                <div class="period-chips" role="tablist" aria-label="季度与全年">
+              <div class="period-filter">
+                <div class="period-row is-year">
+                  <select
+                    v-model.number="year"
+                    class="year-select"
+                    aria-label="年份"
+                    @change="onYearChange"
+                  >
+                    <option v-for="y in yearOptions" :key="y" :value="y">{{ y }} 年</option>
+                  </select>
                   <button
                     type="button"
                     role="tab"
@@ -174,6 +174,8 @@
                   >
                     全年
                   </button>
+                </div>
+                <div class="period-chips is-quarters" role="tablist" aria-label="季度">
                   <button
                     v-for="q in quarters"
                     :key="q.key"
@@ -186,25 +188,77 @@
                     {{ q.label }}
                   </button>
                 </div>
-              </div>
-              <div class="period-chips is-months" role="tablist" aria-label="月份">
                 <div
-                  v-for="group in monthSeasonGroups"
-                  :key="group.season"
-                  class="month-season"
-                  :class="group.season"
+                  v-if="!isMobileShell"
+                  class="period-chips is-months"
+                  role="tablist"
+                  aria-label="月份"
                 >
-                  <button
-                    v-for="m in group.items"
-                    :key="m.key"
-                    type="button"
-                    role="tab"
-                    :class="[m.season, { on: period === m.key }]"
-                    :aria-selected="period === m.key"
-                    @click="setPeriod(m.key)"
+                  <div
+                    v-for="group in monthSeasonGroups"
+                    :key="group.season"
+                    class="month-season"
+                    :class="group.season"
                   >
-                    {{ m.label }}
-                  </button>
+                    <button
+                      v-for="m in group.items"
+                      :key="m.key"
+                      type="button"
+                      role="tab"
+                      :class="[m.season, { on: period === m.key }]"
+                      :aria-selected="period === m.key"
+                      @click="setPeriod(m.key)"
+                    >
+                      {{ m.label }}
+                    </button>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="period-chips is-months is-halves"
+                  role="tablist"
+                  aria-label="月份"
+                >
+                  <div class="month-half">
+                    <div
+                      v-for="group in monthSeasonGroups.slice(0, 2)"
+                      :key="group.season"
+                      class="month-season"
+                      :class="group.season"
+                    >
+                      <button
+                        v-for="m in group.items"
+                        :key="m.key"
+                        type="button"
+                        role="tab"
+                        :class="[m.season, { on: period === m.key }]"
+                        :aria-selected="period === m.key"
+                        @click="setPeriod(m.key)"
+                      >
+                        {{ m.label }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="month-half">
+                    <div
+                      v-for="group in monthSeasonGroups.slice(2)"
+                      :key="group.season"
+                      class="month-season"
+                      :class="group.season"
+                    >
+                      <button
+                        v-for="m in group.items"
+                        :key="m.key"
+                        type="button"
+                        role="tab"
+                        :class="[m.season, { on: period === m.key }]"
+                        :aria-selected="period === m.key"
+                        @click="setPeriod(m.key)"
+                      >
+                        {{ m.label }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1102,12 +1156,40 @@ onMounted(async () => {
 .ui-btn.ghost:hover {
   border-color: #c5d8e8;
 }
-.period-bar {
+.period-filter {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.period-row.is-year {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   align-items: center;
-  margin-bottom: 8px;
+}
+.period-row.is-year .year-select,
+.period-row.is-year .season-year {
+  width: 100%;
+  min-width: 0;
+}
+.period-row.is-year .season-year {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--ov-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ov-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.period-row.is-year .season-year.on {
+  background: var(--ov-select);
+  border-color: var(--ov-select);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(26, 95, 138, 0.22);
 }
 .year-select {
   height: 36px;
@@ -1133,11 +1215,15 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  flex: 1;
   min-width: 0;
 }
+.period-chips.is-quarters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
 .period-chips.is-months {
-  margin-bottom: 10px;
+  margin-bottom: 0;
   gap: 8px;
 }
 .period-chips.is-months .month-season {
@@ -1146,6 +1232,31 @@ onMounted(async () => {
   gap: 6px;
   padding: 4px 6px;
   border-radius: 999px;
+}
+.period-chips.is-months.is-halves {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.period-chips.is-months .month-half {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  min-width: 0;
+}
+.period-chips.is-months.is-halves .month-season {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  min-width: 0;
+}
+.period-chips.is-months.is-halves .month-season button {
+  min-width: 0;
+  width: 100%;
+  padding: 0 2px;
+  font-size: 12px;
 }
 .period-chips.is-months .month-season.spring {
   background: #d8efe1;
@@ -1171,10 +1282,21 @@ onMounted(async () => {
   font-weight: 600;
   cursor: pointer;
 }
+.period-chips.is-quarters button {
+  padding: 0 6px;
+  font-size: 12px;
+  width: 100%;
+}
 .period-chips.is-months button {
-  min-width: 44px;
-  padding: 0 10px;
+  min-width: 0;
+  width: 100%;
+  padding: 0 4px;
   background: rgba(255, 255, 255, 0.72);
+}
+.period-chips.is-months:not(.is-halves) button {
+  min-width: 44px;
+  width: auto;
+  padding: 0 10px;
 }
 .period-chips button:hover {
   color: var(--ov-ink);
@@ -1561,9 +1683,16 @@ onMounted(async () => {
 }
 .m-home-item .chev {
   flex-shrink: 0;
-  color: #94a3b8;
-  font-size: 18px;
-  line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(26, 95, 138, 0.12);
+}
+.m-home-item .chev :deep(.el-icon) {
+  font-size: 14px;
+  color: var(--ov-select);
 }
 
 .m-back-bar {
