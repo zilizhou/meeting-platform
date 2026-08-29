@@ -957,7 +957,7 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 .topic-search {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   border: 1px solid var(--ov-line);
   border-radius: 12px;
@@ -972,8 +972,9 @@ onMounted(async () => {
   border-color: #b7cce0;
 }
 .topic-cat-select {
-  flex-shrink: 0;
-  min-width: 140px;
+  flex: 0 0 auto;
+  min-width: 120px;
+  max-width: 160px;
   height: 42px;
   border: 1px solid var(--ov-line);
   border-radius: 12px;
@@ -992,6 +993,20 @@ onMounted(async () => {
 .topic-cat-select:focus {
   outline: 2px solid rgba(26, 95, 138, 0.22);
   border-color: #b7cce0;
+}
+
+@media (max-width: 1023px) {
+  .topic-filter-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .topic-search,
+  .topic-cat-select {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
 }
 
 .split {
