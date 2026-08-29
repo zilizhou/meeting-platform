@@ -13,7 +13,6 @@
       <div class="side-brand">
         <div class="marks" aria-hidden="true"><i class="p" /><i class="j" /></div>
         <div class="side-brand-name">
-          <strong>明德同枢</strong>
           <img
             class="side-emblem"
             src="/brand/qfnu-emblem.png"
@@ -21,6 +20,7 @@
             height="36"
             alt="曲阜师范大学校徽"
           />
+          <strong>明德同枢</strong>
         </div>
         <em>{{
           isSchoolShell

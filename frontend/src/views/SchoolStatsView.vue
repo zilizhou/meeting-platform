@@ -82,7 +82,10 @@
       </div>
 
       <div v-if="showMobileDetail" class="m-back-bar">
-        <button type="button" class="m-back" @click="backToMobileHome">‹ 部门</button>
+        <button type="button" class="m-back" @click="backToMobileHome">
+          <span class="chev" aria-hidden="true"><el-icon><CaretLeft /></el-icon></span>
+          部门
+        </button>
         <div class="m-back-title">
           <strong>{{ selectedCollegeName }}</strong>
           <span v-if="!loading">
@@ -332,7 +335,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { CaretRight } from '@element-plus/icons-vue'
+import { CaretLeft, CaretRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import http from '@/api/http'
@@ -920,11 +923,21 @@ onMounted(async () => {
   height: 42px;
   border: 1px solid var(--ov-line);
   border-radius: 12px;
-  padding: 0 12px;
+  padding: 0 40px 0 12px;
   font: inherit;
   color: var(--ov-ink);
-  background: var(--ov-panel);
+  background-color: var(--ov-panel);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Crect width='22' height='22' rx='6' fill='%231a5f8a' fill-opacity='0.12'/%3E%3Cpath d='M7.2 9.2h7.6L11 14.2 7.2 9.2z' fill='%231a5f8a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 22px 22px;
   box-shadow: var(--ov-shadow);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.topic-cat-select:focus {
+  outline: 2px solid rgba(26, 95, 138, 0.22);
+  border-color: #b7cce0;
 }
 
 .split {
@@ -1100,17 +1113,18 @@ onMounted(async () => {
   height: 36px;
   border: 1px solid var(--ov-line);
   border-radius: 10px;
-  padding: 0 32px 0 10px;
+  padding: 0 40px 0 10px;
   font: inherit;
   font-weight: 700;
   font-family: var(--font-num), "AppDigits", serif;
-  background: #fff
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%231a5f8a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    no-repeat right 10px center;
   color: var(--ov-ink);
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Crect width='22' height='22' rx='6' fill='%231a5f8a' fill-opacity='0.12'/%3E%3Cpath d='M7.2 9.2h7.6L11 14.2 7.2 9.2z' fill='%231a5f8a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 22px 22px;
   appearance: none;
   -webkit-appearance: none;
-  background-size: 16px 16px;
 }
 .year-select:focus {
   outline: 2px solid rgba(26, 95, 138, 0.2);
@@ -1568,8 +1582,23 @@ onMounted(async () => {
   font: inherit;
   font-size: 15px;
   font-weight: 700;
-  padding: 8px 4px;
+  padding: 4px 2px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.m-back .chev {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(26, 95, 138, 0.12);
+}
+.m-back .chev :deep(.el-icon) {
+  font-size: 14px;
+  color: var(--ov-select);
 }
 .m-back-title {
   flex: 1;
