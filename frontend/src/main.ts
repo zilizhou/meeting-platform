@@ -5,7 +5,10 @@ import 'element-plus/dist/index.css'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import App from './App.vue'
 import router from './router'
+import { initFontScale } from './composables/useFontScale'
 import './styles.css'
 import './styles/app-ui.css'
+
+initFontScale()
 
 createApp(App).use(createPinia()).use(router).use(ElementPlus, { locale: zhCn }).mount('#app')

@@ -21,6 +21,11 @@
   --shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
   --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-serif: "STZhongsong", "华文中宋", "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-zoom: 1;
+}
+
+html {
+  zoom: var(--font-zoom);
 }
 
 html,

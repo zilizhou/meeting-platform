@@ -142,6 +142,28 @@
         -->
 
         <div class="block">
+          <div class="label">显示</div>
+          <div class="item mode-item">
+            <div class="ico">字</div>
+            <div>
+              <strong>界面字号</strong>
+              <em>花眼时可调大，当前：{{ fontLabel }}</em>
+            </div>
+            <div class="mode-switch font-switch" role="group" aria-label="界面字号">
+              <button
+                v-for="opt in fontOptions"
+                :key="opt.value"
+                type="button"
+                :class="{ on: fontScale === opt.value }"
+                @click="setFontScale(opt.value)"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="block">
           <div class="label">关于</div>
           <div class="item static">
             <div class="ico">系</div>
@@ -172,10 +194,17 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
+import { useFontScale } from '@/composables/useFontScale'
 // import { useOnboarding } from '@/composables/useOnboarding'
 
 const auth = useAuthStore()
 const router = useRouter()
+const {
+  scale: fontScale,
+  label: fontLabel,
+  setScale: setFontScale,
+  options: fontOptions,
+} = useFontScale()
 // const onboarding = useOnboarding()
 const unread = ref(0)
 const summary = reactive({
@@ -360,10 +389,15 @@ onMounted(load)
   cursor: default;
 }
 
-.mode-item { cursor: default; }
-.mode-switch { display: flex; margin-left: auto; padding: 2px; border-radius: 9px; background: #eef2f5; }
+.mode-item { cursor: default; flex-wrap: wrap; }
+.mode-switch { display: flex; margin-left: auto; padding: 2px; border-radius: 9px; background: #eef2f5; flex-shrink: 0; }
 .mode-switch button { border: 0; border-radius: 7px; padding: 6px 9px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
 .mode-switch button.on { background: #fff; color: var(--joint); box-shadow: 0 1px 4px rgba(15, 45, 75, .14); font-weight: 700; }
+.font-switch { margin-top: 8px; margin-left: 48px; width: calc(100% - 48px); }
+.font-switch button { flex: 1; padding: 8px 6px; font-size: 13px; }
+@media (min-width: 420px) {
+  .font-switch { margin-top: 0; margin-left: auto; width: auto; }
+}
 
 .ico {
   width: 36px;

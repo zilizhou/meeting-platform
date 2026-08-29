@@ -283,9 +283,12 @@
                         <li v-for="(topic, idx) in m.topics || []" :key="topic.id">
                           <button type="button" class="topic-link" @click="openTopic(topic.id)">
                             <span class="topic-idx">{{ idx + 1 }}.</span>
-                            <span v-if="topic.category?.name" class="topic-cat">{{
-                              topic.category.name
-                            }}</span>
+                            <span
+                              v-if="topic.category?.name"
+                              class="topic-cat"
+                              :class="`tone-${categoryTone(topic.category)}`"
+                              >{{ topic.category.name }}</span
+                            >
                             <span class="topic-title">{{ topic.title }}</span>
                           </button>
                         </li>
@@ -536,6 +539,29 @@ const listSummary = computed(() => {
 function clearTopicFilters() {
   topicQ.value = ''
   categoryId.value = ''
+}
+
+/** 议题分类三色：理论学习 / 业务科研 / 党建组织 */
+type CatTone = 'theory' | 'research' | 'org'
+
+function categoryTone(cat?: { code?: string | null; name?: string | null } | null): CatTone {
+  const code = String(cat?.code || '').toUpperCase()
+  const name = String(cat?.name || '')
+  if (
+    ['FIRST_TOPIC', 'IDEOLOGY_EDU', 'IDEOLOGY', 'MORAL'].includes(code) ||
+    /理论学习|思政|意识形态|教风学风|师德/.test(name)
+  ) {
+    return 'theory'
+  }
+  if (
+    ['RESEARCH', 'COOP', 'FACULTY', 'STUDENT', 'REFORM', 'GOVERNANCE', 'AWARD', 'OTHER'].includes(
+      code,
+    ) ||
+    /科研|教学|学生培养|改革发展|学术|表彰|教师队伍/.test(name)
+  ) {
+    return 'research'
+  }
+  return 'org'
 }
 
 const partyMeetings = computed(() =>
@@ -1378,16 +1404,22 @@ onMounted(async () => {
 }
 .topic-cat {
   flex-shrink: 0;
-  color: var(--ov-teal);
-  background: var(--ov-teal-soft);
   border-radius: 6px;
   padding: 1px 6px;
   font-size: 11px;
   font-weight: 700;
 }
-.tree-group.party .topic-cat {
-  color: var(--ov-party);
-  background: var(--ov-party-soft);
+.topic-cat.tone-theory {
+  color: #8b2e2e;
+  background: #f5e8e8;
+}
+.topic-cat.tone-research {
+  color: #9a6b14;
+  background: #fbf5e6;
+}
+.topic-cat.tone-org {
+  color: #3d6b8c;
+  background: #e8f0f6;
 }
 .topic-title {
   min-width: 0;
