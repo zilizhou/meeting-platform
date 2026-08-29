@@ -12,7 +12,16 @@
     <aside class="app-side" aria-label="主导航">
       <div class="side-brand">
         <div class="marks" aria-hidden="true"><i class="p" /><i class="j" /></div>
-        <strong>明德同枢</strong>
+        <div class="side-brand-name">
+          <strong>明德同枢</strong>
+          <img
+            class="side-emblem"
+            src="/brand/qfnu-emblem.png"
+            width="36"
+            height="36"
+            alt="曲阜师范大学校徽"
+          />
+        </div>
         <em>{{
           isSchoolShell
             ? isViewerShell

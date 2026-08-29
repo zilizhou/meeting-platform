@@ -21,7 +21,17 @@
   --shadow: 0 8px 20px rgba(15, 53, 95, 0.06);
   --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-serif: "STZhongsong", "华文中宋", "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-num: "Times New Roman", Times, "Noto Serif", serif;
   --font-zoom: 1;
+}
+
+/* 数字统一 Times New Roman 加粗（仅覆盖 0-9） */
+@font-face {
+  font-family: "AppDigits";
+  src: local("Times New Roman Bold"), local("TimesNewRomanPS-BoldMT"), local("Times New Roman");
+  font-weight: 400 900;
+  font-style: normal;
+  unicode-range: U+0030-0039;
 }
 
 html {
@@ -31,9 +41,26 @@ html {
 html,
 body,
 #app {
-  font-family: var(--font-sans);
+  font-family: "AppDigits", var(--font-sans);
   color: var(--text);
   background: var(--bg);
+}
+
+/* KPI / 徽标等数字再强调一遍 */
+.ui-hero .nums strong,
+.ui-hero .nums .kpi strong,
+.app-tab .badge,
+.side-nav button .badge,
+.stat b,
+.topic-idx,
+.tree-row em,
+.dept-list em,
+.m-home-item em,
+.fb-top span,
+.num-font {
+  font-family: var(--font-num), "AppDigits", serif;
+  font-weight: 700;
+  font-variant-numeric: lining-nums;
 }
 
 /* —— App Shell —— */
@@ -1213,11 +1240,27 @@ body,
   }
 
   .side-brand strong {
-    display: block;
+    display: inline;
     font-family: var(--font-serif);
     font-size: 17px;
     font-weight: 700;
     line-height: 1.4;
+  }
+
+  .side-brand-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .side-emblem {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2));
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
   }
 
   .side-brand em {

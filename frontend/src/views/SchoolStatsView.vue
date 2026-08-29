@@ -251,7 +251,9 @@
                     :aria-expanded="isGroupOpen(group.key)"
                     @click="toggleGroup(group.key)"
                   >
-                    <span class="chev" :class="{ open: isGroupOpen(group.key) }">▸</span>
+                    <span class="chev" :class="{ open: isGroupOpen(group.key) }">
+                      <el-icon><CaretRight /></el-icon>
+                    </span>
                     <strong>{{ group.label }}</strong>
                     <em>{{ group.items.length }}</em>
                   </button>
@@ -267,7 +269,9 @@
                           :aria-label="isMeetingOpen(m.id) ? '收起议题' : '展开议题'"
                           @click="toggleMeeting(m.id)"
                         >
-                          <span class="chev" :class="{ open: isMeetingOpen(m.id) }">▸</span>
+                          <span class="chev" :class="{ open: isMeetingOpen(m.id) }">
+                            <el-icon><CaretRight /></el-icon>
+                          </span>
                         </button>
                         <button type="button" class="meeting-main" @click="toggleMeeting(m.id)">
                           <strong>{{ m.title }}</strong>
@@ -328,6 +332,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { CaretRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import http from '@/api/http'
@@ -1095,11 +1100,17 @@ onMounted(async () => {
   height: 36px;
   border: 1px solid var(--ov-line);
   border-radius: 10px;
-  padding: 0 10px;
+  padding: 0 32px 0 10px;
   font: inherit;
-  font-weight: 600;
-  background: #fff;
+  font-weight: 700;
+  font-family: var(--font-num), "AppDigits", serif;
+  background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%231a5f8a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
   color: var(--ov-ink);
+  appearance: none;
+  -webkit-appearance: none;
+  background-size: 16px 16px;
 }
 .year-select:focus {
   outline: 2px solid rgba(26, 95, 138, 0.2);
@@ -1324,14 +1335,35 @@ onMounted(async () => {
   place-items: center;
 }
 .tree-row .chev {
-  color: var(--ov-muted);
-  font-size: 12px;
-  transition: transform 0.15s ease;
-  width: 12px;
-  display: inline-block;
+  color: var(--ov-ink);
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: rgba(26, 95, 138, 0.1);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.tree-row .chev :deep(.el-icon) {
+  font-size: 14px;
+  color: var(--ov-select);
 }
 .tree-row .chev.open {
   transform: rotate(90deg);
+  background: rgba(26, 95, 138, 0.18);
+}
+.tree-group.party > .tree-row.is-group .chev {
+  background: rgba(143, 78, 82, 0.12);
+}
+.tree-group.party > .tree-row.is-group .chev :deep(.el-icon) {
+  color: var(--ov-party);
+}
+.tree-group.joint > .tree-row.is-group .chev {
+  background: rgba(26, 111, 120, 0.12);
+}
+.tree-group.joint > .tree-row.is-group .chev :deep(.el-icon) {
+  color: var(--ov-teal);
 }
 .tree-row.is-group strong {
   flex: 1;

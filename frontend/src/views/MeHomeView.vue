@@ -166,7 +166,9 @@
         <div class="block">
           <div class="label">关于</div>
           <div class="item static">
-            <div class="ico">系</div>
+            <div class="ico brand-ico">
+              <img src="/brand/qfnu-emblem.png" alt="" width="28" height="28" />
+            </div>
             <div>
               <strong>明德同枢</strong>
               <em>曲阜师范大学二级学院双会管理系统</em>
@@ -409,6 +411,17 @@ onMounted(load)
   place-items: center;
   font-weight: 700;
   flex-shrink: 0;
+}
+.brand-ico {
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 3px;
+  overflow: hidden;
+}
+.brand-ico img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .item strong {
