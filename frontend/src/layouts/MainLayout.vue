@@ -5,7 +5,9 @@
       'is-detail': isDetail,
       'is-agent': route.name === 'agent',
       'is-overview': route.name === 'admin',
+      'is-school': isSchoolShell,
     }"
+    :style="{ '--tab-count': tabs.length }"
   >
     <aside class="app-side" aria-label="主导航">
       <div class="side-brand">

@@ -179,7 +179,7 @@ body,
   height: calc(var(--tab-h) + var(--safe-b));
   padding-bottom: var(--safe-b);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(var(--tab-count, 5), minmax(0, 1fr));
   background: rgba(255, 255, 255, 0.96);
   border-top: 1px solid var(--line);
   backdrop-filter: blur(10px);
@@ -190,20 +190,38 @@ body,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
+  min-width: 0;
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   position: relative;
   background: none;
   border: 0;
   cursor: pointer;
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .app-tab svg {
   width: 22px;
   height: 22px;
+}
+
+/* 校级三入口：略放大字号与触控区，三等分铺满 */
+.app-shell.is-school {
+  --tab-h: 60px;
+}
+
+.app-shell.is-school .app-tab {
+  font-size: 12px;
+  gap: 4px;
+}
+
+.app-shell.is-school .app-tab svg {
+  width: 24px;
+  height: 24px;
 }
 
 .app-tab.on {

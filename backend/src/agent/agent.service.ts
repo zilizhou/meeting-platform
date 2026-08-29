@@ -607,7 +607,17 @@ export class AgentService {
     ) {
       return 'STATS_ASK';
     }
-    if (/本月|本学期|本年|今年|近\s*12\s*个月/.test(message) && /(召开|缺开|预警)/.test(message)) {
+    // 时段召开情况（含「第一季度…开了联席会」）；排除「有关/相关」议题检索
+    if (
+      !/有关|相关|涉及/.test(message) &&
+      ((/本月|本学期|本年|今年|近\s*12\s*个月|第[一二三四]季度|[一二三四]季度|本季度|上季度|Q\s*[1-4]/i.test(
+        message,
+      ) &&
+        /(召开|开了|开过|举行|缺开|预警)/.test(message)) ||
+        (/哪些学院|各学院|哪个学院/.test(message) &&
+          /(开了|召开|开过|举行|缺开)/.test(message) &&
+          /(联席|党委会|党组织|双会|会议)/.test(message)))
+    ) {
       return 'STATS_ASK';
     }
     if (
@@ -665,7 +675,7 @@ export class AgentService {
     to: Date;
   } {
     const now = new Date();
-    const end = new Date(
+    const endOfToday = new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate(),
@@ -674,9 +684,51 @@ export class AgentService {
       59,
       999,
     );
+    const yearMatch = message.match(/(20\d{2})\s*年/);
+    const namedYear = yearMatch ? Number(yearMatch[1]) : null;
+    const year = namedYear ?? now.getFullYear();
+    const qLabels = ['一', '二', '三', '四'] as const;
+
+    const quarterRange = (y: number, q: number) => {
+      const startMonth = (q - 1) * 3;
+      const from = new Date(y, startMonth, 1);
+      const quarterEnd = new Date(y, startMonth + 3, 0, 23, 59, 59, 999);
+      const to =
+        quarterEnd.getTime() > endOfToday.getTime() && y === now.getFullYear()
+          ? endOfToday
+          : quarterEnd;
+      return {
+        label: `${y}年第${qLabels[q - 1]}季度（${startMonth + 1}月—${startMonth + 3}月）`,
+        from,
+        to,
+      };
+    };
+
+    // 上季度（可跨年）
+    if (/上季度|上一季度/.test(message)) {
+      const curQ = Math.floor(now.getMonth() / 3) + 1;
+      if (curQ === 1) return quarterRange(now.getFullYear() - 1, 4);
+      return quarterRange(now.getFullYear(), curQ - 1);
+    }
+    if (/本季度|这个季度/.test(message)) {
+      return quarterRange(now.getFullYear(), Math.floor(now.getMonth() / 3) + 1);
+    }
+    if (/第一季度|一季度|第\s*1\s*季度|Q\s*1/i.test(message)) {
+      return quarterRange(year, 1);
+    }
+    if (/第二季度|二季度|第\s*2\s*季度|Q\s*2/i.test(message)) {
+      return quarterRange(year, 2);
+    }
+    if (/第三季度|三季度|第\s*3\s*季度|Q\s*3/i.test(message)) {
+      return quarterRange(year, 3);
+    }
+    if (/第四季度|四季度|第\s*4\s*季度|Q\s*4/i.test(message)) {
+      return quarterRange(year, 4);
+    }
+
     if (/本月|这个月|当月/.test(message)) {
       const from = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { label: `${now.getFullYear()}年${now.getMonth() + 1}月`, from, to: end };
+      return { label: `${now.getFullYear()}年${now.getMonth() + 1}月`, from, to: endOfToday };
     }
     if (/本学期|这学期/.test(message)) {
       const m = now.getMonth() + 1;
@@ -686,7 +738,7 @@ export class AgentService {
           : m >= 8
             ? new Date(now.getFullYear(), 7, 1)
             : new Date(now.getFullYear() - 1, 7, 1);
-      return { label: '本学期', from, to: end };
+      return { label: '本学期', from, to: endOfToday };
     }
     // 「一年来 / 近一年」按近 12 个月，须先于「多少→默认本月」
     if (
@@ -695,30 +747,43 @@ export class AgentService {
       )
     ) {
       const from = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-      return { label: '近12个月', from, to: end };
+      return { label: '近12个月', from, to: endOfToday };
     }
-    if (/本年|今年|本年度|这一年(?!来)/.test(message)) {
-      const from = new Date(now.getFullYear(), 0, 1);
-      return { label: `${now.getFullYear()}年`, from, to: end };
+    if (/本年|今年|本年度|这一年(?!来)/.test(message) || namedYear) {
+      const from = new Date(year, 0, 1);
+      const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+      const to =
+        year === now.getFullYear() && yearEnd.getTime() > endOfToday.getTime()
+          ? endOfToday
+          : yearEnd;
+      return { label: `${year}年`, from, to };
     }
     if (/全部|迄今|累计|一共有过/.test(message) && !/本月|本年|今年|一年/.test(message)) {
       return {
         label: '全部时段',
         from: new Date(2000, 0, 1),
-        to: end,
+        to: endOfToday,
       };
     }
     // 未写时段时：带「年」倾向本年，否则本月
-    if (/多少|几场|几次|几项|统计/.test(message)) {
+    if (/多少|几场|几次|几项|统计|哪些学院|各学院/.test(message)) {
       if (/年/.test(message)) {
         const from = new Date(now.getFullYear(), 0, 1);
-        return { label: `${now.getFullYear()}年`, from, to: end };
+        return { label: `${now.getFullYear()}年`, from, to: endOfToday };
       }
       const from = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { label: `${now.getFullYear()}年${now.getMonth() + 1}月`, from, to: end };
+      return { label: `${now.getFullYear()}年${now.getMonth() + 1}月`, from, to: endOfToday };
     }
     const from = new Date(now.getFullYear(), 0, 1);
-    return { label: `${now.getFullYear()}年`, from, to: end };
+    return { label: `${now.getFullYear()}年`, from, to: endOfToday };
+  }
+
+  /** 本地日历日（避免 toISOString 因时区偏一天） */
+  private formatLocalDate(d: Date) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   /** 从问句解析学院；仅限当前用户可见范围 */
@@ -808,7 +873,7 @@ export class AgentService {
             ...dateOr,
           },
           orderBy: [{ scheduledAt: 'desc' }, { createdAt: 'desc' }],
-          take: 8,
+          take: 20,
           select: {
             id: true,
             title: true,
@@ -838,6 +903,40 @@ export class AgentService {
         ? '党政联席会议'
         : '双会（党委会+联席）';
 
+    const wantCollegeBreakdown =
+      /哪些学院|各学院|哪个学院|开了|召开|召开情况/.test(message) && !namedCollege;
+
+    let collegeLines: string[] = [];
+    if (wantCollegeBreakdown) {
+      const grouped = await this.prisma.meeting.groupBy({
+        by: ['collegeId'],
+        where: {
+          ...collegeFilter,
+          ...(meetingTypeFilter ? { meetingType: meetingTypeFilter } : {}),
+          ...dateOr,
+        },
+        _count: { _all: true },
+      });
+      grouped.sort((a, b) => b._count._all - a._count._all);
+      if (grouped.length) {
+        const colleges = await this.prisma.college.findMany({
+          where: { id: { in: grouped.map((g) => g.collegeId) } },
+          select: { id: true, name: true },
+        });
+        const nameOf = new Map(colleges.map((c) => [c.id, c.name]));
+        collegeLines = [
+          '',
+          `按学院（共 ${grouped.length} 所已召开）：`,
+          ...grouped.map(
+            (g) =>
+              `- ${nameOf.get(g.collegeId) || g.collegeId}：${g._count._all} 场`,
+          ),
+        ];
+      } else {
+        collegeLines = ['', '按学院：该时段内暂无已召开记录。'];
+      }
+    }
+
     const lines: string[] = [
       askTopics
         ? `【统计】${range.label} · ${scopeLabel} · ${typeLabel}议题`
@@ -851,6 +950,7 @@ export class AgentService {
       `- 党委会：${partyMeetings} 场；对应议题 ${partyTopics} 项`,
       `- 党政联席会议：${jointMeetings} 场；对应议题 ${jointTopics} 项`,
       `- 合计：会议 ${meetingTotal} 场 / 议题 ${topicTotal} 项`,
+      ...collegeLines,
       '',
       `口径：会议按「召开时间（无则按创建时间）」落入「${range.label}」；议题按「创建时间」；范围：${scopeLabel}。`,
     ];
@@ -859,7 +959,7 @@ export class AgentService {
       lines.push('', '相关会议：');
       for (const m of sample) {
         const when = m.scheduledAt
-          ? m.scheduledAt.toISOString().slice(0, 10)
+          ? this.formatLocalDate(m.scheduledAt)
           : '待定';
         const kind =
           m.meetingType === MeetingType.PARTY_COMMITTEE

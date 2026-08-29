@@ -134,6 +134,14 @@ describe('会议智能助理 Agent（E2E）', () => {
     expect(stats.body.intent).toBe('STATS_ASK');
     expect(String(stats.body.reply)).toMatch(/结论|场|党组织|共/);
 
+    const quarterStats = await request(ctx.app.getHttpServer())
+      .post('/api/agent/chat')
+      .set('Authorization', `Bearer ${ctx.users.office.token}`)
+      .send({ message: '第一季度，哪些学院开了党政联席会？' })
+      .expect(201);
+    expect(quarterStats.body.intent).toBe('STATS_ASK');
+    expect(String(quarterStats.body.reply)).toMatch(/第一季度|统计|党政联席/);
+
     const search = await request(ctx.app.getHttpServer())
       .post('/api/agent/chat')
       .set('Authorization', `Bearer ${ctx.users.office.token}`)
