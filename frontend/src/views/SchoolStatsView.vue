@@ -183,17 +183,24 @@
                 </div>
               </div>
               <div class="period-chips is-months" role="tablist" aria-label="月份">
-                <button
-                  v-for="m in months"
-                  :key="m.key"
-                  type="button"
-                  role="tab"
-                  :class="[m.season, { on: period === m.key }]"
-                  :aria-selected="period === m.key"
-                  @click="setPeriod(m.key)"
+                <div
+                  v-for="group in monthSeasonGroups"
+                  :key="group.season"
+                  class="month-season"
+                  :class="group.season"
                 >
-                  {{ m.label }}
-                </button>
+                  <button
+                    v-for="m in group.items"
+                    :key="m.key"
+                    type="button"
+                    role="tab"
+                    :class="[m.season, { on: period === m.key }]"
+                    :aria-selected="period === m.key"
+                    @click="setPeriod(m.key)"
+                  >
+                    {{ m.label }}
+                  </button>
+                </div>
               </div>
 
               <div class="ui-filter is-equal type-tabs" role="tablist" aria-label="会议类型">
@@ -416,6 +423,14 @@ const months: Array<{ key: PeriodKey; label: string; month: number; season: Seas
     month: i,
     season: (['spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter', 'winter', 'winter'] as SeasonKey[])[i],
   }))
+
+const monthSeasonGroups = computed(() => {
+  const order: SeasonKey[] = ['spring', 'summer', 'autumn', 'winter']
+  return order.map((season) => ({
+    season,
+    items: months.filter((m) => m.season === season),
+  }))
+})
 
 const MEETING_STATUS: Record<string, string> = {
   DRAFT: '草稿',
@@ -1049,6 +1064,26 @@ onMounted(async () => {
 }
 .period-chips.is-months {
   margin-bottom: 10px;
+  gap: 8px;
+}
+.period-chips.is-months .month-season {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 999px;
+}
+.period-chips.is-months .month-season.spring {
+  background: #d8efe1;
+}
+.period-chips.is-months .month-season.summer {
+  background: #f8ddd3;
+}
+.period-chips.is-months .month-season.autumn {
+  background: #f3e6c4;
+}
+.period-chips.is-months .month-season.winter {
+  background: #d9e8f5;
 }
 .period-chips button {
   height: 32px;
@@ -1065,6 +1100,7 @@ onMounted(async () => {
 .period-chips.is-months button {
   min-width: 44px;
   padding: 0 10px;
+  background: rgba(255, 255, 255, 0.72);
 }
 .period-chips button:hover {
   color: var(--ov-ink);
@@ -1097,6 +1133,12 @@ onMounted(async () => {
   color: #2f628f;
   border-color: #b6cfe4;
   background: #eef5fb;
+}
+.period-chips.is-months button.spring,
+.period-chips.is-months button.summer,
+.period-chips.is-months button.autumn,
+.period-chips.is-months button.winter {
+  background: rgba(255, 255, 255, 0.78);
 }
 .period-chips button.spring:hover,
 .period-chips button.summer:hover,
