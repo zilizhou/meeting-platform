@@ -8,6 +8,7 @@
             <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
             <h2>总览</h2>
           </div>
+          <p class="hero-motto" aria-hidden="false">明德同心，同枢共治</p>
           <div class="nums">
             <div class="kpi party">
               <strong>{{ schoolKpi.partyMeetings }}</strong>
@@ -62,6 +63,7 @@
             <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
             <h2>总览</h2>
           </div>
+          <p class="hero-motto" aria-hidden="false">明德同心，同枢共治</p>
           <div class="nums">
             <div class="kpi party">
               <strong>{{ schoolKpi.partyMeetings }}</strong>
@@ -817,6 +819,20 @@ onMounted(async () => {
 }
 .hero-copy {
   min-width: 0;
+  flex-shrink: 0;
+}
+.hero-motto {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: rgba(255, 248, 236, 0.92);
+  text-shadow: 0 1px 0 rgba(8, 24, 48, 0.25);
+  white-space: nowrap;
 }
 .ui-hero.is-compact :deep(.eyebrow) {
   margin-bottom: 2px;
@@ -831,7 +847,7 @@ onMounted(async () => {
 .ui-hero.is-compact :deep(.nums) {
   margin-top: 0;
   gap: 6px;
-  flex: 1;
+  flex: 0 0 auto;
   justify-content: flex-end;
   flex-wrap: nowrap;
 }
@@ -850,6 +866,12 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+@media (max-width: 860px) {
+  .hero-motto {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .hero-row {
     align-items: stretch;
@@ -857,6 +879,7 @@ onMounted(async () => {
   .ui-hero.is-compact :deep(.nums) {
     width: 100%;
     justify-content: stretch;
+    flex: 1 1 100%;
   }
   .ui-hero.is-compact :deep(.nums .kpi) {
     flex: 1;
