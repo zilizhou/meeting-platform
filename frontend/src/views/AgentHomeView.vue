@@ -95,7 +95,7 @@
       <textarea
         v-model="input"
         rows="1"
-        placeholder="例如：帮我看看待整理的纪要"
+        :placeholder="composerHint"
         @keydown.enter.exact.prevent="send"
       />
       <button class="ui-btn" type="button" :disabled="loading" @click="send">
@@ -135,13 +135,15 @@ interface ChatMsg {
 const route = useRoute()
 const router = useRouter()
 const { isSchoolViewer, isSchoolAdmin } = useRoles()
+/** 校级管理员 / 校级查阅：能力对齐总览、议题/会议台账与规则问答 */
+const isSchoolShell = computed(() => isSchoolAdmin.value || isSchoolViewer.value)
 const isViewerOnly = computed(
   () => isSchoolViewer.value && !isSchoolAdmin.value,
 )
 const welcomeText = computed(() =>
-  isViewerOnly.value
-    ? '您好。可按学院、议题或会议关键词提问，例如「哪些学院召开了有关人才引进的会议」。答复供查阅参考，不替代正式审签。'
-    : '您好。可问今日简报、待办、议题检索与议事规则。审题、表决、签署只给引导，须您本人确认。',
+  isSchoolShell.value
+    ? '您好。可问各部门召开情况、议题检索或议事规则，例如「本月各学院召开情况」「哪些学院召开了有关人才引进的会议」。答复供查阅参考，不替代正式审签。'
+    : '您好。可问今日简报、待办、本院会议统计、议题检索与议事规则。审题、表决、签署只给引导，须您本人确认。',
 )
 const loading = ref(false)
 const input = ref('')
@@ -152,24 +154,44 @@ const messages = ref<ChatMsg[]>([
   {
     role: 'assistant',
     content:
-      '您好。可问今日简报、待办、议题检索与议事规则。审题、表决、签署只给引导，须您本人确认。',
+      '您好。可问今日简报、待办、本院会议统计、议题检索与议事规则。审题、表决、签署只给引导，须您本人确认。',
   },
 ])
 
 const quickAsks = computed(() =>
-  isViewerOnly.value
-    ? ['本月召开简报', '缺开与预警', '督办逾期情况', '缺席书面意见算不算票？']
-    : ['今日简报', '我有哪些待办？', '督办预警', '缺席书面意见算不算票？'],
+  isSchoolShell.value
+    ? [
+        '本月各学院召开情况',
+        '哪些学院本月缺开？',
+        '哪些学院召开了有关人才引进的会议？',
+        '缺席书面意见算不算票？',
+      ]
+    : [
+        '今日简报',
+        '我有哪些待办？',
+        '本月本院开了几场会？',
+        '缺席书面意见算不算票？',
+      ],
 )
 
 const heroEyebrow = computed(() =>
-  isViewerOnly.value ? '校级查阅 · 智能问答' : '会务问答 · 智能辅助',
+  isViewerOnly.value
+    ? '校级查阅 · 智能问答'
+    : isSchoolAdmin.value
+      ? '校级监管 · 智能问答'
+      : '会务问答 · 智能辅助',
 )
 
 const statusNote = computed(() =>
-  isViewerOnly.value
-    ? '用自然语言查询所管学院的会议、议题与召开情况；结果可一键打开详情，仅供查阅参考。'
+  isSchoolShell.value
+    ? '用自然语言查询所管部门的会议、议题与召开情况；结果可一键打开详情或总览，仅供查阅参考。'
     : '用自然语言查待办、简报、议题与议事规则；需要办理时给出入口，审题与表决仍须本人确认。',
+)
+
+const composerHint = computed(() =>
+  isSchoolShell.value
+    ? '例如：文学院今年开了多少次党委会'
+    : '例如：我有哪些待办？本月本院开了几场会？',
 )
 
 const dialogRounds = computed(() =>
