@@ -152,7 +152,7 @@ body,
   flex-direction: column;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1023px) {
   .app-shell.is-overview .app-content {
     overflow: auto;
     display: block;

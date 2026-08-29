@@ -1,43 +1,31 @@
 <template>
-  <div class="overview">
-    <div class="ui-hero is-official is-compact">
-      <div class="hero-row">
-        <div class="hero-copy">
-          <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
-          <h2>总览</h2>
-        </div>
-        <div class="nums">
-          <div class="kpi party">
-            <strong>{{ schoolKpi.partyMeetings }}</strong>
-            <span>党委会</span>
+  <div class="overview" :class="{ 'is-m-home': showMobileHome, 'is-m-detail': showMobileDetail }">
+    <!-- 手机一级：全校 KPI + 部门列表 -->
+    <template v-if="showMobileHome">
+      <div class="ui-hero is-official is-compact">
+        <div class="hero-row">
+          <div class="hero-copy">
+            <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
+            <h2>总览</h2>
           </div>
-          <div class="kpi teal">
-            <strong>{{ schoolKpi.jointMeetings }}</strong>
-            <span>联席会</span>
-          </div>
-          <div class="kpi sky">
-            <strong>{{ schoolKpi.topics }}</strong>
-            <span>议题</span>
+          <div class="nums">
+            <div class="kpi party">
+              <strong>{{ schoolKpi.partyMeetings }}</strong>
+              <span>党委会</span>
+            </div>
+            <div class="kpi teal">
+              <strong>{{ schoolKpi.jointMeetings }}</strong>
+              <span>联席会</span>
+            </div>
+            <div class="kpi sky">
+              <strong>{{ schoolKpi.topics }}</strong>
+              <span>议题</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="topic-filter-bar">
-      <input
-        v-model="topicQ"
-        type="search"
-        class="topic-search"
-        placeholder="模糊检索议题标题、会议标题"
-      />
-      <select v-model="categoryId" class="topic-cat-select" aria-label="议题分类">
-        <option value="">全部分类</option>
-        <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
-      </select>
-    </div>
-
-    <div class="split">
-      <aside class="dept-pane" aria-label="部门列表">
+      <section class="m-home-panel" aria-label="部门列表">
         <div class="dept-pane-head">
           <strong>部门</strong>
           <span>{{ filteredColleges.length }}/{{ colleges.length }}</span>
@@ -48,182 +36,265 @@
           class="dept-search"
           placeholder="筛选部门名称"
         />
-        <div class="dept-list" role="listbox">
+        <div class="m-home-list" role="listbox">
           <button
             v-for="c in filteredColleges"
             :key="c.collegeId"
             type="button"
             role="option"
-            class="dept-item"
-            :aria-selected="collegeId === c.collegeId"
-            :class="{ on: collegeId === c.collegeId }"
+            class="m-home-item"
             @click="selectCollege(c.collegeId)"
           >
             <span class="name" :title="c.name">{{ c.name }}</span>
             <em v-if="c.meetingCount != null">{{ c.meetingCount }}</em>
+            <span class="chev" aria-hidden="true">›</span>
           </button>
           <div v-if="!filteredColleges.length" class="dept-empty">无匹配部门</div>
         </div>
-      </aside>
+      </section>
+    </template>
 
-      <section class="detail-pane">
-        <template v-if="collegeId">
-          <div class="detail-tools">
-            <div class="detail-head">
-              <div>
-                <h3>{{ selectedCollegeName }}</h3>
-                <p v-if="!loading">
-                  会议 {{ listSummary.total }} · 党委会 {{ listSummary.party }} · 联席
-                  {{ listSummary.joint }} · 议题 {{ listSummary.topics }}
-                  <template v-if="hasTopicFilter">（已筛选）</template>
-                </p>
-              </div>
-              <button type="button" class="ui-btn ghost" @click="feedbackOpen = true">反馈</button>
+    <!-- 电脑双栏 / 手机二级（复用现有详情，暂不重做） -->
+    <template v-else>
+      <div v-if="!isMobileShell" class="ui-hero is-official is-compact">
+        <div class="hero-row">
+          <div class="hero-copy">
+            <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
+            <h2>总览</h2>
+          </div>
+          <div class="nums">
+            <div class="kpi party">
+              <strong>{{ schoolKpi.partyMeetings }}</strong>
+              <span>党委会</span>
             </div>
-
-            <div class="period-bar">
-              <select
-                v-model.number="year"
-                class="year-select"
-                aria-label="年份"
-                @change="onYearChange"
-              >
-                <option v-for="y in yearOptions" :key="y" :value="y">{{ y }} 年</option>
-              </select>
-              <div class="period-chips" role="tablist" aria-label="季度与全年">
-                <button
-                  type="button"
-                  role="tab"
-                  :aria-selected="period === 'year'"
-                  :class="{ on: period === 'year' }"
-                  @click="setPeriod('year')"
-                >
-                  全年
-                </button>
-                <button
-                  v-for="q in quarters"
-                  :key="q.key"
-                  type="button"
-                  role="tab"
-                  :aria-selected="period === q.key"
-                  :class="{ on: period === q.key }"
-                  @click="setPeriod(q.key)"
-                >
-                  {{ q.label }}
-                </button>
-              </div>
+            <div class="kpi teal">
+              <strong>{{ schoolKpi.jointMeetings }}</strong>
+              <span>联席会</span>
             </div>
-            <div class="period-chips is-months" role="tablist" aria-label="月份">
-              <button
-                v-for="m in months"
-                :key="m.key"
-                type="button"
-                role="tab"
-                :aria-selected="period === m.key"
-                :class="{ on: period === m.key }"
-                @click="setPeriod(m.key)"
-              >
-                {{ m.label }}
-              </button>
-            </div>
-
-            <div class="ui-filter is-equal type-tabs" role="tablist" aria-label="会议类型">
-              <button
-                v-for="t in typeTabs"
-                :key="t.key || 'all'"
-                type="button"
-                role="tab"
-                :aria-selected="meetingType === t.key"
-                :class="{
-                  on: meetingType === t.key,
-                  party: t.key === 'PARTY_COMMITTEE',
-                }"
-                @click="meetingType = t.key"
-              >
-                {{ t.label }}
-                <em>{{ t.count }}</em>
-              </button>
-            </div>
-            <div v-if="hasTopicFilter" class="filter-hint">
-              <span>已按议题检索/分类筛选</span>
-              <button type="button" @click="clearTopicFilters">清除筛选</button>
+            <div class="kpi sky">
+              <strong>{{ schoolKpi.topics }}</strong>
+              <span>议题</span>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div class="detail-scroll">
-            <div v-if="loading" class="pane-empty">加载中…</div>
-            <div v-else-if="!visibleMeetings.length" class="pane-empty">
-              <template v-if="hasTopicFilter">
-                <p>当前筛选下没有匹配的会议或议题</p>
-                <button type="button" class="ui-btn ghost" @click="clearTopicFilters">清除筛选</button>
-              </template>
-              <template v-else>该部门在所选时段暂无会议</template>
+      <div v-if="showMobileDetail" class="m-back-bar">
+        <button type="button" class="m-back" @click="backToMobileHome">‹ 部门</button>
+        <div class="m-back-title">
+          <strong>{{ selectedCollegeName }}</strong>
+          <span v-if="!loading">
+            会议 {{ listSummary.total }} · 党委 {{ listSummary.party }} · 联席
+            {{ listSummary.joint }} · 议题 {{ listSummary.topics }}
+          </span>
+        </div>
+        <button type="button" class="ui-btn ghost m-fb" @click="feedbackOpen = true">反馈</button>
+      </div>
+
+      <div class="topic-filter-bar">
+        <input
+          v-model="topicQ"
+          type="search"
+          class="topic-search"
+          placeholder="模糊检索议题标题、会议标题"
+        />
+        <select v-model="categoryId" class="topic-cat-select" aria-label="议题分类">
+          <option value="">全部分类</option>
+          <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+      </div>
+
+      <div class="split">
+        <aside v-if="!isMobileShell" class="dept-pane" aria-label="部门列表">
+          <div class="dept-pane-head">
+            <strong>部门</strong>
+            <span>{{ filteredColleges.length }}/{{ colleges.length }}</span>
+          </div>
+          <input
+            v-model="deptQ"
+            type="search"
+            class="dept-search"
+            placeholder="筛选部门名称"
+          />
+          <div class="dept-list" role="listbox">
+            <button
+              v-for="c in filteredColleges"
+              :key="c.collegeId"
+              type="button"
+              role="option"
+              class="dept-item"
+              :aria-selected="collegeId === c.collegeId"
+              :class="{ on: collegeId === c.collegeId }"
+              @click="selectCollege(c.collegeId)"
+            >
+              <span class="name" :title="c.name">{{ c.name }}</span>
+              <em v-if="c.meetingCount != null">{{ c.meetingCount }}</em>
+            </button>
+            <div v-if="!filteredColleges.length" class="dept-empty">无匹配部门</div>
+          </div>
+        </aside>
+
+        <section class="detail-pane">
+          <template v-if="collegeId">
+            <div class="detail-tools">
+              <div v-if="!isMobileShell" class="detail-head">
+                <div>
+                  <h3>{{ selectedCollegeName }}</h3>
+                  <p v-if="!loading">
+                    会议 {{ listSummary.total }} · 党委会 {{ listSummary.party }} · 联席
+                    {{ listSummary.joint }} · 议题 {{ listSummary.topics }}
+                    <template v-if="hasTopicFilter">（已筛选）</template>
+                  </p>
+                </div>
+                <button type="button" class="ui-btn ghost" @click="feedbackOpen = true">反馈</button>
+              </div>
+
+              <div class="period-bar">
+                <select
+                  v-model.number="year"
+                  class="year-select"
+                  aria-label="年份"
+                  @change="onYearChange"
+                >
+                  <option v-for="y in yearOptions" :key="y" :value="y">{{ y }} 年</option>
+                </select>
+                <div class="period-chips" role="tablist" aria-label="季度与全年">
+                  <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="period === 'year'"
+                    :class="{ on: period === 'year' }"
+                    @click="setPeriod('year')"
+                  >
+                    全年
+                  </button>
+                  <button
+                    v-for="q in quarters"
+                    :key="q.key"
+                    type="button"
+                    role="tab"
+                    :aria-selected="period === q.key"
+                    :class="{ on: period === q.key }"
+                    @click="setPeriod(q.key)"
+                  >
+                    {{ q.label }}
+                  </button>
+                </div>
+              </div>
+              <div class="period-chips is-months" role="tablist" aria-label="月份">
+                <button
+                  v-for="m in months"
+                  :key="m.key"
+                  type="button"
+                  role="tab"
+                  :aria-selected="period === m.key"
+                  :class="{ on: period === m.key }"
+                  @click="setPeriod(m.key)"
+                >
+                  {{ m.label }}
+                </button>
+              </div>
+
+              <div class="ui-filter is-equal type-tabs" role="tablist" aria-label="会议类型">
+                <button
+                  v-for="t in typeTabs"
+                  :key="t.key || 'all'"
+                  type="button"
+                  role="tab"
+                  :aria-selected="meetingType === t.key"
+                  :class="{
+                    on: meetingType === t.key,
+                    party: t.key === 'PARTY_COMMITTEE',
+                  }"
+                  @click="meetingType = t.key"
+                >
+                  {{ t.label }}
+                  <em>{{ t.count }}</em>
+                </button>
+              </div>
+              <div v-if="hasTopicFilter" class="filter-hint">
+                <span>已按议题检索/分类筛选</span>
+                <button type="button" @click="clearTopicFilters">清除筛选</button>
+              </div>
             </div>
 
-            <div v-else class="tree">
-              <div
-                v-for="group in visibleTreeGroups"
-                :key="group.key"
-                class="tree-group"
-                :class="group.key === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
-              >
-                <button
-                  type="button"
-                  class="tree-row is-group"
-                  :aria-expanded="isGroupOpen(group.key)"
-                  @click="toggleGroup(group.key)"
+            <div class="detail-scroll">
+              <div v-if="loading" class="pane-empty">加载中…</div>
+              <div v-else-if="!visibleMeetings.length" class="pane-empty">
+                <template v-if="hasTopicFilter">
+                  <p>当前筛选下没有匹配的会议或议题</p>
+                  <button type="button" class="ui-btn ghost" @click="clearTopicFilters">清除筛选</button>
+                </template>
+                <template v-else>该部门在所选时段暂无会议</template>
+              </div>
+
+              <div v-else class="tree">
+                <div
+                  v-for="group in visibleTreeGroups"
+                  :key="group.key"
+                  class="tree-group"
+                  :class="group.key === 'PARTY_COMMITTEE' ? 'party' : 'joint'"
                 >
-                  <span class="chev" :class="{ open: isGroupOpen(group.key) }">▸</span>
-                  <strong>{{ group.label }}</strong>
-                  <em>{{ group.items.length }}</em>
-                </button>
+                  <button
+                    type="button"
+                    class="tree-row is-group"
+                    :aria-expanded="isGroupOpen(group.key)"
+                    @click="toggleGroup(group.key)"
+                  >
+                    <span class="chev" :class="{ open: isGroupOpen(group.key) }">▸</span>
+                    <strong>{{ group.label }}</strong>
+                    <em>{{ group.items.length }}</em>
+                  </button>
 
-                <div v-show="isGroupOpen(group.key)" class="tree-children">
-                  <div v-if="!group.items.length" class="tree-empty">本时段无记录</div>
-                  <div v-for="m in group.items" :key="m.id" class="tree-meeting">
-                    <div class="tree-row is-meeting">
-                      <button
-                        type="button"
-                        class="expand-hit"
-                        :aria-expanded="isMeetingOpen(m.id)"
-                        :aria-label="isMeetingOpen(m.id) ? '收起议题' : '展开议题'"
-                        @click="toggleMeeting(m.id)"
-                      >
-                        <span class="chev" :class="{ open: isMeetingOpen(m.id) }">▸</span>
-                      </button>
-                      <button type="button" class="meeting-main" @click="toggleMeeting(m.id)">
-                        <strong>{{ m.title }}</strong>
-                        <span
-                          >{{ statusLabel(m.status) }} ·
-                          {{ formatTime(m.scheduledAt || m.createdAt) }} · 议题
-                          {{ m.topics?.length || 0 }}</span
+                  <div v-show="isGroupOpen(group.key)" class="tree-children">
+                    <div v-if="!group.items.length" class="tree-empty">本时段无记录</div>
+                    <div v-for="m in group.items" :key="m.id" class="tree-meeting">
+                      <div class="tree-row is-meeting">
+                        <button
+                          type="button"
+                          class="expand-hit"
+                          :aria-expanded="isMeetingOpen(m.id)"
+                          :aria-label="isMeetingOpen(m.id) ? '收起议题' : '展开议题'"
+                          @click="toggleMeeting(m.id)"
                         >
-                      </button>
-                      <button type="button" class="link-btn" @click="openMeeting(m)">详情</button>
-                    </div>
-
-                    <ul v-show="isMeetingOpen(m.id)" class="topic-children">
-                      <li v-if="!m.topics?.length" class="tree-empty">暂无议题</li>
-                      <li v-for="(topic, idx) in m.topics || []" :key="topic.id">
-                        <button type="button" class="topic-link" @click="openTopic(topic.id)">
-                          <span class="topic-idx">{{ idx + 1 }}.</span>
-                          <span v-if="topic.category?.name" class="topic-cat">{{ topic.category.name }}</span>
-                          <span class="topic-title">{{ topic.title }}</span>
+                          <span class="chev" :class="{ open: isMeetingOpen(m.id) }">▸</span>
                         </button>
-                      </li>
-                    </ul>
+                        <button type="button" class="meeting-main" @click="toggleMeeting(m.id)">
+                          <strong>{{ m.title }}</strong>
+                          <span
+                            >{{ statusLabel(m.status) }} ·
+                            {{ formatTime(m.scheduledAt || m.createdAt) }} · 议题
+                            {{ m.topics?.length || 0 }}</span
+                          >
+                        </button>
+                        <button type="button" class="link-btn" @click="openMeeting(m)">详情</button>
+                      </div>
+
+                      <ul v-show="isMeetingOpen(m.id)" class="topic-children">
+                        <li v-if="!m.topics?.length" class="tree-empty">暂无议题</li>
+                        <li v-for="(topic, idx) in m.topics || []" :key="topic.id">
+                          <button type="button" class="topic-link" @click="openTopic(topic.id)">
+                            <span class="topic-idx">{{ idx + 1 }}.</span>
+                            <span v-if="topic.category?.name" class="topic-cat">{{
+                              topic.category.name
+                            }}</span>
+                            <span class="topic-title">{{ topic.title }}</span>
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </template>
+          </template>
 
-        <div v-else class="pane-empty hint">
-          请从左侧选择部门。部门较多时可直接搜索名称。
-        </div>
-      </section>
-    </div>
+          <div v-else class="pane-empty hint">
+            请从左侧选择部门。部门较多时可直接搜索名称。
+          </div>
+        </section>
+      </div>
+    </template>
 
     <SchoolFeedbackPanel
       :open="feedbackOpen"
@@ -245,6 +316,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import http from '@/api/http'
 import SchoolFeedbackPanel from '@/components/SchoolFeedbackPanel.vue'
 import SchoolPreviewDrawer from '@/components/SchoolPreviewDrawer.vue'
@@ -290,6 +362,10 @@ type PeriodKey =
   | 'm12'
 
 const auth = useAuthStore()
+const isMobileShell = useMediaQuery('(max-width: 1023px)')
+const mobilePhase = ref<'home' | 'detail'>('home')
+const showMobileHome = computed(() => isMobileShell.value && mobilePhase.value === 'home')
+const showMobileDetail = computed(() => isMobileShell.value && mobilePhase.value === 'detail')
 const colleges = ref<CollegeRow[]>([])
 const collegeId = ref('')
 const deptQ = ref('')
@@ -540,6 +616,13 @@ function applyPeriod() {
 
 function selectCollege(id: string) {
   collegeId.value = id
+  if (isMobileShell.value) mobilePhase.value = 'detail'
+}
+
+function backToMobileHome() {
+  mobilePhase.value = 'home'
+  feedbackOpen.value = false
+  clearTopicFilters()
 }
 
 async function loadColleges() {
@@ -552,7 +635,8 @@ async function loadColleges() {
   schoolKpi.partyMeetings = Number(stats?.meetings?.party ?? 0)
   schoolKpi.jointMeetings = Number(stats?.meetings?.joint ?? 0)
   schoolKpi.topics = Number(stats?.topics?.total ?? 0)
-  if (!collegeId.value && colleges.value.length) {
+  // 电脑端默认选中第一项；手机一级首页不预选
+  if (!collegeId.value && colleges.value.length && !isMobileShell.value) {
     collegeId.value = colleges.value[0].collegeId
   }
 }
@@ -607,6 +691,19 @@ watch(collegeId, () => {
   topicQ.value = ''
   categoryId.value = ''
   loadMeetings()
+})
+
+watch(isMobileShell, (mobile, wasMobile) => {
+  if (mobile === wasMobile) return
+  if (!mobile) {
+    mobilePhase.value = 'home'
+    if (!collegeId.value && colleges.value.length) {
+      collegeId.value = colleges.value[0].collegeId
+    }
+    return
+  }
+  // 切到手机：回到一级列表，避免残留双栏布局
+  mobilePhase.value = 'home'
 })
 
 watch([topicQ, categoryId], () => {
@@ -1195,27 +1292,143 @@ onMounted(async () => {
   text-decoration: underline;
 }
 
-@media (max-width: 860px) {
-  .overview {
+/* —— 手机一级：部门清单 —— */
+.m-home-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ov-panel);
+  border: 1px solid rgba(223, 231, 241, 0.9);
+  border-radius: 16px;
+  box-shadow: var(--ov-shadow);
+  overflow: hidden;
+}
+.m-home-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 8px 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.m-home-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 14px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ov-ink);
+  border-bottom: 1px solid #eef2f7;
+}
+.m-home-item:last-child {
+  border-bottom: none;
+}
+.m-home-item:active {
+  background: var(--ov-joint-soft);
+}
+.m-home-item .name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m-home-item em {
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--ov-muted);
+  background: #e8eef5;
+  border-radius: 999px;
+  min-width: 28px;
+  text-align: center;
+  padding: 3px 8px;
+}
+.m-home-item .chev {
+  flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.m-back-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 4px 0;
+}
+.m-back {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--ov-select);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 8px 4px;
+  cursor: pointer;
+}
+.m-back-title {
+  flex: 1;
+  min-width: 0;
+}
+.m-back-title strong {
+  display: block;
+  font-size: 16px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m-back-title span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ov-muted);
+}
+.m-fb {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.overview.is-m-home,
+.overview.is-m-detail {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+.overview.is-m-detail .split {
+  grid-template-columns: 1fr;
+  flex: none;
+}
+.overview.is-m-detail .detail-pane {
+  height: auto;
+  min-height: 0;
+}
+.overview.is-m-detail .detail-scroll {
+  max-height: none;
+  overflow: visible;
+}
+.overview.is-m-detail .detail-tools {
+  padding-top: 10px;
+}
+
+@media (max-width: 1023px) {
+  .overview:not(.is-m-home):not(.is-m-detail) {
     height: auto;
-    max-height: none;
     overflow: visible;
-  }
-  .split {
-    grid-template-columns: 1fr;
-    flex: none;
-    min-height: 0;
-  }
-  .dept-pane {
-    height: auto;
-    max-height: 220px;
-  }
-  .detail-pane {
-    height: auto;
-    min-height: 360px;
-  }
-  .detail-scroll {
-    max-height: min(55vh, 520px);
   }
 }
 </style>
