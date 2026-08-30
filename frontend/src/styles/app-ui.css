@@ -977,6 +977,23 @@ body,
   gap: 8px;
 }
 
+.ui-card .foot .chev,
+.ui-chev {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(26, 95, 138, 0.12);
+}
+
+.ui-card .foot .chev .el-icon,
+.ui-chev .el-icon {
+  font-size: 14px;
+  color: #1a5f8a;
+}
+
 .ui-tag {
   display: inline-flex;
   align-items: center;

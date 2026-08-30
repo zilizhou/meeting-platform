@@ -687,6 +687,17 @@ select {
   outline: none;
 }
 
+select {
+  padding-right: 40px;
+  background-color: #f7f9fc;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Crect width='22' height='22' rx='6' fill='%231a5f8a' fill-opacity='0.12'/%3E%3Cpath d='M7.2 9.2h7.6L11 14.2 7.2 9.2z' fill='%231a5f8a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 22px 22px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 textarea {
   resize: vertical;
 }

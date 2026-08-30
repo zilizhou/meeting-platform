@@ -6,26 +6,23 @@
           <div class="avatar">{{ avatarText }}</div>
           <div>
             <h3>{{ auth.user?.realName || '用户' }}</h3>
-            <div class="role">
-              <template v-if="auth.user?.collegeName">{{ auth.user.collegeName }} · </template>
-              {{ auth.user?.title || auth.user?.roles?.join(' / ') || '成员' }}
-            </div>
+            <div v-if="profileSub" class="role">{{ profileSub }}</div>
           </div>
         </div>
 
         <div v-if="isViewerOnly" class="stats">
-          <div class="stat party">
-            <b>查阅</b>
-            <span>校级只读</span>
-          </div>
-          <div class="stat">
+          <button type="button" class="stat party" @click="router.push('/admin')">
             <b>总览</b>
             <span>双会态势</span>
-          </div>
-          <div class="stat warn">
-            <b>简报</b>
-            <span>领导阅件</span>
-          </div>
+          </button>
+          <button type="button" class="stat" @click="router.push('/school-topics')">
+            <b>议题</b>
+            <span>台账检索</span>
+          </button>
+          <button type="button" class="stat warn" @click="router.push('/school-meetings')">
+            <b>会议</b>
+            <span>按期查阅</span>
+          </button>
         </div>
         <div v-else class="stats">
           <div class="stat party">
@@ -45,14 +42,14 @@
 
       <div>
         <div class="block">
-          <div class="label">账号</div>
+          <div class="label">{{ canAccessSchoolDashboard ? '功能入口' : '常用' }}</div>
           <button class="item" type="button" @click="router.push('/notifications')">
             <div class="ico">消</div>
             <div>
               <strong>消息中心</strong>
               <em>未读 {{ unread }}</em>
             </div>
-            <span class="chev">›</span>
+            <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
           </button>
           <button v-if="canManageUsers" class="item" type="button" @click="router.push('/users')">
             <div class="ico">员</div>
@@ -60,7 +57,7 @@
               <strong>人员管理</strong>
               <em>本院账号与角色</em>
             </div>
-            <span class="chev">›</span>
+            <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
           </button>
           <button
             v-if="canAccessSchoolDashboard"
@@ -73,7 +70,7 @@
               <strong>总览</strong>
               <em>部门 · 时段 · 双会与议题</em>
             </div>
-            <span class="chev">›</span>
+            <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
           </button>
           <button
             v-if="canAccessSchoolDashboard || canCollegeFeedback"
@@ -86,7 +83,7 @@
               <strong>{{ canAccessSchoolDashboard ? '部门反馈' : '校级反馈' }}</strong>
               <em>{{ canAccessSchoolDashboard ? '向各部门发送与查看往来' : '查看并回复校级反馈' }}</em>
             </div>
-            <span class="chev">›</span>
+            <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
           </button>
           <button
             v-if="canAccessSchoolDashboard"
@@ -99,7 +96,7 @@
               <strong>议题台账</strong>
               <em>所管部门议题检索</em>
             </div>
-            <span class="chev">›</span>
+            <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
           </button>
           <button
             v-if="canAccessSchoolDashboard"
@@ -112,7 +109,7 @@
               <strong>会议台账</strong>
               <em>按时间查阅会议</em>
             </div>
-            <span class="chev">›</span>
+            <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
           </button>
         </div>
 
@@ -125,7 +122,7 @@
               <strong>重新开始新手引导</strong>
               <em>按当前身份介绍入口与办理步骤</em>
             </div>
-            <span class="chev">›</span>
+            <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
           </button>
           <div class="item mode-item">
             <div class="ico">模</div>
@@ -182,7 +179,7 @@
             <strong>修改密码</strong>
             <em>定期更换，保障账号安全</em>
           </div>
-          <span class="chev">›</span>
+          <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
         </button>
         <button class="out" type="button" @click="onLogout">退出登录</button>
         <div class="foot">明德同枢 · 曲阜师范大学</div>
@@ -194,6 +191,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { CaretRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import http from '@/api/http'
 import { useFontScale } from '@/composables/useFontScale'
@@ -234,6 +232,21 @@ const canAccessSchoolDashboard = computed(
   () =>
     isSchoolAdmin.value || (auth.user?.roles || []).includes('SCHOOL_VIEWER'),
 )
+
+/** 校级账号不展示挂靠部门（如组织部）；学院账号保留「学院 · 职务」 */
+const profileSub = computed(() => {
+  if (isViewerOnly.value) return ''
+  if (isSchoolAdmin.value) {
+    const title = (auth.user?.title || '').trim()
+    const name = (auth.user?.realName || '').trim()
+    const college = (auth.user?.collegeName || '').trim()
+    if (title && title !== name && title !== college) return title
+    return ''
+  }
+  const college = (auth.user?.collegeName || '').trim()
+  const rest = auth.user?.title || auth.user?.roles?.join(' / ') || '成员'
+  return college ? `${college} · ${rest}` : rest
+})
 
 const canManageUsers = computed(() => {
   const roles = auth.user?.roles || []
@@ -337,6 +350,16 @@ onMounted(load)
   padding: 12px 8px;
   text-align: center;
   box-shadow: var(--shadow);
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+button.stat {
+  cursor: pointer;
+}
+button.stat:active {
+  transform: scale(0.98);
 }
 
 .stat b {
@@ -439,8 +462,17 @@ onMounted(load)
 
 .chev {
   margin-left: auto;
-  color: var(--muted);
-  font-size: 18px;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(26, 95, 138, 0.12);
+}
+.chev :deep(.el-icon) {
+  font-size: 14px;
+  color: #1a5f8a;
 }
 
 .out {

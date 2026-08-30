@@ -189,7 +189,7 @@
             </div>
             <div class="foot">
               <span class="ui-link">{{ flowResumeLink(m) }}</span>
-              <span>›</span>
+              <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
             </div>
           </button>
         </div>
@@ -331,6 +331,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { CaretRight } from '@element-plus/icons-vue'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
 import { groupMeetingsByMonth } from '@/utils/meetingMonthGroups'

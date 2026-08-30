@@ -189,7 +189,7 @@
       >
         <strong>{{ row.name }}</strong>
         <em>{{ row.label }}</em>
-        <span class="chev">筛选 ›</span>
+        <span class="chev" aria-hidden="true">筛选 <el-icon><CaretRight /></el-icon></span>
       </button>
     </div>
 
@@ -382,6 +382,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { CaretRight } from '@element-plus/icons-vue'
 import http from '@/api/http'
 import { downloadWithAuth } from '@/api/download'
 import { useAuthStore } from '@/stores/auth'
@@ -892,6 +893,19 @@ onMounted(load)
 .miss-item .chev {
   color: var(--brand);
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.miss-item .chev :deep(.el-icon) {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 5px;
+  background: rgba(26, 95, 138, 0.12);
+  font-size: 12px;
+  color: #1a5f8a;
 }
 .warn-chips {
   display: grid;

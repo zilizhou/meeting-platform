@@ -1,57 +1,59 @@
 <template>
   <div class="todo-page">
     <div class="ui-hero is-official todo-hero">
-      <div class="todo-hero-text">
-        <h2>待办</h2>
-        <p>审题、纪要、督办与校级反馈</p>
-      </div>
-      <div class="nums">
-        <button
-          type="button"
-          class="num kpi gold"
-          :class="{ on: kind === 'all' }"
-          @click="kind = 'all'"
-        >
-          <strong>{{ counts.all }}</strong>
-          <span>全部</span>
-        </button>
-        <button
-          type="button"
-          class="num kpi coral"
-          :class="{ on: kind === 'review' }"
-          @click="kind = 'review'"
-        >
-          <strong>{{ counts.review }}</strong>
-          <span>待审题</span>
-        </button>
-        <button
-          type="button"
-          class="num kpi sky"
-          :class="{ on: kind === 'minutes' }"
-          @click="kind = 'minutes'"
-        >
-          <strong>{{ counts.minutes }}</strong>
-          <span>纪要</span>
-        </button>
-        <button
-          type="button"
-          class="num kpi mint"
-          :class="{ on: kind === 'supervision' }"
-          @click="kind = 'supervision'"
-        >
-          <strong>{{ counts.supervision }}</strong>
-          <span>督办</span>
-        </button>
-        <button
-          v-if="canCollegeFeedback"
-          type="button"
-          class="num kpi plum"
-          :class="{ on: kind === 'feedback' }"
-          @click="focusFeedback"
-        >
-          <strong>{{ feedbackItems.length }}</strong>
-          <span>反馈</span>
-        </button>
+      <div class="todo-hero-row">
+        <div class="todo-hero-text">
+          <h2>待办</h2>
+          <p>审题 · 纪要 · 督办 · 反馈</p>
+        </div>
+        <div class="nums">
+          <button
+            type="button"
+            class="num kpi gold"
+            :class="{ on: kind === 'all' }"
+            @click="kind = 'all'"
+          >
+            <strong>{{ counts.all }}</strong>
+            <span>全部</span>
+          </button>
+          <button
+            type="button"
+            class="num kpi coral"
+            :class="{ on: kind === 'review' }"
+            @click="kind = 'review'"
+          >
+            <strong>{{ counts.review }}</strong>
+            <span>待审题</span>
+          </button>
+          <button
+            type="button"
+            class="num kpi sky"
+            :class="{ on: kind === 'minutes' }"
+            @click="kind = 'minutes'"
+          >
+            <strong>{{ counts.minutes }}</strong>
+            <span>纪要</span>
+          </button>
+          <button
+            type="button"
+            class="num kpi mint"
+            :class="{ on: kind === 'supervision' }"
+            @click="kind = 'supervision'"
+          >
+            <strong>{{ counts.supervision }}</strong>
+            <span>督办</span>
+          </button>
+          <button
+            v-if="canCollegeFeedback"
+            type="button"
+            class="num kpi plum"
+            :class="{ on: feedbackSheetOpen }"
+            @click="focusFeedback"
+          >
+            <strong>{{ feedbackMessages.length }}</strong>
+            <span>反馈</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -64,31 +66,18 @@
       · 党政联席会议 {{ holding.joint?.count }}/{{ holding.joint?.required }}。
     </div>
 
-    <section v-if="canCollegeFeedback" ref="feedbackSec" class="feedback-block">
-      <div class="ui-sec">
-        <h3><i class="party"></i>校级反馈</h3>
-        <span class="n">{{ feedbackItems.length }} 条</span>
+    <button
+      v-if="canCollegeFeedback"
+      type="button"
+      class="feedback-entry"
+      @click="openFeedbackSheet"
+    >
+      <div class="fb-entry-copy">
+        <strong>校级反馈</strong>
+        <em>{{ feedbackMessages.length ? `${feedbackMessages.length} 条消息，点开查看并回复` : '暂无消息，点开也可刷新' }}</em>
       </div>
-      <p class="group-hint">校级对本院的意见往来，可在此直接查看并回复。</p>
-      <div v-if="feedbackLoading" class="ui-empty">加载反馈…</div>
-      <div v-else-if="!feedbackItems.length" class="ui-empty soft">暂无校级反馈</div>
-      <div v-else class="fb-list">
-        <button
-          v-for="t in feedbackItems"
-          :key="t.id"
-          type="button"
-          class="fb-card"
-          @click="openFeedback(t)"
-        >
-          <div class="fb-top">
-            <strong>{{ t.subject || '校级反馈' }}</strong>
-            <span>{{ formatTime(t.lastMessageAt) }}</span>
-          </div>
-          <em>{{ preview(t.lastMessage?.content) }}</em>
-          <span class="fb-count">{{ t.messageCount }} 条消息 · 点开回复</span>
-        </button>
-      </div>
-    </section>
+      <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>
+    </button>
 
     <div class="ui-filter is-equal" role="tablist">
       <button
@@ -178,24 +167,75 @@
       </div>
     </template>
 
-    <SchoolFeedbackPanel
+    <el-drawer
       v-if="canCollegeFeedback"
-      :open="panelOpen"
-      :college-id="panelCollegeId"
-      :college-name="panelCollegeName"
-      :can-create="false"
-      :initial-thread-id="panelThreadId"
-      @close="closeFeedback"
-    />
+      v-model="feedbackSheetOpen"
+      title="校级反馈"
+      direction="btt"
+      size="78%"
+      class="feedback-drawer"
+      append-to-body
+    >
+      <p class="drawer-hint">以下为全部往来消息，点「回复」即可直接发送。</p>
+      <div v-if="feedbackLoading" class="ui-empty">加载反馈…</div>
+      <div v-else-if="!feedbackMessages.length" class="ui-empty soft">暂无校级反馈</div>
+      <div v-else class="fb-msg-list">
+        <article
+          v-for="m in feedbackMessages"
+          :key="m.id"
+          class="fb-msg"
+          :class="m.fromSchool ? 'school' : 'college'"
+        >
+          <header>
+            <div>
+              <b>{{ m.author.realName }}</b>
+              <span>{{ m.fromSchool ? '校级' : '本院' }}</span>
+            </div>
+            <time>{{ formatTime(m.createdAt) }}</time>
+          </header>
+          <p class="fb-subject" v-if="m.subject">{{ m.subject }}</p>
+          <p class="fb-body">{{ m.content }}</p>
+          <button type="button" class="fb-reply-btn" @click="openReply(m)">回复</button>
+        </article>
+      </div>
+    </el-drawer>
+
+    <el-dialog
+      v-if="canCollegeFeedback"
+      v-model="replyOpen"
+      title="回复校级反馈"
+      width="92%"
+      align-center
+      append-to-body
+      destroy-on-close
+    >
+      <div v-if="replyTarget" class="reply-quote">
+        <strong>{{ replyTarget.fromSchool ? '校级' : '本院' }} · {{ replyTarget.author.realName }}</strong>
+        <p>{{ replyTarget.content }}</p>
+      </div>
+      <el-input
+        v-model="replyDraft"
+        type="textarea"
+        :rows="4"
+        maxlength="2000"
+        show-word-limit
+        placeholder="输入回复内容…"
+      />
+      <template #footer>
+        <el-button @click="replyOpen = false">取消</el-button>
+        <el-button type="primary" :loading="replySending" @click="sendReply">发送</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { CaretRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import http from '@/api/http'
 import { useRoles } from '@/composables/useRoles'
-import SchoolFeedbackPanel from '@/components/SchoolFeedbackPanel.vue'
 
 interface TodoItem {
   id: string
@@ -208,14 +248,14 @@ interface TodoItem {
   taskId?: string
 }
 
-interface FeedbackThread {
+interface FeedbackMessage {
   id: string
-  collegeId: string
+  threadId: string
   subject?: string | null
-  lastMessageAt: string
-  messageCount: number
-  college?: { name: string }
-  lastMessage?: { content: string } | null
+  content: string
+  createdAt: string
+  fromSchool: boolean
+  author: { id: string; realName: string }
 }
 
 type KindFilter = 'all' | 'review' | 'minutes' | 'supervision' | 'feedback'
@@ -229,7 +269,7 @@ interface TodoGroup {
 }
 
 const router = useRouter()
-const { canCollegeFeedback, auth } = useRoles()
+const { canCollegeFeedback } = useRoles()
 const loading = ref(true)
 const kind = ref<KindFilter>('all')
 const track = ref<TrackFilter>('all')
@@ -237,12 +277,12 @@ const items = ref<TodoItem[]>([])
 const holding = ref<any>(null)
 
 const feedbackLoading = ref(false)
-const feedbackItems = ref<FeedbackThread[]>([])
-const feedbackSec = ref<HTMLElement | null>(null)
-const panelOpen = ref(false)
-const panelCollegeId = ref('')
-const panelCollegeName = ref('')
-const panelThreadId = ref('')
+const feedbackMessages = ref<FeedbackMessage[]>([])
+const feedbackSheetOpen = ref(false)
+const replyOpen = ref(false)
+const replySending = ref(false)
+const replyDraft = ref('')
+const replyTarget = ref<FeedbackMessage | null>(null)
 
 const TYPE_LABEL: Record<string, string> = {
   JOINT_REVIEW: '联席审题',
@@ -355,9 +395,35 @@ async function loadFeedback() {
   feedbackLoading.value = true
   try {
     const res: any = await http.get('/feedback')
-    feedbackItems.value = res.items || []
+    const threads: any[] = res.items || []
+    const details = await Promise.all(
+      threads.map(async (t) => {
+        try {
+          return (await http.get(`/feedback/${t.id}`)) as any
+        } catch {
+          return null
+        }
+      }),
+    )
+    const flat: FeedbackMessage[] = []
+    for (const d of details) {
+      if (!d?.messages?.length) continue
+      for (const m of d.messages) {
+        flat.push({
+          id: m.id,
+          threadId: d.id,
+          subject: d.subject,
+          content: m.content,
+          createdAt: m.createdAt,
+          fromSchool: !!m.fromSchool,
+          author: m.author || { id: '', realName: '—' },
+        })
+      }
+    }
+    flat.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+    feedbackMessages.value = flat
   } catch {
-    feedbackItems.value = []
+    feedbackMessages.value = []
   } finally {
     feedbackLoading.value = false
   }
@@ -380,34 +446,42 @@ async function load() {
 }
 
 async function focusFeedback() {
-  kind.value = 'feedback'
-  await nextTick()
-  feedbackSec.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  openFeedbackSheet()
 }
 
-function openFeedback(t: FeedbackThread) {
-  panelCollegeId.value = t.collegeId
-  panelCollegeName.value = t.college?.name || auth.user?.collegeName || ''
-  panelThreadId.value = t.id
-  panelOpen.value = true
-}
-
-function closeFeedback() {
-  panelOpen.value = false
-  panelThreadId.value = ''
+function openFeedbackSheet() {
+  feedbackSheetOpen.value = true
   loadFeedback()
 }
 
-function preview(text?: string) {
-  if (!text) return '暂无内容'
-  return text.length > 72 ? `${text.slice(0, 72)}…` : text
+function openReply(m: FeedbackMessage) {
+  replyTarget.value = m
+  replyDraft.value = ''
+  replyOpen.value = true
+}
+
+async function sendReply() {
+  const content = replyDraft.value.trim()
+  const target = replyTarget.value
+  if (!content || !target) return
+  replySending.value = true
+  try {
+    await http.post(`/feedback/${target.threadId}/messages`, { content })
+    ElMessage.success('已发送回复')
+    replyOpen.value = false
+    replyDraft.value = ''
+    replyTarget.value = null
+    await loadFeedback()
+  } finally {
+    replySending.value = false
+  }
 }
 
 function formatTime(iso?: string) {
   if (!iso) return '—'
   const d = new Date(iso)
   const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 function go(item: TodoItem) {
@@ -447,53 +521,80 @@ onMounted(load)
 
 <style scoped>
 .todo-hero {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.todo-hero-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 16px;
-  padding: 12px 14px;
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
 }
 
 .todo-hero-text {
   min-width: 0;
-  flex: 1 1 140px;
 }
 
 .todo-hero :deep(h2) {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: 18px;
+  line-height: 1.15;
 }
 
 .todo-hero :deep(p) {
-  margin: 3px 0 0;
-  font-size: 12px;
+  margin: 2px 0 0;
+  font-size: 11px;
   opacity: 0.8;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .todo-hero :deep(.nums) {
   margin-top: 0;
-  flex: 1 1 auto;
-  justify-content: flex-end;
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.todo-hero :deep(.num) {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 4px;
+}
+
+.todo-hero :deep(.num strong) {
+  font-size: 16px;
+}
+
+.todo-hero :deep(.num span) {
+  font-size: 10px;
 }
 
 @media (min-width: 1024px) {
   .todo-hero {
-    padding: 14px 18px;
+    padding: 12px 16px;
+  }
+  .todo-hero-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
   }
   .todo-hero :deep(h2) {
-    font-size: 22px;
+    font-size: 20px;
   }
   .todo-hero :deep(p) {
-    font-size: 13px;
+    font-size: 12px;
+  }
+  .todo-hero :deep(.nums) {
+    width: auto;
+    flex: 1;
+    max-width: 520px;
   }
 }
 
 .rule-banner {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   padding: 10px 12px;
   border-radius: 12px;
   background: #f0fdf4;
@@ -510,63 +611,180 @@ onMounted(load)
   margin-bottom: 2px;
 }
 
-.feedback-block {
-  margin-bottom: 16px;
-}
-
-.fb-list {
-  display: grid;
-  gap: 8px;
-}
-
-.fb-card {
-  display: block;
+.feedback-entry {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid #f0d4d6;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff8f8, #fff);
+  color: inherit;
+  font: inherit;
   text-align: left;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(122, 69, 72, 0.06);
+}
+.feedback-entry:active {
+  transform: scale(0.995);
+}
+.fb-entry-copy {
+  flex: 1;
+  min-width: 0;
+}
+.fb-entry-copy strong {
+  display: block;
+  font-size: 15px;
+  color: var(--party);
+}
+.fb-entry-copy em {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--muted);
+}
+.feedback-entry .chev {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(143, 78, 82, 0.12);
+}
+.feedback-entry .chev :deep(.el-icon) {
+  font-size: 14px;
+  color: var(--party);
+}
+
+.drawer-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.fb-msg-list {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+.fb-msg {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px 14px;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
   box-shadow: var(--shadow);
 }
 
-.fb-card:hover {
-  border-color: #c5d6ea;
+.fb-msg.school {
+  border-color: #f0d4d6;
+  background: linear-gradient(180deg, #fff8f8 0%, #fff 42%);
 }
 
-.fb-top {
+.fb-msg.college {
+  border-color: #d5e4f2;
+  background: linear-gradient(180deg, #f7fbff 0%, #fff 42%);
+}
+
+.fb-msg header {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 10px;
-  margin-bottom: 4px;
-}
-
-.fb-top strong {
-  font-size: 14px;
-}
-
-.fb-top span {
-  color: var(--muted);
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.fb-card em {
-  display: block;
-  font-style: normal;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--text);
   margin-bottom: 6px;
 }
 
-.fb-count {
+.fb-msg header div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fb-msg header b {
+  font-size: 14px;
+}
+
+.fb-msg header span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: #eef2f6;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.fb-msg.school header span {
+  color: var(--party);
+  background: var(--party-soft, #f8e9ea);
+}
+
+.fb-msg.college header span {
   color: var(--joint);
+  background: var(--joint-soft, #e8f2f8);
+}
+
+.fb-msg header time {
+  flex-shrink: 0;
   font-size: 12px;
-  font-weight: 600;
+  color: var(--muted);
+}
+
+.fb-subject {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.fb-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.fb-reply-btn {
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--joint);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+}
+
+.reply-quote {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f5f8fb;
+  border: 1px solid #e2e8f0;
+}
+
+.reply-quote strong {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.reply-quote p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .ui-empty.soft {

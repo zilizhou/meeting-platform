@@ -51,7 +51,7 @@
       </div>
       <div class="task-guide-list">
         <button v-for="task in guideTasks" :key="task.key" type="button" @click="task.go()">
-          <b>{{ task.icon }}</b><span><strong>{{ task.title }}</strong><em>{{ task.desc }}</em></span><i>前往 ›</i>
+          <b>{{ task.icon }}</b><span><strong>{{ task.title }}</strong><em>{{ task.desc }}</em></span><i class="go">前往 <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span></i>
         </button>
       </div>
     </section>
@@ -210,6 +210,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { CaretRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRoles } from '@/composables/useRoles'
 import http from '@/api/http'
@@ -384,7 +385,19 @@ onMounted(async () => {
 .task-guide-list strong, .task-guide-list em { display: block; }
 .task-guide-list strong { font-size: 14px; }
 .task-guide-list em { margin-top: 2px; overflow: hidden; color: var(--muted); font-size: 11px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
-.task-guide-list i { color: var(--joint); font-size: 12px; font-style: normal; }
+.task-guide-list i { color: var(--joint); font-size: 12px; font-style: normal; display: inline-flex; align-items: center; gap: 4px; }
+.task-guide-list .chev {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 5px;
+  background: rgba(26, 95, 138, 0.12);
+}
+.task-guide-list .chev :deep(.el-icon) {
+  font-size: 12px;
+  color: #1a5f8a;
+}
 .ui-sec h3 i.party {
   background: var(--party);
 }
