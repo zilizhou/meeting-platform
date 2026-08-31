@@ -4,7 +4,7 @@
       <div class="todo-hero-row">
         <div class="todo-hero-text">
           <h2>待办</h2>
-          <p>审题 · 纪要 · 督办 · 反馈</p>
+          <p>审题 · 纪要 · 反馈</p>
         </div>
         <div class="nums">
           <button
@@ -33,15 +33,6 @@
           >
             <strong>{{ counts.minutes }}</strong>
             <span>纪要</span>
-          </button>
-          <button
-            type="button"
-            class="num kpi mint"
-            :class="{ on: kind === 'supervision' }"
-            @click="kind = 'supervision'"
-          >
-            <strong>{{ counts.supervision }}</strong>
-            <span>督办</span>
           </button>
           <button
             v-if="canCollegeFeedback"
@@ -119,7 +110,7 @@
       >
         <div class="ui-sec">
           <h3>
-            <i :class="{ party: group.key === 'review' || group.key === 'supervision' }"></i>
+            <i :class="{ party: group.key === 'review' }"></i>
             {{ group.title }}
           </h3>
           <span class="n">{{ group.items.length }} 项</span>
@@ -258,7 +249,7 @@ interface FeedbackMessage {
   author: { id: string; realName: string }
 }
 
-type KindFilter = 'all' | 'review' | 'minutes' | 'supervision' | 'feedback'
+type KindFilter = 'all' | 'review' | 'minutes' | 'feedback'
 type TrackFilter = 'all' | 'party' | 'joint'
 
 interface TodoGroup {
@@ -289,7 +280,6 @@ const TYPE_LABEL: Record<string, string> = {
   PARTY_REVIEW: '党委会审题',
   MINUTES: '整理纪要',
   MINUTES_SIGN: '整理纪要',
-  SUPERVISION: '督办',
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -297,7 +287,6 @@ const ACTION_LABEL: Record<string, string> = {
   PARTY_REVIEW: '去审题',
   MINUTES: '去整理',
   MINUTES_SIGN: '去整理',
-  SUPERVISION: '去反馈',
 }
 
 const GROUPS: { key: Exclude<KindFilter, 'all' | 'feedback'>; title: string; hint: string }[] = [
@@ -310,11 +299,6 @@ const GROUPS: { key: Exclude<KindFilter, 'all' | 'feedback'>; title: string; hin
     key: 'minutes',
     title: '待整理纪要',
     hint: '会后上传或编辑纪要正文，不替代现场签署。',
-  },
-  {
-    key: 'supervision',
-    title: '督办落实',
-    hint: '按决议反馈进展；逾期项请优先办理。',
   },
 ]
 
@@ -329,14 +313,12 @@ function actionLabel(t: string) {
 function kindOf(item: TodoItem): Exclude<KindFilter, 'all' | 'feedback'> | null {
   if (item.type === 'JOINT_REVIEW' || item.type === 'PARTY_REVIEW') return 'review'
   if (item.type === 'MINUTES' || item.type === 'MINUTES_SIGN') return 'minutes'
-  if (item.type === 'SUPERVISION') return 'supervision'
   return null
 }
 
 function trackOf(item: TodoItem) {
   if (item.meetingType === 'PARTY_COMMITTEE' || item.type === 'PARTY_REVIEW') return 'party'
   if (item.meetingType === 'JOINT_CONFERENCE' || item.type === 'JOINT_REVIEW') return 'joint'
-  if (item.type === 'SUPERVISION') return 'party'
   return 'joint'
 }
 
@@ -371,7 +353,6 @@ const counts = computed(() => {
     all: list.length,
     review: list.filter((i) => kindOf(i) === 'review').length,
     minutes: list.filter((i) => kindOf(i) === 'minutes').length,
-    supervision: list.filter((i) => kindOf(i) === 'supervision').length,
   }
 })
 
@@ -386,7 +367,6 @@ const visibleGroups = computed<TodoGroup[]>(() => {
 const emptyText = computed(() => {
   if (kind.value === 'review') return '当前没有待审议题'
   if (kind.value === 'minutes') return '当前没有待整理纪要'
-  if (kind.value === 'supervision') return '当前没有督办事项'
   return '暂无待办，可到议题申报或查看议题库'
 })
 
@@ -507,10 +487,6 @@ function go(item: TodoItem) {
       params: { id: item.meetingId },
       query: { from: item.meetingType === 'PARTY_COMMITTEE' ? 'party' : 'joint' },
     })
-    return
-  }
-  if (item.taskId || item.type === 'SUPERVISION') {
-    router.push('/supervisions')
     return
   }
   router.push('/topics-home')

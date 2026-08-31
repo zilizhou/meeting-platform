@@ -88,6 +88,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useRoles } from '@/composables/useRoles'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import http from '@/api/http'
 // import OnboardingGuide from '@/components/OnboardingGuide.vue'
 
@@ -102,6 +103,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { isSchoolAdmin, isSchoolViewer } = useRoles()
+const isMobileShell = useMediaQuery('(max-width: 1023px)')
 const todoCount = ref(0)
 let timer: number | undefined
 
@@ -113,26 +115,46 @@ const isViewerShell = computed(
 /** 校级管理员 / 校级查阅 / 分管查阅共用统计-议题-会议界面 */
 const isSchoolShell = computed(() => isSchoolAdmin.value || isSchoolViewer.value)
 
-const schoolTabs: TabItem[] = [
+const schoolLedgerTabs: TabItem[] = [
+  {
+    name: 'school-topics',
+    label: '议题台账',
+    path: '/school-topics',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M7 4.5h10A1.5 1.5 0 0 1 18.5 6v13.2L12 16.2l-6.5 3V6A1.5 1.5 0 0 1 7 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.2 8.5h5.6M9.2 11.5h5.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  },
+  {
+    name: 'school-meetings',
+    label: '会议台账',
+    path: '/school-meetings',
+    icon: `<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  },
+]
+
+const schoolCoreTabs: TabItem[] = [
   {
     name: 'admin',
-    label: '总览',
+    label: '会议总览',
     path: '/admin',
     icon: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-5H4v5Zm10-11h6V4h-6v5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
   },
   {
     name: 'agent',
-    label: '智能体',
+    label: '同枢智伴',
     path: '/agent',
     icon: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.8"/><path d="M9.2 12.2h.01M14.8 12.2h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M9.2 14.6c.8.9 1.7 1.3 2.8 1.3s2-.4 2.8-1.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   },
   {
     name: 'me',
-    label: '我的',
+    label: '我的设置',
     path: '/me',
     icon: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 19c1.5-3 4-4.5 7-4.5S17.5 16 19 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   },
 ]
+
+const schoolTabs = computed<TabItem[]>(() => {
+  if (!isMobileShell.value) return schoolCoreTabs
+  return [schoolCoreTabs[0], ...schoolLedgerTabs, ...schoolCoreTabs.slice(1)]
+})
 
 const collegeTabs: TabItem[] = [
   {
@@ -173,7 +195,7 @@ const collegeTabs: TabItem[] = [
   },
 ]
 
-const tabs = computed(() => (isSchoolShell.value ? schoolTabs : collegeTabs))
+const tabs = computed(() => (isSchoolShell.value ? schoolTabs.value : collegeTabs))
 
 const tabNames = computed(() => new Set(tabs.value.map((t) => t.name)))
 
@@ -226,10 +248,14 @@ function isTabActive(name: string) {
       route.name === 'feedback' ||
       route.name === 'feedback-thread' ||
       ((route.name === 'topic-detail' || route.name === 'meeting-detail') &&
-        route.query.from === 'school') ||
-      route.name === 'school-topics' ||
-      route.name === 'school-meetings'
+        route.query.from === 'school')
     )
+  }
+  if (name === 'school-topics') {
+    return route.name === 'topic-detail' && route.query.from === 'school-topics'
+  }
+  if (name === 'school-meetings') {
+    return route.name === 'meeting-detail' && route.query.from === 'school-meetings'
   }
   return false
 }

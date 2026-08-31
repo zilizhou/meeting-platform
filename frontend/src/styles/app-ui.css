@@ -242,8 +242,9 @@ body,
 }
 
 .app-shell.is-school .app-tab {
-  font-size: 12px;
-  gap: 4px;
+  font-size: 11px;
+  gap: 3px;
+  padding: 6px 2px 8px;
 }
 
 .app-shell.is-school .app-tab svg {

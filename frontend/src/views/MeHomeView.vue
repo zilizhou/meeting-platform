@@ -12,7 +12,7 @@
 
         <div v-if="isViewerOnly" class="stats">
           <button type="button" class="stat party" @click="router.push('/admin')">
-            <b>总览</b>
+            <b>会议总览</b>
             <span>双会态势</span>
           </button>
           <button type="button" class="stat" @click="router.push('/school-topics')">
@@ -67,7 +67,7 @@
           >
             <div class="ico">览</div>
             <div>
-              <strong>总览</strong>
+              <strong>会议总览</strong>
               <em>部门 · 时段 · 双会与议题</em>
             </div>
             <span class="chev" aria-hidden="true"><el-icon><CaretRight /></el-icon></span>

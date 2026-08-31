@@ -101,7 +101,7 @@
             <span><i class="party" />党委会</span>
             <span><i class="joint" />联席</span>
           </span>
-          <span class="chevron" :class="{ open: chartOpen }" aria-hidden="true">▾</span>
+          <span class="chevron" :class="{ open: chartOpen }" aria-hidden="true" />
         </div>
       </button>
       <div v-show="chartOpen" class="college-bars">
@@ -395,7 +395,7 @@ function toggleCollege(id: string) {
 function open(m: MeetingRow) {
   router.push({
     path: `/meetings/${m.id}`,
-    query: { from: 'school' },
+    query: { from: 'school-meetings' },
   })
 }
 
@@ -569,6 +569,16 @@ onMounted(() => {
   font: inherit;
   background: #f7f9fc;
 }
+.row select {
+  padding-right: 44px;
+  background-color: #f7f9fc;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 22 22'%3E%3Crect width='22' height='22' rx='6' fill='%231a5f8a' fill-opacity='0.14'/%3E%3Cpath d='M6.4 8.6h9.2L11 15.2 6.4 8.6z' fill='%231a5f8a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 26px 26px;
+  appearance: none;
+  -webkit-appearance: none;
+}
 
 .chart-panel {
   background: #fff;
@@ -615,15 +625,15 @@ onMounted(() => {
   padding-top: 2px;
 }
 .chevron {
-  display: inline-flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 12px;
+  display: inline-block;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 22 22'%3E%3Crect width='22' height='22' rx='6' fill='%231a5f8a' fill-opacity='0.14'/%3E%3Cpath d='M6.4 8.6h9.2L11 15.2 6.4 8.6z' fill='%231a5f8a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 26px 26px;
   transition: transform 0.18s ease;
 }
 .chevron.open {

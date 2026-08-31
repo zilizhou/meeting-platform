@@ -6,7 +6,7 @@
         <div class="hero-row">
           <div class="hero-copy">
             <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
-            <h2>总览</h2>
+            <h2>会议总览</h2>
           </div>
           <p class="hero-motto" aria-hidden="false">明德同心，同枢共治</p>
           <div class="nums">
@@ -61,7 +61,7 @@
         <div class="hero-row">
           <div class="hero-copy">
             <div class="eyebrow"><b></b> {{ scopeLabel }}</div>
-            <h2>总览</h2>
+            <h2>会议总览</h2>
           </div>
           <p class="hero-motto" aria-hidden="false">明德同心，同枢共治</p>
           <div class="nums">

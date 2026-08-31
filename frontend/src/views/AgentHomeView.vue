@@ -3,7 +3,7 @@
     <div ref="listEl" class="agent-scroll">
       <div class="ui-hero is-official">
         <div class="eyebrow"><b></b> {{ heroEyebrow }}</div>
-        <h2>会议智能体</h2>
+        <h2>{{ isSchoolShell ? '同枢智伴' : '会议智能体' }}</h2>
         <p>{{ statusNote }}</p>
         <div class="nums">
           <div class="kpi sky"><strong>{{ dialogRounds }}</strong><span>轮对话</span></div>
@@ -47,7 +47,7 @@
         :class="m.role === 'user' ? 'user' : 'assistant'"
       >
         <div class="bubble">
-          <div class="who">{{ m.role === 'user' ? '我' : '智能体' }}</div>
+          <div class="who">{{ m.role === 'user' ? '我' : isSchoolShell ? '同枢智伴' : '智能体' }}</div>
           <div
             v-if="m.role === 'assistant'"
             class="msg-md"
